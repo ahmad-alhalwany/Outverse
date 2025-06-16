@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 26, 26, 26;
+  --background-end-rgb: 26, 26, 26;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--background-start-rgb)),
+    rgb(var(--background-end-rgb))
+  );
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* Sidebar */
+.sidebar {
+  background: #23234A;
+  color: #F5F6FA;
+}
+
+/* Cards */
+.card {
+  background: #23234A;
+  color: #F5F6FA;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px #1113;
+  }
+
+/* Danger zone */
+.danger {
+  color: #FF3B3B;
+  border: 1px solid #FF3B3B;
+  background: #2E1A1A;
+}
+
+/* Table */
+table {
+  background: #23234A;
+  color: #F5F6FA;
+}
+th, td {
+  border-bottom: 1px solid #2E2E4D;
+}
+
+/* Alerts */
+.alert {
+  background: #2E1A1A;
+  color: #FF3B3B;
+  border-left: 4px solid #FF3B3B;
+  padding: 12px 20px;
+  border-radius: 8px;
+  margin-bottom: 18px;
+}
