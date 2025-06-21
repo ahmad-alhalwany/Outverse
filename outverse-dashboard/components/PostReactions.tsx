@@ -2,39 +2,75 @@
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
+import useSound from "./useSound";
 
 const reactions = [
-  { emoji: '💡', label: 'Inspired', color: '#FFD700' },
-  { emoji: '🌌', label: 'Cosmic', color: '#4B0082' },
-  { emoji: '🌀', label: 'Mind-Bending', color: '#00CED1' },
-  { emoji: '🌱', label: 'Growing', color: '#32CD32' },
-  { emoji: '✨', label: 'Spark', color: '#FF69B4' },
+  { emoji: '💡', label: 'Inspired', color: '#FFD700', sound: '/sounds/bubblepop-254773.mp3' },
+  { emoji: '🌌', label: 'Cosmic', color: '#4B0082', sound: '/sounds/shine-11-268907.mp3' },
+  { emoji: '🌀', label: 'Mind-Bending', color: '#00CED1', sound: '/sounds/mystical-chime-196405.mp3' },
+  { emoji: '🌱', label: 'Growing', color: '#32CD32', sound: '/sounds/sound-effects-finger-snap-without-reverb-113862.mp3' },
+  { emoji: '✨', label: 'Spark', color: '#FF69B4', sound: '/sounds/logo-transparent-139678.mp3' },
 ];
 
 interface PostReactionsProps {
   onReaction: (reaction: string) => void;
+  selectedReaction?: string;
+  reactionCounts?: { [key: string]: number };
 }
 
-export default function PostReactions({ onReaction }: PostReactionsProps) {
+export default function PostReactions({ onReaction, selectedReaction, reactionCounts }: PostReactionsProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedReaction, setSelectedReaction] = useState<string | null>(null);
+  // أصوات التفاعلات
+  const playSounds: Record<string, () => void> = {
+    '💡': useSound(reactions[0].sound, 0.5),
+    '🌌': useSound(reactions[1].sound, 0.5),
+    '🌀': useSound(reactions[2].sound, 0.5),
+    '🌱': useSound(reactions[3].sound, 0.5),
+    '✨': useSound(reactions[4].sound, 0.5),
+  };
 
   const handleReaction = (reaction: string) => {
-    setSelectedReaction(reaction);
+    if (playSounds[reaction]) playSounds[reaction]();
     onReaction(reaction);
     setTimeout(() => setIsOpen(false), 1000);
   };
+
+  // Find the selected reaction details
+  const selectedReactionDetails = selectedReaction ? reactions.find(r => r.emoji === selectedReaction) : null;
 
   return (
     <div className="relative">
       <motion.button
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 text-gray-500 hover:text-gray-700"
+        onClick={() => selectedReaction ? onReaction(selectedReaction) : setIsOpen(!isOpen)}
+        className={`flex items-center space-x-2 ${selectedReaction ? 'text-lab font-semibold' : 'text-gray-500 hover:text-gray-700'}`}
+        style={{ color: selectedReactionDetails?.color }}
       >
-        <span>💫</span>
-        <span className="text-sm">React</span>
+        {selectedReaction ? (
+          <>
+            <span className="text-xl">{selectedReaction}</span>
+            <span className="text-sm">{selectedReactionDetails?.label}</span>
+            {reactionCounts && reactionCounts[selectedReaction] > 0 && (
+              <span className="text-sm ml-1">({reactionCounts[selectedReaction]})</span>
+            )}
+          </>
+        ) : (
+          <>
+            <span>💫</span>
+            <span className="text-sm">React</span>
+            {reactionCounts && Object.values(reactionCounts).some(count => count > 0) && (
+              <div className="flex items-center space-x-1 ml-2">
+                {Object.entries(reactionCounts).map(([reaction, count]) => count > 0 && (
+                  <div key={reaction} className="flex items-center">
+                    <span className="text-sm">{reaction}</span>
+                    <span className="text-xs ml-1">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </motion.button>
 
       <AnimatePresence>
@@ -64,8 +100,9 @@ export default function PostReactions({ onReaction }: PostReactionsProps) {
                   >
                     {reaction.emoji}
                   </motion.span>
-                  <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
                     {reaction.label}
+                    {reactionCounts && reactionCounts[reaction.emoji] > 0 && ` (${reactionCounts[reaction.emoji]})`}
                   </span>
                 </motion.button>
               ))}
@@ -73,25 +110,6 @@ export default function PostReactions({ onReaction }: PostReactionsProps) {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {selectedReaction && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          className="absolute -top-10 left-1/2 transform -translate-x-1/2"
-        >
-          <motion.span
-            className="text-3xl"
-            animate={{
-              y: [-20, 0],
-              opacity: [0, 1, 0],
-            }}
-            transition={{ duration: 1 }}
-          >
-            {selectedReaction}
-          </motion.span>
-        </motion.div>
-      )}
     </div>
   );
 } 
