@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import useSound from "./useSound";
 
 const reactions = [
@@ -20,6 +20,8 @@ interface PostReactionsProps {
 
 export default function PostReactions({ onReaction, selectedReaction, reactionCounts }: PostReactionsProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [cosmicBurst, setCosmicBurst] = useState<{ x: number; y: number; key: number } | null>(null);
+  const burstKey = useRef(0);
   // أصوات التفاعلات
   const playSounds: Record<string, () => void> = {
     '💡': useSound(reactions[0].sound, 0.5),
@@ -32,7 +34,10 @@ export default function PostReactions({ onReaction, selectedReaction, reactionCo
   const handleReaction = (reaction: string) => {
     if (playSounds[reaction]) playSounds[reaction]();
     onReaction(reaction);
+    // تأثير كوني: نجوم متطايرة
+    setCosmicBurst({ x: Math.random() * 40 - 20, y: -30 + Math.random() * 10, key: burstKey.current++ });
     setTimeout(() => setIsOpen(false), 1000);
+    setTimeout(() => setCosmicBurst(null), 700);
   };
 
   // Find the selected reaction details
@@ -42,11 +47,26 @@ export default function PostReactions({ onReaction, selectedReaction, reactionCo
     <div className="relative">
       <motion.button
         whileHover={{ scale: 1.1 }}
-        whileTap={{ scale: 0.9 }}
+        whileTap={{ scale: 1.2, boxShadow: '0 0 16px 4px #a78bfa, 0 0 32px 8px #38bdf8' }}
         onClick={() => selectedReaction ? onReaction(selectedReaction) : setIsOpen(!isOpen)}
-        className={`flex items-center space-x-2 ${selectedReaction ? 'text-lab font-semibold' : 'text-gray-500 hover:text-gray-700'}`}
+        className={`flex items-center space-x-2 relative ${selectedReaction ? 'text-lab font-semibold' : 'text-gray-500 hover:text-gray-700'}`}
         style={{ color: selectedReactionDetails?.color }}
       >
+        {/* تأثير كوني: نجوم متطايرة عند التفاعل */}
+        {cosmicBurst && (
+          <motion.span
+            key={cosmicBurst.key}
+            initial={{ opacity: 1, scale: 0.7, x: 0, y: 0 }}
+            animate={{ opacity: 0, scale: 1.8, x: cosmicBurst.x, y: cosmicBurst.y }}
+            transition={{ duration: 0.7, ease: 'easeOut' }}
+            className="absolute left-1/2 top-1/2 pointer-events-none"
+            style={{ zIndex: 20 }}
+          >
+            <span className="text-yellow-300 text-lg drop-shadow-glow">★</span>
+            <span className="text-blue-400 text-base drop-shadow-glow">✦</span>
+            <span className="text-pink-400 text-base drop-shadow-glow">✧</span>
+          </motion.span>
+        )}
         {selectedReaction ? (
           <>
             <span className="text-xl">{selectedReaction}</span>
@@ -93,10 +113,16 @@ export default function PostReactions({ onReaction, selectedReaction, reactionCo
                   <motion.span
                     className="text-2xl"
                     animate={selectedReaction === reaction.emoji ? {
-                      scale: [1, 1.5, 1],
+                      scale: [1, 1.8, 1.2, 1],
                       rotate: [0, 360],
+                      filter: [
+                        'drop-shadow(0 0 8px #a78bfa)',
+                        'drop-shadow(0 0 16px #38bdf8)',
+                        'drop-shadow(0 0 8px #a78bfa)',
+                        'none'
+                      ]
                     } : {}}
-                    transition={{ duration: 0.5 }}
+                    transition={{ duration: 0.7 }}
                   >
                     {reaction.emoji}
                   </motion.span>

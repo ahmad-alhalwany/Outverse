@@ -7,8 +7,11 @@ import { useState, useEffect } from 'react';
 import ShareBottleAnimation from './ShareBottleAnimation';
 import Slider from './Slider';
 import LinkPreview from './LinkPreview';
+import { formatRelativeTime } from '../utils/dateFormatter';
+import CosmicVideoPlayer from './CosmicVideoPlayer';
 
 interface PostCardProps {
+  id: number;
   user: {
     name: string;
     avatar: string;
@@ -16,8 +19,7 @@ interface PostCardProps {
   time: string;
   text: string;
   images?: string[];
-  image?: string;
-  video?: string;
+  videos?: string[];
   audio?: string;
   description?: string;
   stats: {
@@ -27,81 +29,8 @@ interface PostCardProps {
   };
 }
 
-// Define the Comment type explicitly for reuse
-type CommentType = {
-  id: number;
-  user: { id: number; name: string; avatar: string; };
-  text: string;
-  time: string;
-  images?: string[];
-  image?: string;
-  video?: string;
-  audio?: string;
-  description?: string;
-  gifUrl?: string;
-  stickerUrl?: string;
-  style?: React.CSSProperties;
-  replies?: CommentType[];
-};
-
-const mockCommentsData: CommentType[] = [
-  {
-    id: 1,
-    user: {
-      id: 101,
-      name: 'Alex Chen',
-      avatar: 'https://randomuser.me/api/portraits/men/32.jpg',
-    },
-    text: 'This is amazing! The colors are so vibrant.',
-    time: '1 hour ago',
-    images: [
-      'https://images.unsplash.com/photo-1506744038136-46273834b3fb',
-      'https://images.unsplash.com/photo-1465101046530-73398c7f28ca',
-      'https://images.unsplash.com/photo-1519125323398-675f0ddb6308',
-      'https://images.unsplash.com/photo-1465101178521-c3a6088ed0c4',
-      'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429',
-      'https://images.unsplash.com/photo-1465101046530-73398c7f28ca?ixid=MnwxMjA3fDB8MHxzZWFyY2h8Mnx8c3BhY2V8ZW58MHx8MHx8',
-      'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?ixid=MnwxMjA3fDB8MHxzZWFyY2h8M3x8c3BhY2V8ZW58MHx8MHx8',
-    ],
-    replies: [],
-  },
-  {
-    id: 2,
-    user: {
-      id: 102,
-      name: 'Maria Garcia',
-      avatar: 'https://randomuser.me/api/portraits/women/44.jpg',
-    },
-    text: 'I love how you captured the essence of creativity here.',
-    time: '45 minutes ago',
-    image: 'https://images.unsplash.com/photo-1519125323398-675f0ddb6308',
-    replies: [],
-  },
-  {
-    id: 3,
-    user: {
-      id: 103,
-      name: 'Video Lover',
-      avatar: 'https://randomuser.me/api/portraits/men/45.jpg',
-    },
-    text: 'Check out this creative video!',
-    time: '10 minutes ago',
-    video: 'https://www.w3schools.com/html/mov_bbb.mp4',
-    replies: [],
-  },
-  {
-    id: 4,
-    user: {
-      id: 104,
-      name: 'Detail Writer',
-      avatar: 'https://randomuser.me/api/portraits/women/55.jpg',
-    },
-    text: 'A deep dive into the creative process.',
-    time: '5 minutes ago',
-    description: 'This post explores the journey of creativity, from the first spark of inspiration to the final masterpiece. It covers techniques, mindset, and the emotional rollercoaster every artist faces. Read on for tips, stories, and more!\n\nKey points:\n- Inspiration sources\n- Overcoming creative block\n- Sharing your work with the world',
-    replies: [],
-  },
-];
+// Mock user data for now - this should come from authentication context
+const mockUser = { id: 1, name: 'Current User' };
 
 const reactionList = [
   { emoji: '💡', label: 'Inspired', color: '#FFD700' },
@@ -111,16 +40,22 @@ const reactionList = [
   { emoji: '✨', label: 'Spark', color: '#FF69B4' },
 ];
 
-export default function PostCard({ user, time, text, images, image, video, audio, description, stats }: PostCardProps) {
+export default function PostCard({ id, user, time, text, images, videos, audio, description, stats }: PostCardProps) {
   const [showShareAnim, setShowShareAnim] = useState(false);
   const [selectedReaction, setSelectedReaction] = useState<{emoji: string, label: string} | null>(null);
-  const [comments, setComments] = useState<CommentType[]>(mockCommentsData);
+  const [commentsCount, setCommentsCount] = useState(stats.comments);
+
+  // دمج الصور والفيديوهات في مصفوفة واحدة مرتبة
+  const media = [
+    ...(images || []).map((url) => ({ type: 'image', url })),
+    ...(videos || []).map((url) => ({ type: 'video', url })),
+  ];
   const [imgIdx, setImgIdx] = useState(0);
-  const hasImages = images && images.length > 0;
-  const nextImg = () => setImgIdx(i => hasImages ? (i + 1) % images.length : 0);
-  const prevImg = () => setImgIdx(i => hasImages ? (i - 1 + images.length) % images.length : 0);
-  const surpriseImg = () => setImgIdx(() => hasImages ? Math.floor(Math.random() * images.length) : 0);
-  useEffect(() => { setImgIdx(0); }, [images]);
+  const hasMedia = media.length > 0;
+  const nextMedia = () => setImgIdx(i => hasMedia ? (i + 1) % media.length : 0);
+  const prevMedia = () => setImgIdx(i => hasMedia ? (i - 1 + media.length) % media.length : 0);
+  const surpriseMedia = () => setImgIdx(() => hasMedia ? Math.floor(Math.random() * media.length) : 0);
+  useEffect(() => { setImgIdx(0); }, [images, videos]);
 
   const handleReaction = (reactionEmoji: string) => {
     // ابحث عن التفاعل المختار من القائمة
@@ -129,68 +64,7 @@ export default function PostCard({ user, time, text, images, image, video, audio
     else setSelectedReaction(null);
   };
 
-  const handleAddComment = (data: { text: string; gifUrl?: string; stickerUrl?: string; style?: React.CSSProperties }) => {
-    const newComment: CommentType = {
-      id: Date.now(),
-      user: { id: 99, name: 'Current User', avatar: 'https://randomuser.me/api/portraits/lego/1.jpg' },
-      text: data.text,
-      gifUrl: data.gifUrl,
-      stickerUrl: data.stickerUrl,
-      style: data.style,
-      time: 'Just now',
-      replies: []
-    };
-    setComments(prev => [newComment, ...prev]);
-  };
 
-  const handleReply = (parentId: number, data: { text: string; gifUrl?: string; stickerUrl?: string; }) => {
-    const newReply = {
-      id: Date.now(),
-      user: { id: 99, name: 'Current User', avatar: 'https://randomuser.me/api/portraits/lego/1.jpg' },
-      text: data.text,
-      gifUrl: data.gifUrl,
-      stickerUrl: data.stickerUrl,
-      time: 'Just now',
-      replies: []
-    };
-    setComments(prev => 
-      prev.map(c => 
-        c.id === parentId 
-        ? { ...c, replies: [...(c.replies || []), newReply] } 
-        : c
-      )
-    );
-  };
-
-  const handleDeleteComment = (commentId: number) => {
-    const deleteRecursively = (commentsList: CommentType[]): CommentType[] => {
-      return commentsList.filter(comment => {
-        if (comment.id === commentId) {
-          return false;
-        }
-        if (comment.replies) {
-          comment.replies = deleteRecursively(comment.replies);
-        }
-        return true;
-      });
-    };
-    setComments(prev => deleteRecursively([...prev]));
-  };
-
-  const handleEditComment = (commentId: number, newText: string) => {
-    const editRecursively = (commentsList: CommentType[]): CommentType[] => {
-      return commentsList.map(comment => {
-        if (comment.id === commentId) {
-          return { ...comment, text: newText };
-        }
-        if (comment.replies) {
-          comment.replies = editRecursively(comment.replies);
-        }
-        return comment;
-      });
-    };
-    setComments(prev => editRecursively([...prev]));
-  };
 
   const handleShare = () => {
     setShowShareAnim(true);
@@ -256,36 +130,38 @@ export default function PostCard({ user, time, text, images, image, video, audio
           ))}
         </motion.p>
         {firstUrl && <LinkPreview url={firstUrl} />}
-        {/* عرض الصور */}
-        {images && images.length > 1 ? (
-          <Slider images={images} />
-        ) : images && images.length === 1 ? (
-          <motion.img
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7, ease: 'easeOut' }}
-            whileHover={{ scale: 1.03 }}
-            src={images[0]}
-            alt="post"
-            className="rounded-lg w-full object-cover max-h-96"
-          />
-        ) : image ? (
-          <motion.img
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.7, ease: 'easeOut' }}
-            whileHover={{ scale: 1.03 }}
-            src={image}
-            alt="post"
-            className="rounded-lg w-full object-cover max-h-96"
-          />
-        ) : null}
-        {/* عرض الفيديو */}
-        {video && (
-          <video controls className="rounded-lg w-full max-h-96 mt-2">
-            <source src={video} />
-            Your browser does not support the video tag.
-          </video>
+        {/* في مكان عرض الصور: */}
+        {hasMedia && (
+          <div className="relative w-full flex flex-col items-center">
+            <div className="rounded-2xl overflow-hidden shadow-lg bg-black/80 flex items-center justify-center" style={{ minHeight: 320, minWidth: 320, maxHeight: 480 }}>
+              {media[imgIdx].type === 'image' ? (
+                <img src={media[imgIdx].url} alt="media" className="object-cover w-full h-full" style={{ maxHeight: 480 }} />
+              ) : (
+                <CosmicVideoPlayer src={media[imgIdx].url} />
+              )}
+            </div>
+            {/* أزرار التنقل */}
+            {media.length > 1 && (
+              <>
+                <button onClick={prevMedia} className="absolute left-2 top-1/2 -translate-y-1/2 bg-purple-500/80 text-white rounded-full p-2 shadow-lg z-10">&#8592;</button>
+                <button onClick={nextMedia} className="absolute right-2 top-1/2 -translate-y-1/2 bg-purple-500/80 text-white rounded-full p-2 shadow-lg z-10">&#8594;</button>
+                <button onClick={surpriseMedia} className="absolute top-2 left-1/2 -translate-x-1/2 bg-green-700/80 text-white rounded-full px-4 py-1 shadow">Surprise Me 🚀</button>
+              </>
+            )}
+            {/* نقاط السلايدر */}
+            {media.length > 1 && (
+              <div className="flex gap-2 mt-4">
+                {media.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setImgIdx(i)}
+                    className={`w-3 h-3 rounded-full transition-all duration-200 ${i === imgIdx ? 'bg-purple-500 scale-125 shadow-lg' : 'bg-gray-400/50'}`}
+                    aria-label={`Go to media ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         )}
         {/* عرض الصوت */}
         {audio && (
@@ -328,16 +204,17 @@ export default function PostCard({ user, time, text, images, image, video, audio
           <span>🔗</span>
           <span>{stats.shares}</span>
         </div>
+        <div className="flex items-center space-x-1">
+          <span>💬</span>
+          <span>{commentsCount}</span>
+        </div>
       </div>
       {showShareAnim && <ShareBottleAnimation onClose={handleCloseShare} />}
       <Comments 
-        comments={comments} 
-        onAddComment={handleAddComment} 
-        onReply={handleReply}
-        onEditComment={handleEditComment}
-        onDeleteComment={handleDeleteComment}
-        user={{ id: 99, name: 'Current User' }}
-        postOwner={{ id: 101, name: 'Alex Chen' }}
+        postId={id}
+        user={mockUser}
+        postOwner={{ id: 1, name: user.name }}
+        onCommentsCountUpdate={setCommentsCount}
       />
     </motion.div>
   );

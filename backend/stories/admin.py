@@ -1,6 +1,9 @@
 from django.contrib import admin
-from .models import Story, StoryContribution
+from .models import Story
 
-# Register your models here.
-admin.site.register(Story)
-admin.site.register(StoryContribution)
+@admin.register(Story)
+class StoryAdmin(admin.ModelAdmin):
+    list_display = ['user', 'text', 'created_at', 'views', 'is_active']
+    list_filter = ['created_at', 'is_active', 'user']
+    search_fields = ['text', 'user__username']
+    readonly_fields = ['created_at', 'views']

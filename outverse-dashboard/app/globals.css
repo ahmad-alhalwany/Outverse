@@ -8,13 +8,13 @@
   --background-end-rgb: 26, 26, 26;
 }
 
+/* --- Cosmic background gradient for body --- */
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-    to bottom,
-    rgb(var(--background-start-rgb)),
-    rgb(var(--background-end-rgb))
-  );
+  background: linear-gradient(120deg, #1a1a2e 0%, #23234a 60%, #2d1b4a 100%);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
 }
 
 @layer utilities {
@@ -29,13 +29,15 @@ body {
   color: #F5F6FA;
 }
 
-/* Cards */
+/* --- Subtle cosmic glow for cards --- */
 .card {
   background: #23234A;
   color: #F5F6FA;
   border-radius: 12px;
-  box-shadow: 0 1px 4px #1113;
-  }
+  box-shadow: 0 2px 12px 0 rgba(106,0,255,0.10), 0 1.5px 8px 0 #1113;
+  border: 1px solid rgba(106,0,255,0.10);
+  background: linear-gradient(120deg, #23234a 80%, #2d1b4a 100%);
+}
 
 /* Danger zone */
 .danger {
@@ -61,4 +63,83 @@ th, td {
   padding: 12px 20px;
   border-radius: 8px;
   margin-bottom: 18px;
+}
+
+/* --- Cosmic hover effect for buttons --- */
+button, .btn, [type="button"] {
+  transition: box-shadow 0.2s, border 0.2s;
+}
+button:hover, .btn:hover, [type="button"]:hover {
+  box-shadow: 0 0 0 2px #6a00ff44, 0 2px 8px #00ccff33;
+  border-color: #6a00ff;
+}
+
+/* --- Subtle cosmic particles background using ::before --- */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(circle at 10% 20%, #fff3 1.5px, transparent 1.5px),
+    radial-gradient(circle at 80% 60%, #fff2 1.2px, transparent 1.2px),
+    radial-gradient(circle at 50% 80%, #6a00ff33 2px, transparent 2px),
+    radial-gradient(circle at 70% 30%, #00ccff33 1.5px, transparent 1.5px),
+    radial-gradient(circle at 30% 70%, #fff2 1px, transparent 1px);
+  background-repeat: repeat;
+  background-size: 400px 400px;
+  opacity: 0.45;
+  animation: cosmicStars 60s linear infinite;
+}
+
+@keyframes cosmicStars {
+  0% { background-position: 0 0, 0 0, 0 0, 0 0, 0 0; }
+  100% { background-position: 400px 400px, 200px 200px, 300px 100px, 100px 300px, 250px 150px; }
+}
+
+/* --- Pulse animation for text-only stories --- */
+@keyframes pulse {
+  0% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes cosmic-particle {
+  0% { transform: translateY(0) scale(1); opacity: 1; }
+  50% { transform: translateY(-10px) scale(1.2); opacity: 0.7; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.animate-cosmic-particle {
+  animation: cosmic-particle infinite alternate ease-in-out;
+}
+
+.cosmic-btn {
+  border-radius: 9999px;
+  background: linear-gradient(120deg, #6a00ff 0%, #a259ff 60%, #00dbde 100%);
+  color: #fff;
+  box-shadow: 0 0 8px 2px #a259ff55;
+  padding: 0.5rem 0.7rem;
+  transition: all 0.2s;
+  outline: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cosmic-btn:hover, .cosmic-btn:focus {
+  box-shadow: 0 0 24px 6px #a259ff99, 0 0 32px 8px #00dbde55;
+  transform: scale(1.08) rotate(-2deg);
+  background: linear-gradient(120deg, #a259ff 0%, #00dbde 100%);
+}
+.cosmic-btn:active {
+  transform: scale(0.96) rotate(1deg);
+  box-shadow: 0 0 8px 2px #a259ff55;
 }
