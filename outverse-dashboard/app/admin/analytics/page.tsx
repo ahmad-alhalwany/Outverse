@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from "react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { apiUrl } from '@/lib/api';
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<any>(null);
@@ -9,7 +10,7 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch("http://localhost:8000/api/analytics/platform/")
+    fetch(apiUrl('analytics/platform/'))
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch analytics');
         return res.json();

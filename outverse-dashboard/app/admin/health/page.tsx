@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from "react";
+import { apiUrl } from '@/lib/api';
 
 interface Service {
   name: string;
@@ -16,7 +17,7 @@ export default function SystemHealthPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch("http://localhost:8000/api/health/system/")
+    fetch(apiUrl('health/system/'))
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch system health');
         return res.json();

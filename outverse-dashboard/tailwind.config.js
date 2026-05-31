@@ -13,10 +13,10 @@ module.exports = {
         'vault': '#9C27B0',    // بنفسجي
         'story': '#FF9800',    // برتقالي
         'shop': '#E91E63',     // وردي
-        'background': '#1A1A1A',
-        'surface': '#2D2D2D',
-        'text': '#FFFFFF',
-        'text-secondary': '#B3B3B3',
+        'background': 'rgb(var(--c-background) / <alpha-value>)',
+        'surface': 'rgb(var(--c-surface) / <alpha-value>)',
+        'text': 'rgb(var(--c-text) / <alpha-value>)',
+        'text-secondary': 'rgb(var(--c-text-secondary) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['var(--font-inter)'],

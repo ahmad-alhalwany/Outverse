@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import "../globals.css";
+import { apiUrl } from '@/lib/api';
 
 interface UserProfile {
   id: number;
@@ -23,13 +24,14 @@ export default function AdminDashboard() {
   const pathname = usePathname();
 
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/api/users/profiles/")
+    fetch(apiUrl('users/profiles/'))
       .then(res => res.json())
       .then(data => setProfiles(data));
   }, []);
 
   const navLinks = [
     { href: "/admin", label: "Dashboard", icon: "🏠" },
+    { href: "/admin/chat", label: "Chat", icon: "💬" },
     { href: "/admin/users", label: "User Management", icon: "👥" },
     { href: "/admin/moderation", label: "Content Moderation", icon: "🚩" },
     { href: "/admin/challenges", label: "Challenges", icon: "🎯" },

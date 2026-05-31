@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from "react";
 import "../../globals.css";
+import { apiUrl } from '@/lib/api';
 
 interface UserProfile {
   id: number;
@@ -28,7 +29,7 @@ export default function UserManagement() {
 
   const fetchProfiles = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/users/profiles/");
+      const res = await fetch(apiUrl('users/profiles/'));
       const data = await res.json();
       setProfiles(data);
     } catch (err) {
@@ -49,7 +50,7 @@ export default function UserManagement() {
     if (!modal.profile || !modal.action) return;
     setLoading(true);
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/users/profiles/${modal.profile.id}/`, {
+      const res = await fetch(apiUrl(`users/profiles/${modal.profile.id}/`), {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',

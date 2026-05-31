@@ -9,7 +9,9 @@ interface Challenge {
   created_at: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/challenges/";
+import { apiUrl } from '@/lib/api';
+
+const API_URL = apiUrl('challenges/');
 
 export default function ChallengesAdminPage() {
   const [challenges, setChallenges] = useState<Challenge[]>([]);

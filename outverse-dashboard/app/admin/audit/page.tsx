@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import "../../globals.css";
+import { apiUrl } from '@/lib/api';
 
 interface AuditLog {
   id: number;
@@ -21,7 +22,7 @@ export default function AuditLogsPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch("http://localhost:8000/api/audit/logs/")
+    fetch(apiUrl('audit/logs/'))
       .then(res => {
         if (!res.ok) throw new Error('Failed to fetch audit logs');
         return res.json();

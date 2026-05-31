@@ -10,7 +10,9 @@ interface FlaggedContent {
   status: 'pending' | 'approved' | 'rejected';
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/moderation/flagged/';
+import { apiUrl } from '@/lib/api';
+
+const API_URL = apiUrl('moderation/flagged/');
 
 export default function ModerationPage() {
   const [flagged, setFlagged] = useState<FlaggedContent[]>([]);
