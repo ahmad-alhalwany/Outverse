@@ -29,16 +29,12 @@ urlpatterns = [
     path('api/health/', include('health.urls')),
     path('api/', include('posts.urls')),
     path('api/', include('stories.urls')),
-<<<<<<< HEAD
     path('api/', include('bottles.urls')),
     path('api/', include('ideas.urls')),
     path('api/shop/', include('shop.urls')),
     path('api/forge/', include('narratives.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/chat/', include('chat.urls')),
-=======
-    path('api/', include('comments.urls')),
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
 ]
 
 if settings.DEBUG:

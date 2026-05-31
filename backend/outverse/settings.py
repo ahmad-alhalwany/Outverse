@@ -55,13 +55,9 @@ INSTALLED_APPS = [
     'analytics',
     'audit',
     'posts',
-<<<<<<< HEAD
     'notifications',
     'chat',
     'channels',
-=======
-    'comments',
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
 ]
 
 ASGI_APPLICATION = 'outverse.asgi.application'

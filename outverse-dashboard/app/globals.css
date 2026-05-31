@@ -24,7 +24,6 @@
   --c-text-secondary: 179 179 179;
 }
 
-<<<<<<< HEAD
 /* Warm light theme */
 html.light {
   --foreground-rgb: 30, 27, 60;
@@ -52,15 +51,6 @@ body {
   position: relative;
   overflow-x: hidden;
   transition: background 0.4s ease, color 0.3s ease;
-=======
-/* --- Cosmic background gradient for body --- */
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(120deg, #1a1a2e 0%, #23234a 60%, #2d1b4a 100%);
-  min-height: 100vh;
-  position: relative;
-  overflow-x: hidden;
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
 }
 
 @layer utilities {
@@ -81,14 +71,9 @@ body {
   color: var(--card-text);
   border-radius: 12px;
   box-shadow: 0 2px 12px 0 rgba(106,0,255,0.10), 0 1.5px 8px 0 #1113;
-<<<<<<< HEAD
   border: 1px solid var(--card-border);
   background: var(--card-bg);
   transition: background 0.4s ease, color 0.3s ease, border-color 0.3s ease;
-=======
-  border: 1px solid rgba(106,0,255,0.10);
-  background: linear-gradient(120deg, #23234a 80%, #2d1b4a 100%);
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
 }
 
 /* Danger zone */
@@ -141,14 +126,9 @@ body::before {
     radial-gradient(circle at 30% 70%, #fff2 1px, transparent 1px);
   background-repeat: repeat;
   background-size: 400px 400px;
-<<<<<<< HEAD
   opacity: var(--star-opacity);
   animation: cosmicStars 60s linear infinite;
   transition: opacity 0.4s ease;
-=======
-  opacity: 0.45;
-  animation: cosmicStars 60s linear infinite;
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
 }
 
 @keyframes cosmicStars {
@@ -201,7 +181,6 @@ body::before {
   transform: scale(0.96) rotate(1deg);
   box-shadow: 0 0 8px 2px #a259ff55;
 }
-<<<<<<< HEAD
 
 .home-feed {
   padding-bottom: 4.5rem;
@@ -1450,5 +1429,3 @@ html:not(.light) .vault-map-style-toggle:not(.vault-map-style-toggle--cosmic) {
 .vault-map-popup-ttl {
   margin: 0;
 }
-=======
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660

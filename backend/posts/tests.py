@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
@@ -87,8 +86,3 @@ class PostsAuthAPITest(APITestCase):
         self.assertEqual(res.status_code, 201)
         comment = Comment.objects.get(pk=res.data['id'])
         self.assertEqual(comment.user_id, self.reader.id)
-=======
-from django.test import TestCase
-
-# Create your tests here.
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660

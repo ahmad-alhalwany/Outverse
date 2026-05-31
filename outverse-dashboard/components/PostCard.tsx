@@ -12,7 +12,6 @@ import { BookmarkIcon as BookmarkSolid } from '@heroicons/react/24/solid';
 import LinkPreview from './LinkPreview';
 import { formatRelativeTime } from '../utils/dateFormatter';
 import CosmicVideoPlayer from './CosmicVideoPlayer';
-<<<<<<< HEAD
 import { getUser } from '@/lib/auth';
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
 import { countsToEmojiMap, COSMIC_REACTIONS, REACTION_TYPE_BY_EMOJI, EMOJI_BY_REACTION_TYPE } from '@/lib/reactions';
@@ -34,11 +33,6 @@ function commentUserName(u: { username?: string; first_name?: string; last_name?
 interface PostCardProps {
   variant?: 'default' | 'premium';
   id?: number;
-=======
-
-interface PostCardProps {
-  id: number;
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
   user: {
     id?: number;
     name: string;
@@ -65,7 +59,6 @@ interface PostCardProps {
   };
 }
 
-<<<<<<< HEAD
 // Define the Comment type explicitly for reuse
 type CommentType = {
   id: number;
@@ -104,10 +97,6 @@ function mapComment(c: Record<string, unknown>): CommentType {
     replies: Array.isArray(c.replies) ? (c.replies as Record<string, unknown>[]).map(mapComment) : [],
   };
 }
-=======
-// Mock user data for now - this should come from authentication context
-const mockUser = { id: 1, name: 'Current User' };
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
 
 export default function PostCard({ variant = 'default', id, user, time, text, mood, tags, reaction_counts, my_reaction, is_saved: isSavedProp = false, images, videos, audio, description, stats, onDeleted, onUpdated, onSavedChange }: PostCardProps) {
   const [showShare, setShowShare] = useState(false);
@@ -130,7 +119,6 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
   const [linkCopied, setLinkCopied] = useState(false);
   const [shareCount, setShareCount] = useState(stats.shares);
 
-<<<<<<< HEAD
   useEffect(() => {
     setSaved(isSavedProp);
   }, [isSavedProp]);
@@ -163,13 +151,6 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
     fetchComments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-=======
-export default function PostCard({ id, user, time, text, images, videos, audio, description, stats }: PostCardProps) {
-  const [showShareAnim, setShowShareAnim] = useState(false);
-  const [selectedReaction, setSelectedReaction] = useState<{emoji: string, label: string} | null>(null);
-  const [commentsCount, setCommentsCount] = useState(stats.comments);
-
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
   // دمج الصور والفيديوهات في مصفوفة واحدة مرتبة
   const media = [
     ...(images || []).map((url) => ({ type: 'image', url })),
@@ -182,7 +163,6 @@ export default function PostCard({ id, user, time, text, images, videos, audio, 
   const surpriseMedia = () => setImgIdx(() => hasMedia ? Math.floor(Math.random() * media.length) : 0);
   useEffect(() => { setImgIdx(0); }, [images, videos]);
 
-<<<<<<< HEAD
   const handleReaction = async (reactionEmoji: string) => {
     if (!id) return;
     const type = REACTION_TYPE_BY_EMOJI[reactionEmoji];
@@ -246,16 +226,6 @@ export default function PostCard({ id, user, time, text, images, videos, audio, 
       /* ignore */
     }
   };
-=======
-  const handleReaction = (reactionEmoji: string) => {
-    // ابحث عن التفاعل المختار من القائمة
-    const found = reactionList.find(r => r.emoji === reactionEmoji);
-    if (found) setSelectedReaction({ emoji: found.emoji, label: found.label });
-    else setSelectedReaction(null);
-  };
-
-
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
 
   const handleCommentReaction = async (commentId: number, reactionEmoji: string) => {
     const type = REACTION_TYPE_BY_EMOJI[reactionEmoji];
@@ -599,7 +569,6 @@ export default function PostCard({ id, user, time, text, images, videos, audio, 
           <div className="text-text-secondary text-sm mt-2 whitespace-pre-line">{description}</div>
         )}
       </div>
-<<<<<<< HEAD
       <PostEngagementBar
         onReaction={handleReaction}
         selectedReaction={selectedReaction?.emoji}
@@ -632,48 +601,6 @@ export default function PostCard({ id, user, time, text, images, videos, audio, 
         onCommentReaction={handleCommentReaction}
         user={{ id: currentUser.id, name: currentUser.name }}
         postOwner={{ id: user.id ?? 0, name: user.name }}
-=======
-      <div className="flex items-center space-x-6 text-gray-500 text-sm">
-        <div className="flex items-center space-x-2">
-          {selectedReaction ? (
-            <button
-              type="button"
-              onClick={() => setSelectedReaction(null)}
-              className="flex items-center space-x-2 focus:outline-none group"
-              style={{ color: selectedReaction ? reactionList.find(r => r.emoji === selectedReaction.emoji)?.color : undefined }}
-              title="Change your reaction"
-            >
-              <span className="text-xl group-hover:scale-125 transition-transform duration-200">{selectedReaction.emoji}</span>
-              <span className="font-semibold text-base group-hover:underline">{selectedReaction.label}</span>
-            </button>
-          ) : (
-            <PostReactions onReaction={handleReaction} />
-          )}
-        </div>
-        <div className="flex items-center space-x-1">
-          <span>👁️</span>
-          <span>{stats.views}</span>
-        </div>
-        <button onClick={handleShare} className="flex items-center space-x-1 hover:text-lab transition">
-          <span>🚀</span>
-          <span>Share</span>
-        </button>
-        <div className="flex items-center space-x-1">
-          <span>🔗</span>
-          <span>{stats.shares}</span>
-        </div>
-        <div className="flex items-center space-x-1">
-          <span>💬</span>
-          <span>{commentsCount}</span>
-        </div>
-      </div>
-      {showShareAnim && <ShareBottleAnimation onClose={handleCloseShare} />}
-      <Comments 
-        postId={id}
-        user={mockUser}
-        postOwner={{ id: 1, name: user.name }}
-        onCommentsCountUpdate={setCommentsCount}
->>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
       />
     </motion.div>
   );
