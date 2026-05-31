@@ -4,12 +4,16 @@ from django.conf import settings
 class Post(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='posts')
     text = models.TextField(blank=True)
+<<<<<<< HEAD
     mood = models.CharField(max_length=20, blank=True)
     tags = models.JSONField(default=list, blank=True)
+=======
+>>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
     created_at = models.DateTimeField(auto_now_add=True)
     views = models.PositiveIntegerField(default=0)
     comments_count = models.PositiveIntegerField(default=0)
     likes_count = models.PositiveIntegerField(default=0)
+<<<<<<< HEAD
     shares_count = models.PositiveIntegerField(default=0)
 
     class Meta:
@@ -17,6 +21,17 @@ class Post(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.text[:30]}"
+=======
+
+    def __str__(self):
+        return f"{self.user.username} - {self.text[:30]}"
+    
+    def update_comments_count(self):
+        """تحديث عدد التعليقات"""
+        from comments.models import Comment
+        self.comments_count = Comment.objects.filter(post=self).count()
+        self.save(update_fields=['comments_count'])
+>>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
 
 MEDIA_TYPE_CHOICES = (
     ('image', 'Image'),
@@ -31,6 +46,7 @@ class PostMedia(models.Model):
 
     def __str__(self):
         return f"{self.media_type.capitalize()} for Post {self.post.id}"
+<<<<<<< HEAD
 
 
 class Reaction(models.Model):
@@ -124,3 +140,5 @@ class SavedPost(models.Model):
 
     def __str__(self):
         return f"user {self.user_id} saved post {self.post_id}"
+=======
+>>>>>>> e510d1e377ae974ece29ee583e54641c26f00660
