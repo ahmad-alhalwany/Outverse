@@ -34,9 +34,20 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class PostMediaSerializer(serializers.ModelSerializer):
+    media_file = serializers.SerializerMethodField()
+
     class Meta:
         model = PostMedia
         fields = ['id', 'media_file', 'media_type', 'order']
+
+    def get_media_file(self, obj):
+        if not obj.media_file:
+            return ''
+        request = self.context.get('request')
+        path = obj.media_file.url
+        if request:
+            return request.build_absolute_uri(path)
+        return path
 
 
 class PostSerializer(serializers.ModelSerializer):

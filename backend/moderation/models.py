@@ -6,6 +6,8 @@ class FlaggedContent(models.Model):
     CONTENT_TYPES = [
         ('post', 'Post'),
         ('comment', 'Comment'),
+        ('reel', 'Reel'),
+        ('reel_comment', 'Reel comment'),
     ]
     STATUS_CHOICES = [
         ('pending', 'Pending'),

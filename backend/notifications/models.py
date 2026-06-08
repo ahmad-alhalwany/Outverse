@@ -27,6 +27,13 @@ class Notification(models.Model):
         blank=True,
         related_name='+',
     )
+    reel = models.ForeignKey(
+        'reels.Reel',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
     text = models.CharField(max_length=255, blank=True)
     is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

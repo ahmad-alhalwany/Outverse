@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'moods',
     'bottles',
     'stories',
+    'reels',
     'narratives',
     'shop',
     'moderation',

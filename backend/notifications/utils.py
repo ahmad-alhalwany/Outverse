@@ -1,7 +1,7 @@
 from .models import Notification
 
 
-def create_notification(recipient_id, actor_id, verb, post=None, text=''):
+def create_notification(recipient_id, actor_id, verb, post=None, reel=None, text=''):
     """Create a notification, skipping self-directed actions."""
     if not recipient_id or not actor_id:
         return None
@@ -12,5 +12,6 @@ def create_notification(recipient_id, actor_id, verb, post=None, text=''):
         actor_id=actor_id,
         verb=verb,
         post=post,
+        reel=reel,
         text=text or '',
     )

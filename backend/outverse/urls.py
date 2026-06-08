@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/health/', include('health.urls')),
     path('api/', include('posts.urls')),
     path('api/', include('stories.urls')),
+    path('api/', include('reels.urls')),
     path('api/', include('bottles.urls')),
     path('api/', include('ideas.urls')),
     path('api/shop/', include('shop.urls')),

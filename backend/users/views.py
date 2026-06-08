@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from notifications.utils import create_notification
+from reels.models import Reel
 
 from .models import Follow, Profile
 from .serializers import (
@@ -40,6 +41,9 @@ def _public_user_dict(user, request, is_following=False, posts_count=None):
         'location': getattr(user, 'location', '') or '',
         'avatar': _avatar_url(user, request),
         'posts_count': posts_count if posts_count is not None else user.posts.count(),
+        'reels_count': Reel.objects.filter(
+            user_id=user.id, is_active=True
+        ).count(),
         'followers_count': Follow.objects.filter(following_id=user.id).count(),
         'following_count': Follow.objects.filter(follower_id=user.id).count(),
         'is_following': is_following,
