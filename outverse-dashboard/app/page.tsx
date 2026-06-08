@@ -1,26 +1,43 @@
 'use client';
 
-import Header from '../components/Header';
-import Sidebar from '../components/Sidebar';
-import PostCard from '../components/PostCard';
-import RightSidebar from '../components/RightSidebar';
-import CreatePostCard from '../components/CreatePostCard';
-import FeedHero from '@/components/home/FeedHero';
-import HomeStoriesRail from '@/components/home/HomeStoriesRail';
-import DailyChallengeBanner from '@/components/home/DailyChallengeBanner';
+import dynamic from 'next/dynamic';
 import FeedTabs from '@/components/home/FeedTabs';
 import PostFeedSkeleton from '@/components/home/PostFeedSkeleton';
 import HomeMobileNav from '@/components/home/HomeMobileNav';
-import HomeDiscoverMobile from '@/components/home/HomeDiscoverMobile';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Suspense, useCallback, useEffect, useState } from 'react';
+
+const Header = dynamic(() => import('../components/Header'), { ssr: false });
+const Sidebar = dynamic(() => import('../components/Sidebar'), { ssr: false });
+const CreatePostCard = dynamic(() => import('../components/CreatePostCard'), {
+  loading: () => <div className="h-32 rounded-2xl bg-surface/40 animate-pulse mb-6" />,
+});
+const FeedHero = dynamic(() => import('@/components/home/FeedHero'), {
+  loading: () => <div className="h-24 rounded-2xl bg-surface/30 animate-pulse mb-4" />,
+});
+const HomeStoriesRail = dynamic(() => import('@/components/home/HomeStoriesRail'), {
+  loading: () => <div className="h-20 rounded-xl bg-surface/30 animate-pulse mb-4" />,
+});
+const HomePostList = dynamic(() => import('@/components/home/HomePostList'), {
+  loading: () => <PostFeedSkeleton count={4} />,
+});
+
+const RightSidebar = dynamic(() => import('../components/RightSidebar'), {
+  ssr: false,
+  loading: () => <aside className="w-80 hidden xl:block shrink-0" aria-hidden />,
+});
+const DailyChallengeBanner = dynamic(
+  () => import('@/components/home/DailyChallengeBanner'),
+  { loading: () => null },
+);
+const HomeDiscoverMobile = dynamic(
+  () => import('@/components/home/HomeDiscoverMobile'),
+  { ssr: false, loading: () => null },
+);
 import { useRouter, useSearchParams } from 'next/navigation';
 import { mapPost } from '../utils/postMapper';
-import { apiFetch, apiUrl } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { useLocale } from '@/components/LocaleProvider';
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-
-const API_URL = apiUrl('posts/');
 
 function HomeContent() {
   const { t } = useLocale();
@@ -116,11 +133,7 @@ function HomeContent() {
               </button>
             </div>
           ) : mappedPosts.length === 0 ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="empty-feed rounded-2xl py-16 px-6 text-center"
-            >
+            <div className="empty-feed rounded-2xl py-16 px-6 text-center home-empty-feed">
               <p className="text-4xl mb-3">🌌</p>
               <p className="font-semibold text-text mb-2">
                 {feed === 'following'
@@ -148,33 +161,13 @@ function HomeContent() {
                   Create a post
                 </a>
               )}
-            </motion.div>
+            </div>
           ) : (
-            <AnimatePresence mode="popLayout" initial={false}>
-              {mappedPosts.map((post, idx) => (
-                <motion.div
-                  key={post.id || idx}
-                  layout
-                  initial={{ opacity: 0, y: 32 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.98 }}
-                  transition={{
-                    duration: 0.45,
-                    type: 'spring',
-                    stiffness: 90,
-                    delay: Math.min(idx * 0.04, 0.2),
-                  }}
-                  className="mb-8"
-                >
-                  <PostCard
-                    {...post}
-                    variant="premium"
-                    onDeleted={() => fetchPosts(true)}
-                    onUpdated={() => fetchPosts(true)}
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            <HomePostList
+              posts={mappedPosts}
+              onDeleted={() => fetchPosts(true)}
+              onUpdated={() => fetchPosts(true)}
+            />
           )}
         </section>
         <RightSidebar />

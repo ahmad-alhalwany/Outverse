@@ -5,13 +5,12 @@ import Comments from './Comments';
 import PostEngagementBar from './PostEngagementBar';
 import ShareCosmicPanel from './ShareCosmicPanel';
 import { useState, useEffect } from 'react';
-import Slider from './Slider';
 import Link from 'next/link';
+import PostMediaGallery from './PostMediaGallery';
 import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon, BookmarkIcon, LinkIcon } from '@heroicons/react/24/outline';
 import { BookmarkIcon as BookmarkSolid } from '@heroicons/react/24/solid';
 import LinkPreview from './LinkPreview';
 import { formatRelativeTime } from '../utils/dateFormatter';
-import CosmicVideoPlayer from './CosmicVideoPlayer';
 import { getUser } from '@/lib/auth';
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
 import { countsToEmojiMap, COSMIC_REACTIONS, REACTION_TYPE_BY_EMOJI, EMOJI_BY_REACTION_TYPE } from '@/lib/reactions';
@@ -118,10 +117,29 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
   const [saveBusy, setSaveBusy] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [shareCount, setShareCount] = useState(stats.shares);
+  const [commentsCount, setCommentsCount] = useState(stats.comments);
+  const [reactionBusy, setReactionBusy] = useState(false);
 
   useEffect(() => {
     setSaved(isSavedProp);
   }, [isSavedProp]);
+
+  useEffect(() => {
+    setCommentsCount(stats.comments);
+  }, [stats.comments]);
+
+  useEffect(() => {
+    setReactionCounts(countsToEmojiMap(reaction_counts));
+  }, [reaction_counts]);
+
+  useEffect(() => {
+    if (my_reaction) {
+      const found = COSMIC_REACTIONS.find((r) => r.type === my_reaction);
+      setSelectedReaction(found ? { emoji: found.emoji, label: found.label } : null);
+    } else {
+      setSelectedReaction(null);
+    }
+  }, [my_reaction]);
 
   const fetchComments = async () => {
     if (!id) return;
@@ -129,7 +147,9 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
       const res = await apiFetch(`comments/?post=${id}`);
       if (res.ok) {
         const data = await res.json();
-        setComments(Array.isArray(data) ? data.map(mapComment) : []);
+        const list = Array.isArray(data) ? data.map(mapComment) : [];
+        setComments(list);
+        setCommentsCount(list.length);
       }
     } catch {
       /* keep existing comments on error */
@@ -151,21 +171,39 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
     fetchComments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-  // دمج الصور والفيديوهات في مصفوفة واحدة مرتبة
-  const media = [
-    ...(images || []).map((url) => ({ type: 'image', url })),
-    ...(videos || []).map((url) => ({ type: 'video', url })),
-  ];
-  const [imgIdx, setImgIdx] = useState(0);
-  const hasMedia = media.length > 0;
-  const nextMedia = () => setImgIdx(i => hasMedia ? (i + 1) % media.length : 0);
-  const prevMedia = () => setImgIdx(i => hasMedia ? (i - 1 + media.length) % media.length : 0);
-  const surpriseMedia = () => setImgIdx(() => hasMedia ? Math.floor(Math.random() * media.length) : 0);
-  useEffect(() => { setImgIdx(0); }, [images, videos]);
+
+  const hasMedia =
+    (images?.some((u) => mediaUrl(u)) ?? false) ||
+    (videos?.some((u) => mediaUrl(u)) ?? false);
 
   const handleReaction = async (reactionEmoji: string) => {
-    if (!id) return;
+    if (!id || reactionBusy) return;
     const type = REACTION_TYPE_BY_EMOJI[reactionEmoji];
+    if (!type) return;
+
+    const prevCounts = { ...reactionCounts };
+    const prevSelected = selectedReaction;
+    const found = COSMIC_REACTIONS.find((r) => r.emoji === reactionEmoji);
+    const nextCounts = { ...reactionCounts };
+
+    if (prevSelected?.emoji === reactionEmoji) {
+      const n = Math.max(0, (nextCounts[reactionEmoji] || 0) - 1);
+      if (n === 0) delete nextCounts[reactionEmoji];
+      else nextCounts[reactionEmoji] = n;
+      setSelectedReaction(null);
+    } else {
+      if (prevSelected?.emoji) {
+        const old = prevSelected.emoji;
+        const n = Math.max(0, (nextCounts[old] || 0) - 1);
+        if (n === 0) delete nextCounts[old];
+        else nextCounts[old] = n;
+      }
+      nextCounts[reactionEmoji] = (nextCounts[reactionEmoji] || 0) + 1;
+      setSelectedReaction(found ? { emoji: found.emoji, label: found.label } : null);
+    }
+    setReactionCounts(nextCounts);
+    setReactionBusy(true);
+
     try {
       const res = await apiFetchJson(`posts/${id}/react/`, {
         method: 'POST',
@@ -175,14 +213,20 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
         const data = await res.json();
         setReactionCounts(countsToEmojiMap(data.reaction_counts));
         if (data.my_reaction) {
-          const found = COSMIC_REACTIONS.find(r => r.type === data.my_reaction);
-          setSelectedReaction(found ? { emoji: found.emoji, label: found.label } : null);
+          const picked = COSMIC_REACTIONS.find((r) => r.type === data.my_reaction);
+          setSelectedReaction(picked ? { emoji: picked.emoji, label: picked.label } : null);
         } else {
           setSelectedReaction(null);
         }
+      } else {
+        setReactionCounts(prevCounts);
+        setSelectedReaction(prevSelected);
       }
     } catch {
-      /* ignore */
+      setReactionCounts(prevCounts);
+      setSelectedReaction(prevSelected);
+    } finally {
+      setReactionBusy(false);
     }
   };
 
@@ -215,7 +259,7 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
     parentId: number,
     data: { text: string; gifUrl?: string; stickerUrl?: string },
   ) => {
-    if (!id || !data.text?.trim()) return;
+    if (!id || (!data.text?.trim() && !data.gifUrl && !data.stickerUrl)) return;
     try {
       await apiFetchJson('comments/', {
         method: 'POST',
@@ -524,43 +568,11 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
           </div>
         )}
         {firstUrl && <LinkPreview url={firstUrl} />}
-        {/* في مكان عرض الصور: */}
-        {hasMedia && (
-          <div className="relative w-full flex flex-col items-center">
-            <div className="rounded-2xl overflow-hidden shadow-lg bg-black/80 flex items-center justify-center" style={{ minHeight: 320, minWidth: 320, maxHeight: 480 }}>
-              {media[imgIdx].type === 'image' ? (
-                <img src={media[imgIdx].url} alt="media" className="object-cover w-full h-full" style={{ maxHeight: 480 }} />
-              ) : (
-                <CosmicVideoPlayer src={media[imgIdx].url} />
-              )}
-            </div>
-            {/* أزرار التنقل */}
-            {media.length > 1 && (
-              <>
-                <button onClick={prevMedia} className="absolute left-2 top-1/2 -translate-y-1/2 bg-purple-500/80 text-white rounded-full p-2 shadow-lg z-10">&#8592;</button>
-                <button onClick={nextMedia} className="absolute right-2 top-1/2 -translate-y-1/2 bg-purple-500/80 text-white rounded-full p-2 shadow-lg z-10">&#8594;</button>
-                <button onClick={surpriseMedia} className="absolute top-2 left-1/2 -translate-x-1/2 bg-green-700/80 text-white rounded-full px-4 py-1 shadow">Surprise Me 🚀</button>
-              </>
-            )}
-            {/* نقاط السلايدر */}
-            {media.length > 1 && (
-              <div className="flex gap-2 mt-4">
-                {media.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setImgIdx(i)}
-                    className={`w-3 h-3 rounded-full transition-all duration-200 ${i === imgIdx ? 'bg-purple-500 scale-125 shadow-lg' : 'bg-gray-400/50'}`}
-                    aria-label={`Go to media ${i + 1}`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        {hasMedia && <PostMediaGallery images={images} videos={videos} />}
         {/* عرض الصوت */}
         {audio && (
           <audio controls className="w-full mt-2">
-            <source src={audio} />
+            <source src={mediaUrl(audio)} />
             Your browser does not support the audio element.
           </audio>
         )}
@@ -574,7 +586,7 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
         selectedReaction={selectedReaction?.emoji}
         reactionCounts={reactionCounts}
         views={stats.views}
-        commentsCount={comments.length || stats.comments}
+        commentsCount={commentsCount}
         sharesCount={shareCount}
         commentsOpen={commentsOpen}
         onCommentsToggle={() => setCommentsOpen((o) => !o)}

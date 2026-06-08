@@ -3,18 +3,18 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
 import useSound from './useSound';
-import Picker from '@emoji-mart/react';
-import data from '@emoji-mart/data';
 import {
   FaceSmileIcon,
   PaperAirplaneIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
+import CommentMediaPicker, { type PickerTab } from './comments/CommentMediaPicker';
 import { FaEdit, FaTrash, FaThumbtack, FaSpinner } from 'react-icons/fa';
 import { MdGif } from 'react-icons/md';
 import PostReactions from './PostReactions';
 import { formatRelativeTime } from '../utils/dateFormatter';
 import { useLocale } from './LocaleProvider';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, mediaUrl } from '@/lib/api';
 
 interface User {
   id: number;
@@ -46,13 +46,6 @@ interface CommentsProps {
   onCommentsCountUpdate?: (count: number) => void;
 }
 
-const gifs = [
-  'https://media.giphy.com/media/3oEjI6SIIHBdRxXI40/giphy.gif',
-  'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
-];
-
-const stickers = ['/stickers/sticker1.png', '/stickers/sticker2.png', '/stickers/sticker3.png'];
-
 export default function Comments({
   comments,
   open,
@@ -66,11 +59,9 @@ export default function Comments({
 }: CommentsProps) {
   const { t } = useLocale();
   const [newComment, setNewComment] = useState('');
-  const [showEmoji, setShowEmoji] = useState(false);
+  const [pickerTab, setPickerTab] = useState<PickerTab | null>(null);
   const [gifUrl, setGifUrl] = useState<string | null>(null);
-  const [showGif, setShowGif] = useState(false);
   const [stickerUrl, setStickerUrl] = useState<string | null>(null);
-  const [showStickers, setShowStickers] = useState(false);
   const playComment = useSound('/sounds/comment.mp3', 0.4);
   const [replyingTo, setReplyingTo] = useState<number | null>(null);
   const [replyText, setReplyText] = useState('');
@@ -85,6 +76,7 @@ export default function Comments({
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionUsers, setMentionUsers] = useState<{ id: number; name: string }[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const attachRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!showMentionList || mentionQuery.length < 1) {
@@ -124,9 +116,16 @@ export default function Comments({
   }
 
   const handleReply = (parentId: number) => {
-    if (replyText.trim() && onReply) {
-      onReply(parentId, { text: replyText, time: formatRelativeTime(new Date()) });
+    if (onReply && (replyText.trim() || gifUrl || stickerUrl)) {
+      onReply(parentId, {
+        text: replyText,
+        gifUrl: gifUrl || undefined,
+        stickerUrl: stickerUrl || undefined,
+        time: formatRelativeTime(new Date()),
+      });
       setReplyText('');
+      setGifUrl(null);
+      setStickerUrl(null);
       setReplyingTo(null);
     }
   };
@@ -219,16 +218,23 @@ export default function Comments({
                 {editingLoading ? <FaSpinner className="animate-spin" /> : 'Save'}
               </button>
             </div>
-          ) : (
+            ) : comment.text?.trim() ? (
             <p className="cosmic-comment__text">
               {comment.text.split(/(@[\w ]+)/g).map((part, i) =>
                 part.startsWith('@') ? <span key={i} className="text-lab font-semibold">{part}</span> : part,
               )}
             </p>
-          )}
+          ) : null}
 
-          {comment.gifUrl && <img src={comment.gifUrl} alt="" className="w-20 h-20 rounded-lg mt-2" />}
-          {comment.stickerUrl && <img src={comment.stickerUrl} alt="" className="w-12 h-12 mt-2" />}
+          {comment.gifUrl && (
+            <img src={mediaUrl(comment.gifUrl) || comment.gifUrl} alt="" className="cosmic-comment__gif mt-2" />
+          )}
+          {comment.stickerUrl && (
+            <img src={mediaUrl(comment.stickerUrl) || comment.stickerUrl} alt="" className="cosmic-comment__sticker mt-2" />
+          )}
+          {!comment.text?.trim() && !comment.gifUrl && !comment.stickerUrl && (
+            <p className="cosmic-comment__text text-text-secondary italic">…</p>
+          )}
 
           {showConfirmDelete === comment.id && (
             <div className="mt-2 p-2 rounded-lg bg-surface/50 text-xs">
@@ -294,11 +300,37 @@ export default function Comments({
           animate={{ height: 'auto', opacity: 1 }}
           exit={{ height: 0, opacity: 0 }}
           transition={{ duration: 0.25 }}
-          className="cosmic-comments overflow-hidden"
+          className="cosmic-comments"
         >
           <div className="cosmic-comments__panel">
-            <form onSubmit={handleSubmit} className="relative">
-              <div className="cosmic-comments__composer">
+            <form onSubmit={handleSubmit} className="cosmic-comments__form">
+              <div className="cosmic-comments__composer" ref={attachRef}>
+                <div className="cosmic-comments__toolbar">
+                  <button
+                    type="button"
+                    className={`cosmic-comments__tool${pickerTab === 'emoji' ? ' cosmic-comments__tool--active' : ''}`}
+                    onClick={() => setPickerTab((t) => (t === 'emoji' ? null : 'emoji'))}
+                    title={t('picker.emoji')}
+                  >
+                    <FaceSmileIcon className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    className={`cosmic-comments__tool${pickerTab === 'gif' ? ' cosmic-comments__tool--active' : ''}`}
+                    onClick={() => setPickerTab((t) => (t === 'gif' ? null : 'gif'))}
+                    title={t('picker.gif')}
+                  >
+                    <MdGif className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    className={`cosmic-comments__tool${pickerTab === 'sticker' ? ' cosmic-comments__tool--active' : ''}`}
+                    onClick={() => setPickerTab((t) => (t === 'sticker' ? null : 'sticker'))}
+                    title={t('picker.sticker')}
+                  >
+                    🌟
+                  </button>
+                </div>
                 <input
                   ref={inputRef}
                   type="text"
@@ -311,38 +343,41 @@ export default function Comments({
                   {addingComment ? <FaSpinner className="animate-spin h-4 w-4" /> : <PaperAirplaneIcon className="h-4 w-4" />}
                 </button>
               </div>
-              <div className="cosmic-comments__toolbar">
-                <button type="button" className="cosmic-comments__tool" onClick={() => setShowEmoji(!showEmoji)} title="Emoji">
-                  <FaceSmileIcon className="h-5 w-5" />
-                </button>
-                <button type="button" className="cosmic-comments__tool" onClick={() => setShowGif(!showGif)} title="GIF">
-                  <MdGif className="h-5 w-5" />
-                </button>
-                <button type="button" className="cosmic-comments__tool" onClick={() => setShowStickers(!showStickers)} title="Sticker">🌟</button>
-              </div>
-              {showEmoji && (
-                <div className="absolute z-50 bottom-full left-0 mb-2">
-                  <Picker data={data} onEmojiSelect={(e: { native: string }) => { setNewComment((c) => c + e.native); setShowEmoji(false); }} theme="auto" />
-                </div>
-              )}
-              {showGif && (
-                <div className="absolute z-50 top-full left-0 mt-1 flex gap-2 p-2 rounded-xl bg-background border border-surface shadow-lg">
-                  {gifs.map((url) => (
-                    <img key={url} src={url} alt="" className="w-14 h-14 rounded-lg cursor-pointer" onClick={() => { setGifUrl(url); setShowGif(false); }} />
-                  ))}
-                </div>
-              )}
-              {showStickers && (
-                <div className="absolute z-50 top-full left-16 mt-1 flex gap-2 p-2 rounded-xl bg-background border border-surface shadow-lg">
-                  {stickers.map((url) => (
-                    <img key={url} src={url} alt="" className="w-10 h-10 cursor-pointer" onClick={() => { setStickerUrl(url); setShowStickers(false); }} />
-                  ))}
-                </div>
-              )}
+              <CommentMediaPicker
+                tab={pickerTab}
+                anchorRef={attachRef}
+                onTabChange={setPickerTab}
+                onEmoji={(native) => setNewComment((c) => c + native)}
+                onGif={(url) => {
+                  setGifUrl(url);
+                  setStickerUrl(null);
+                }}
+                onSticker={(url) => {
+                  setStickerUrl(url);
+                  setGifUrl(null);
+                }}
+              />
+
               {(gifUrl || stickerUrl) && (
-                <div className="flex gap-2 mt-2 px-1">
-                  {gifUrl && <img src={gifUrl} alt="" className="w-16 h-16 rounded-lg" />}
-                  {stickerUrl && <img src={stickerUrl} alt="" className="w-10 h-10" />}
+                <div className="cosmic-comments__preview">
+                  {gifUrl && (
+                    <div className="cosmic-comments__preview-item">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={gifUrl} alt="" className="cosmic-comment__gif" />
+                      <button type="button" className="cosmic-comments__preview-remove" onClick={() => setGifUrl(null)} aria-label={t('picker.close')}>
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  {stickerUrl && (
+                    <div className="cosmic-comments__preview-item">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={mediaUrl(stickerUrl) || stickerUrl} alt="" className="cosmic-comment__sticker" />
+                      <button type="button" className="cosmic-comments__preview-remove" onClick={() => setStickerUrl(null)} aria-label={t('picker.close')}>
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {showMentionList && (

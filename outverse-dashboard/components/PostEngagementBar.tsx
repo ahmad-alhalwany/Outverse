@@ -55,16 +55,26 @@ export default function PostEngagementBar({
           aria-expanded={commentsOpen}
         >
           <ChatBubbleLeftRightIcon className="h-4 w-4" />
-          <span>{commentsCount}</span>
           <span className="hidden sm:inline">
             {commentsOpen ? t('feed.hideComments') : t('feed.discuss')}
           </span>
+          {commentsCount > 0 && (
+            <span className="post-engagement__count" aria-label={`${commentsCount} comments`}>
+              {commentsCount}
+            </span>
+          )}
         </button>
 
-        <button type="button" onClick={onShare} className="post-engagement__chip">
+        <button
+          type="button"
+          onClick={onShare}
+          className="post-engagement__chip post-engagement__chip--share"
+        >
           <ShareIcon className="h-4 w-4" />
           <span className="hidden sm:inline">{t('feed.share')}</span>
-          {sharesCount > 0 && <span>{sharesCount}</span>}
+          {sharesCount > 0 && (
+            <span className="post-engagement__count">{sharesCount}</span>
+          )}
         </button>
       </div>
     </div>

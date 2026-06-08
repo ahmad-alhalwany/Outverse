@@ -3,9 +3,15 @@
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { SparklesIcon, Cog6ToothIcon } from '@heroicons/react/24/outline';
+import ReelsIcon from '@/components/icons/ReelsIcon';
 import { getUser, getCurrentUserId } from '@/lib/auth';
 
-const WORLDS = [
+type WorldLink =
+  | { href: string; label: string; color: string; reelsIcon: true }
+  | { href: string; label: string; color: string; emoji: string };
+
+const WORLDS: WorldLink[] = [
+  { href: '/reels', label: 'Signals', reelsIcon: true, color: '#22D3EE' },
   { href: '/lab', label: 'Lab', emoji: '🧪', color: '#6A00FF' },
   { href: '/bazaar', label: 'Bazaar', emoji: '💡', color: '#FF6B9D' },
   { href: '/bottles', label: 'Vault', emoji: '🍶', color: '#00CCFF' },
@@ -68,7 +74,11 @@ export default function FeedHero() {
                 color: 'var(--card-text)',
               }}
             >
-              <span>{w.emoji}</span>
+              {'reelsIcon' in w ? (
+                <ReelsIcon size={18} active className="shrink-0" />
+              ) : (
+                <span>{w.emoji}</span>
+              )}
               {w.label}
             </Link>
           ))}

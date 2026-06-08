@@ -11,11 +11,37 @@ export function apiUrl(path: string): string {
   return `${API_ORIGIN}/api/${segment}`;
 }
 
+/** Fix legacy API paths missing the `/media/` prefix. */
+function normalizeMediaPath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('http')) {
+    try {
+      const u = new URL(trimmed);
+      if (u.pathname.startsWith('/posts/media/')) {
+        u.pathname = `/media${u.pathname}`;
+        return u.toString();
+      }
+      return trimmed;
+    } catch {
+      return trimmed;
+    }
+  }
+  if (trimmed.startsWith('/posts/media/')) {
+    return `/media${trimmed}`;
+  }
+  if (trimmed.startsWith('posts/media/')) {
+    return `/media/${trimmed}`;
+  }
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+}
+
 /** Resolve uploaded media paths from Django (`/media/…`). */
 export function mediaUrl(path: string | null | undefined): string {
   if (!path) return '';
-  if (path.startsWith('http')) return path;
-  return `${API_ORIGIN}${path.startsWith('/') ? path : `/${path}`}`;
+  const normalized = normalizeMediaPath(path);
+  if (normalized.startsWith('http')) return normalized;
+  return `${API_ORIGIN}${normalized}`;
 }
 
 /** @deprecated Use `mediaUrl` — kept for existing imports */
