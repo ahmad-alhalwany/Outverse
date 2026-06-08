@@ -14,6 +14,9 @@ const themeInitScript = `(function(){try{var t=localStorage.getItem('outverse-th
 export const metadata: Metadata = {
   title: "Outverse Dashboard",
   description: "Your creative social space where ideas come to life",
+  icons: {
+    icon: [{ url: "/vercel.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({

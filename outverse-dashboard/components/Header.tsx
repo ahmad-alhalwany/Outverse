@@ -48,6 +48,7 @@ interface AppNotification {
   actor: { id: number; username: string; avatar: string | null };
   verb: 'reaction' | 'comment' | 'follow';
   post: number | null;
+  reel: number | null;
   text: string;
   is_read: boolean;
   created_at: string;
@@ -185,6 +186,8 @@ const Header = () => {
     setShowNotifications(false);
     if (n.verb === 'follow' && n.actor?.id) {
       router.push(`/profile/${n.actor.id}`);
+    } else if (n.reel) {
+      router.push(`/reels/${n.reel}`);
     } else if (n.post) {
       router.push(`/post/${n.post}`);
     }
@@ -418,7 +421,9 @@ const Header = () => {
                           className={`flex items-start gap-3 px-5 py-4 border-0 relative cursor-pointer hover:bg-surface transition-colors ${n.is_read ? 'bg-transparent' : 'bg-vault/10 backdrop-blur-sm shadow-inner'} rounded-xl mb-1`}
                           style={{ boxShadow: n.is_read ? undefined : '0 0 12px 2px #7f5fff33' }}
                         >
-                          <span className="text-2xl mt-0.5 drop-shadow-glow">{verbIcon[n.verb] || '✨'}</span>
+                          <span className="text-2xl mt-0.5 drop-shadow-glow">
+                            {n.reel ? '🛸' : verbIcon[n.verb] || '✨'}
+                          </span>
                           <div className="flex-1">
                             <div className="text-sm text-text font-medium">
                               <span className="font-bold">{n.actor?.username || 'Someone'}</span> {n.text}

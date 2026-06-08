@@ -18,9 +18,11 @@ import {
   Cog6ToothIcon,
   ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
+import ReelsIcon from '@/components/icons/ReelsIcon';
 
 const navLinks = [
   { nameKey: 'nav.home', icon: HomeIcon, href: '/' },
+  { nameKey: 'nav.reels', href: '/reels', reelsIcon: true as const },
   { nameKey: 'nav.lab', icon: BeakerIcon, href: '/lab' },
   { nameKey: 'nav.bazaar', icon: ShoppingBagIcon, href: '/bazaar' },
   { nameKey: 'nav.vault', icon: ArchiveBoxIcon, href: '/bottles' },
@@ -83,18 +85,27 @@ export default function Sidebar() {
         <ul className="space-y-2">
           {navLinks.map((link) => {
             const active = isNavActive(link.href, pathname, feed);
-            const Icon = link.icon;
+            const isReels = 'reelsIcon' in link && link.reelsIcon;
+            const Icon = 'icon' in link ? link.icon : null;
             return (
               <li key={link.nameKey}>
                 <Link
                   href={link.href}
                   className={`flex items-center space-x-3 font-medium py-2 px-3 rounded-lg transition-colors ${
+                    isReels ? 'sidebar-link--reels ' : ''
+                  }${
                     active
-                      ? 'bg-surface text-text'
+                      ? isReels
+                        ? 'sidebar-link--reels-active text-text'
+                        : 'bg-surface text-text'
                       : 'text-text-secondary hover:text-text hover:bg-surface/60'
                   }`}
                 >
-                  <Icon className="h-5 w-5" />
+                  {isReels ? (
+                    <ReelsIcon size={22} active={active} className="shrink-0" />
+                  ) : (
+                    Icon && <Icon className="h-5 w-5" />
+                  )}
                   <span>{t(link.nameKey)}</span>
                 </Link>
               </li>

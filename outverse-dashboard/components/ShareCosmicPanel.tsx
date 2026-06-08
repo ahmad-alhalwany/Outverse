@@ -52,11 +52,16 @@ export default function ShareCosmicPanel({
   }, []);
 
   useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
   }, [onClose]);
 
   const copyLink = async () => {
@@ -113,7 +118,7 @@ export default function ShareCosmicPanel({
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: 24 }}
-        transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 30 }}
       >
         <div className="cosmic-share-sheet__glow" aria-hidden />
         <button

@@ -23,6 +23,8 @@ import {
 } from '@/lib/profileEmotions';
 import { mapPost } from '@/utils/postMapper';
 import PostCard from '@/components/PostCard';
+import ProfileReelsGrid from '@/components/profile/ProfileReelsGrid';
+import ReelsIcon from '@/components/icons/ReelsIcon';
 
 const PALETTES = {
   light: {
@@ -57,7 +59,7 @@ const PALETTES = {
 
 const WEEK_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-type TabKey = 'posts' | 'challenges' | 'stories' | 'bottles';
+type TabKey = 'posts' | 'reels' | 'challenges' | 'stories' | 'bottles';
 
 interface Profile {
   id: number;
@@ -68,6 +70,7 @@ interface Profile {
   location?: string;
   avatar: string | null;
   posts_count: number;
+  reels_count?: number;
   followers_count: number;
   following_count: number;
   is_following: boolean;
@@ -299,6 +302,16 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           </span>
           <button
             type="button"
+            onClick={() => setTab('reels')}
+            className="hover:opacity-80 text-left"
+          >
+            <span className="font-bold" style={{ color: C.text }}>
+              {formatCount(profile.reels_count ?? 0)}
+            </span>{' '}
+            <span style={{ color: C.text2 }}>signals</span>
+          </button>
+          <button
+            type="button"
             onClick={() => setFollowModal('followers')}
             className="hover:opacity-80 text-left"
           >
@@ -381,6 +394,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         {(
           [
             { key: 'posts', label: 'Posts' },
+            { key: 'reels', label: 'Signals', icon: true as const },
             { key: 'challenges', label: 'Challenges' },
             { key: 'stories', label: 'Stories' },
             { key: 'bottles', label: 'Bottles' },
@@ -396,7 +410,14 @@ export default function ProfileView({ userId }: ProfileViewProps) {
               background: tab === t.key ? C.white : 'transparent',
             }}
           >
-            {t.label}
+            {'icon' in t && t.icon ? (
+              <span className="inline-flex items-center justify-center gap-1">
+                <ReelsIcon size={14} active={tab === t.key} />
+                {t.label}
+              </span>
+            ) : (
+              t.label
+            )}
             {tab === t.key && (
               <motion.div
                 layoutId="profileTab"
@@ -472,6 +493,8 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             )}
           </>
         )}
+
+        {tab === 'reels' && <ProfileReelsGrid userId={userId} palette={C} />}
 
         {tab === 'challenges' && (
           <div className="grid sm:grid-cols-2 gap-3">
