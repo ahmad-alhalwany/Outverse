@@ -30,30 +30,30 @@ export default function AdminChatPage() {
   }, []);
 
   return (
-    <AdminShell title="Cosmic Chat">
-      <div className="card" style={{ padding: 24 }}>
-        <p style={{ color: '#aaa', marginBottom: 16 }}>
-          Django admin: <code>/admin/</code> — full CRUD on conversations, messages, and rooms.
+    <AdminShell title="Cosmic Chat" subtitle="DMs, rooms, and presence overview">
+      {error && <div className="admin-alert admin-alert--error">{error}</div>}
+      {stats && (
+        <div className="admin-kpi-grid">
+          {(
+            [
+              ['Conversations', stats.conversations],
+              ['DM messages', stats.messages],
+              ['Group rooms', stats.rooms],
+              ['Room messages', stats.room_messages],
+              ['Presence', stats.presence_records],
+            ] as const
+          ).map(([label, value]) => (
+            <div key={label} className="admin-kpi">
+              <div className="admin-kpi__label">{label}</div>
+              <div className="admin-kpi__value">{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="admin-panel">
+        <p style={{ color: 'var(--admin-muted)', fontSize: '0.85rem', margin: 0 }}>
+          Full message CRUD remains in Django admin at <code>/admin/</code> on the API host.
         </p>
-        {error && <p style={{ color: '#FF3B3B' }}>{error}</p>}
-        {stats && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 16 }}>
-            {(
-              [
-                ['Conversations', stats.conversations],
-                ['DM messages', stats.messages],
-                ['Group rooms', stats.rooms],
-                ['Room messages', stats.room_messages],
-                ['Presence', stats.presence_records],
-              ] as const
-            ).map(([label, value]) => (
-              <div key={label} style={{ background: '#23234A', borderRadius: 8, padding: 16 }}>
-                <div style={{ fontSize: 12, color: '#aaa' }}>{label}</div>
-                <div style={{ fontSize: 24, fontWeight: 700 }}>{value}</div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </AdminShell>
   );

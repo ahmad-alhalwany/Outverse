@@ -1,8 +1,9 @@
 'use client';
-import { useEffect, useState } from "react";
-import { format } from "date-fns";
-import "../../globals.css";
-import { apiUrl } from '@/lib/api';
+
+import { useEffect, useState } from 'react';
+import { format } from 'date-fns';
+import AdminShell from '@/components/admin/AdminShell';
+import { apiFetch } from '@/lib/api';
 
 interface AuditLog {
   id: number;
@@ -12,74 +13,57 @@ interface AuditLog {
   description: string;
   ip_address: string;
   created_at: string;
-  metadata: any;
 }
 
-export default function AuditLogsPage() {
+export default function AdminAuditPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    setLoading(true);
-    fetch(apiUrl('audit/logs/'))
-      .then(res => {
+    apiFetch('audit/logs/')
+      .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch audit logs');
         return res.json();
       })
-      .then(data => setLogs(Array.isArray(data.results) ? data.results : []))
-      .catch(err => {
-        setError(err.message);
-        setLogs([]);
-      })
-      .finally(() => setLoading(false));
+      .then((data) => setLogs(Array.isArray(data.results) ? data.results : Array.isArray(data) ? data : []))
+      .catch((e: Error) => setError(e.message));
   }, []);
 
   return (
-    <div style={{ padding: 32 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 24 }}>Audit Logs</h1>
-      <div className="card" style={{ padding: 24 }}>
-        {loading ? (
-          <div style={{ color: '#FFB300', margin: '24px 0' }}>Loading...</div>
-        ) : error ? (
-          <div style={{ color: '#FF3B3B', margin: '24px 0' }}>{error}</div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #2A2D3E' }}>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Time</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>User</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Action</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>Description</th>
-                  <th style={{ padding: '12px', textAlign: 'left' }}>IP Address</th>
+    <AdminShell title="Audit Logs" subtitle="Security and activity trail">
+      {error && <div className="admin-alert admin-alert--error">{error}</div>}
+      <div className="admin-panel">
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>User</th>
+                <th>Action</th>
+                <th>Description</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ color: 'var(--admin-muted)' }}>No audit logs yet</td>
                 </tr>
-              </thead>
-              <tbody>
-                {Array.isArray(logs) && logs.length > 0 ? (
-                  logs.map((log) => (
-                    <tr key={log.id} style={{ borderBottom: '1px solid #2A2D3E' }}>
-                      <td style={{ padding: '12px' }}>
-                        {format(new Date(log.created_at), 'MMM d, yyyy HH:mm:ss')}
-                      </td>
-                      <td style={{ padding: '12px' }}>{log.user_email}</td>
-                      <td style={{ padding: '12px' }}>{log.action_display}</td>
-                      <td style={{ padding: '12px' }}>{log.description}</td>
-                      <td style={{ padding: '12px' }}>{log.ip_address}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} style={{ textAlign: 'center', color: '#aaa', padding: 24 }}>
-                      No audit logs found.
-                    </td>
+              ) : (
+                logs.map((log) => (
+                  <tr key={log.id}>
+                    <td>{format(new Date(log.created_at), 'MMM d, yyyy HH:mm')}</td>
+                    <td>{log.user_email}</td>
+                    <td>{log.action_display || log.action}</td>
+                    <td>{log.description}</td>
+                    <td>{log.ip_address}</td>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+    </AdminShell>
   );
-} 
+}

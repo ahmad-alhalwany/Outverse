@@ -1,138 +1,190 @@
-'use client'
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import "../globals.css";
-import { apiUrl } from '@/lib/api';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
+import AdminShell from '@/components/admin/AdminShell';
+import { fetchAdminDashboard } from '@/lib/adminApi';
+import type { AdminDashboardData } from '@/lib/adminTypes';
 
-interface UserProfile {
-  id: number;
-  user: {
-    id: number;
-    username: string;
-    email: string;
-  };
-  points: number;
-  mood_history: any[];
-  achievements: any[];
-}
-
-export default function AdminDashboard() {
-  const [profiles, setProfiles] = useState<UserProfile[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const pathname = usePathname();
-
-  useEffect(() => {
-    fetch(apiUrl('users/profiles/'))
-      .then(res => res.json())
-      .then(data => setProfiles(data));
-  }, []);
-
-  const navLinks = [
-    { href: "/admin", label: "Dashboard", icon: "🏠" },
-    { href: "/admin/chat", label: "Chat", icon: "💬" },
-    { href: "/admin/users", label: "User Management", icon: "👥" },
-    { href: "/admin/moderation", label: "Content Moderation", icon: "🚩" },
-    { href: "/admin/challenges", label: "Challenges", icon: "🎯" },
-    { href: "/admin/analytics", label: "Analytics", icon: "📊" },
-    { href: "/admin/health", label: "System Health", icon: "💻" },
-    { href: "/admin/audit", label: "Audit Logs", icon: "📜" },
-  ];
-
+function Kpi({
+  label,
+  value,
+  delta,
+  warm,
+}: {
+  label: string;
+  value: string | number;
+  delta?: string;
+  warm?: boolean;
+}) {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      {/* Sidebar */}
-      <aside className="sidebar" style={{ width: sidebarOpen ? 220 : 64, transition: 'width 0.2s', borderRight: '1px solid #23234A', padding: sidebarOpen ? 24 : 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 32 }}>
-          <h2 style={{ fontWeight: 700, fontSize: 24, flex: 1, transition: 'opacity 0.2s', opacity: sidebarOpen ? 1 : 0 }}>Outverse</h2>
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} style={{ background: 'none', border: 'none', color: '#F5F6FA', fontSize: 22, cursor: 'pointer' }} title="Toggle sidebar">{sidebarOpen ? '⏪' : '⏩'}</button>
+    <div className={`admin-kpi${warm ? ' admin-kpi--warm' : ''}`}>
+      <div className="admin-kpi__label">{label}</div>
+      <div className="admin-kpi__value">{value}</div>
+      {delta && (
+        <div className={`admin-kpi__delta${delta.startsWith('+') ? ' admin-kpi__delta--up' : ''}`}>
+          {delta}
         </div>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {navLinks.map(link => (
-            <Link
-              key={link.href}
-              href={link.href}
-              style={{
-                color: pathname === link.href ? '#FF3B3B' : '#F5F6FA',
-                textDecoration: 'none',
-                fontWeight: pathname === link.href ? 700 : 500,
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: pathname === link.href ? '#23234A' : 'none',
-                borderRadius: 8,
-                padding: sidebarOpen ? '6px 12px' : '6px',
-                transition: 'all 0.15s',
-              }}
-            >
-              <span>{link.icon}</span>{sidebarOpen && link.label}
-            </Link>
-          ))}
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main style={{ flex: 1, padding: 32 }}>
-        {/* Security Alert */}
-        <div className="alert" style={{ marginBottom: 24 }}>
-          <b>Security Alert:</b> Unusual login activity detected <button className="danger" style={{ float: 'right', fontWeight: 600, borderRadius: 6, padding: '4px 16px', cursor: 'pointer' }}>View Details</button>
-        </div>
-        {/* Cards */}
-        <div style={{ display: 'flex', gap: 24, marginBottom: 32 }}>
-          <div className="card" style={{ flex: 1, padding: 24 }}>
-            <div style={{ fontSize: 14, color: '#aaa' }}>Active Users</div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>{profiles.length}</div>
-            <div style={{ fontSize: 12, color: '#4caf50' }}>+12.5% from last week</div>
-          </div>
-          <div className="card" style={{ flex: 1, padding: 24 }}>
-            <div style={{ fontSize: 14, color: '#aaa' }}>Flagged Content</div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>24</div>
-            <div style={{ fontSize: 12, color: '#FF3B3B' }}>4 high priority</div>
-          </div>
-          <div className="card" style={{ flex: 1, padding: 24 }}>
-            <div style={{ fontSize: 14, color: '#aaa' }}>System Health</div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>98.2%</div>
-            <div style={{ fontSize: 12, color: '#F5F6FA' }}>Stable</div>
-          </div>
-          <div className="card" style={{ flex: 1, padding: 24 }}>
-            <div style={{ fontSize: 14, color: '#aaa' }}>Security Status</div>
-            <div style={{ fontSize: 28, fontWeight: 700 }}>A+</div>
-            <div style={{ fontSize: 12, color: '#F5F6FA' }}>2FA Enabled</div>
-          </div>
-        </div>
-
-        {/* User Management Table */}
-        <div className="card" style={{ padding: 24 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>User Management</h2>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-            <input type="text" placeholder="Search users..." style={{ padding: 6, borderRadius: 6, border: '1px solid #2E2E4D', background: '#23234A', color: '#F5F6FA', width: 200 }} />
-            <button className="danger" style={{ fontWeight: 600, borderRadius: 6, padding: '4px 16px', cursor: 'pointer' }}>Ban Selected</button>
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
-            <thead>
-              <tr style={{ background: '#23234A' }}>
-                <th style={{ textAlign: 'left', padding: 8 }}>Name</th>
-                <th style={{ textAlign: 'left', padding: 8 }}>Email</th>
-                <th style={{ textAlign: 'left', padding: 8 }}>Points</th>
-                <th style={{ textAlign: 'left', padding: 8 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {profiles.map(profile => (
-                <tr key={profile.id} style={{ borderBottom: '1px solid #2E2E4D' }}>
-                  <td style={{ padding: 8 }}>{profile.user.username}</td>
-                  <td style={{ padding: 8 }}>{profile.user.email}</td>
-                  <td style={{ padding: 8 }}>{profile.points}</td>
-                  <td style={{ padding: 8 }}>
-                    <button className="danger" style={{ borderRadius: 6, padding: '4px 12px', cursor: 'pointer' }}>
-                      Ban
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </main>
+      )}
     </div>
   );
-} 
+}
+
+export default function AdminDashboardPage() {
+  const [data, setData] = useState<AdminDashboardData | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetchAdminDashboard()
+      .then(setData)
+      .catch((e: Error) => setError(e.message === 'STAFF_REQUIRED' ? 'Staff token required.' : e.message));
+  }, []);
+
+  return (
+    <AdminShell
+      title="Command Center"
+      subtitle="Platform overview — live data from Django"
+      actions={
+        <button
+          type="button"
+          className="admin-btn admin-btn--ghost"
+          onClick={() => fetchAdminDashboard().then(setData).catch(() => {})}
+        >
+          ↻ Refresh
+        </button>
+      }
+    >
+      {error && <div className="admin-alert admin-alert--error">{error}</div>}
+
+      {!data ? (
+        <p style={{ color: 'var(--admin-muted)' }}>Loading dashboard…</p>
+      ) : (
+        <>
+          <div className="admin-kpi-grid">
+            <Kpi label="Active users" value={data.counts.active_users} delta={`${data.counts.users} total`} warm />
+            <Kpi
+              label="Pending reports"
+              value={data.counts.pending_flags}
+              delta={data.counts.pending_flags > 0 ? 'Needs review' : 'All clear'}
+            />
+            <Kpi label="Today's orders" value={data.shop.orders_today} delta={`${data.shop.revenue_today} coins`} warm />
+            <Kpi label="Completion rate" value={`${data.completion_rate}%`} delta="Lab challenges" warm />
+            <Kpi label="Signals (reels)" value={data.counts.reels} />
+            <Kpi label="Shop products" value={data.shop.active_products} delta={`${data.shop.featured_products} featured`} />
+          </div>
+
+          <div className="admin-grid-2">
+            <div className="admin-panel admin-panel--light">
+              <h3 className="admin-panel__title">Weekly activity</h3>
+              <div style={{ height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={data.weekly_activity}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ecd5cc" />
+                    <XAxis dataKey="day" tick={{ fill: '#6d3d33', fontSize: 11 }} />
+                    <YAxis tick={{ fill: '#6d3d33', fontSize: 11 }} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="total" stroke="#6d3d33" strokeWidth={2} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="admin-panel admin-panel--light">
+              <h3 className="admin-panel__title">Mood heatmap (28 days)</h3>
+              <div className="admin-mood-grid">
+                {data.mood_calendar.map((cell) => (
+                  <div
+                    key={cell.date}
+                    className={`admin-mood-cell${cell.total > 0 ? ' admin-mood-cell--active' : ''}`}
+                    title={`${cell.date}: ${cell.dominant}`}
+                  >
+                    <span>{cell.day}</span>
+                    <span>{cell.total > 0 ? '🙂' : '·'}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: '0.75rem', marginTop: '0.75rem', opacity: 0.8 }}>
+                {data.mood_calendar.filter((c) => c.total > 0).length} active mood days logged
+              </p>
+            </div>
+          </div>
+
+          <div className="admin-grid-2">
+            <div className="admin-panel">
+              <div className="admin-toolbar">
+                <h3 className="admin-panel__title" style={{ margin: 0 }}>Recent reports</h3>
+                <Link href="/admin/moderation" className="admin-btn admin-btn--ghost">
+                  View all
+                </Link>
+              </div>
+              <div className="admin-table-wrap">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>Type</th>
+                      <th>Content</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.recent_flags.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} style={{ color: 'var(--admin-muted)' }}>No reports yet</td>
+                      </tr>
+                    ) : (
+                      data.recent_flags.map((f) => (
+                        <tr key={f.id}>
+                          <td>{f.type}</td>
+                          <td style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {f.content}
+                          </td>
+                          <td>
+                            <span className={`admin-badge admin-badge--${f.status}`}>{f.status}</span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="admin-panel">
+              <h3 className="admin-panel__title">Top supporters</h3>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {data.top_supporters.map((s) => (
+                  <li
+                    key={s.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      padding: '0.5rem 0',
+                      borderBottom: '1px solid var(--admin-border)',
+                    }}
+                  >
+                    <span>@{s.user__username}</span>
+                    <strong>{s.points} pts</strong>
+                  </li>
+                ))}
+              </ul>
+              <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <Link href="/admin/users" className="admin-btn admin-btn--primary">Users</Link>
+                <Link href="/admin/shop" className="admin-btn admin-btn--ghost">Shop</Link>
+                <Link href="/admin/reels" className="admin-btn admin-btn--ghost">Signals</Link>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </AdminShell>
+  );
+}

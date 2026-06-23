@@ -243,9 +243,14 @@ class ReelViewSet(viewsets.ModelViewSet):
         return ctx
 
     def get_queryset(self):
-        qs = Reel.objects.filter(is_active=True).select_related(
-            'user', 'music_track'
-        ).order_by('-created_at')
+        viewer = user_from_request(self.request)
+        if viewer and viewer.is_staff and self.request.query_params.get('admin') == '1':
+            qs = Reel.objects.all().select_related('user', 'music_track')
+        else:
+            qs = Reel.objects.filter(is_active=True).select_related(
+                'user', 'music_track'
+            )
+        qs = qs.order_by('-created_at')
         if self.action != 'list':
             return qs
         feed = self.request.query_params.get('feed')
@@ -280,9 +285,18 @@ class ReelViewSet(viewsets.ModelViewSet):
         user, err = require_user(request)
         if err:
             return err
-        if reel.user_id != user.id:
+        if reel.user_id != user.id and not user.is_staff:
             return Response({'detail': 'Not allowed.'}, status=403)
         return super().destroy(request, *args, **kwargs)
+
+    def partial_update(self, request, *args, **kwargs):
+        reel = self.get_object()
+        user, err = require_user(request)
+        if err:
+            return err
+        if reel.user_id != user.id and not user.is_staff:
+            return Response({'detail': 'Not allowed.'}, status=403)
+        return super().partial_update(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def discover(self, request):

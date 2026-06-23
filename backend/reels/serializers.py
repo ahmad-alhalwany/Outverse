@@ -152,6 +152,14 @@ class ReelSerializer(serializers.ModelSerializer):
             return False
         return obj.likes.filter(user_id=viewer.id).exists()
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get('request')
+        viewer = user_from_request(request) if request else None
+        if viewer and viewer.is_staff:
+            self.fields['is_featured'].read_only = False
+            self.fields['is_active'].read_only = False
+
     def validate(self, attrs):
         start = attrs.get('music_start_seconds', 0) or 0
         end = attrs.get('music_end_seconds')

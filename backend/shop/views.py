@@ -1,6 +1,6 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from outverse.auth_utils import require_user
@@ -23,10 +23,16 @@ class ShopItemViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('wallet', 'purchase'):
             return [IsAuthenticated()]
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAdminUser()]
         return [AllowAny()]
 
     def get_queryset(self):
-        qs = ShopItem.objects.filter(is_available=True)
+        user = getattr(self.request, 'user', None)
+        if user and user.is_authenticated and user.is_staff:
+            qs = ShopItem.objects.all()
+        else:
+            qs = ShopItem.objects.filter(is_available=True)
         params = self.request.query_params
         category = params.get('category')
         item_type = params.get('type')

@@ -1,6 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 
 from outverse.auth_utils import require_user, user_from_request
@@ -13,11 +13,12 @@ class ChallengeViewSet(viewsets.ModelViewSet):
     serializer_class = ChallengeSerializer
 
     def get_permissions(self):
-        if self.action in ('submissions',):
-            if self.request.method == 'POST':
-                return [IsAuthenticated()]
+        if self.action == 'submissions' and self.request.method == 'POST':
+            return [IsAuthenticated()]
         if self.action == 'user_entries':
             return [AllowAny()]
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAdminUser()]
         return [AllowAny()]
 
     def get_queryset(self):

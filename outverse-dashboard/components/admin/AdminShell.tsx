@@ -3,105 +3,92 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ReactNode, useState } from 'react';
+import { getUser } from '@/lib/auth';
 
 const NAV = [
   { href: '/admin', label: 'Dashboard', icon: '🏠' },
-  { href: '/admin/users', label: 'Users', icon: '👥' },
-  { href: '/admin/chat', label: 'Chat', icon: '💬' },
-  { href: '/admin/challenges', label: 'Challenges', icon: '🎯' },
-  { href: '/admin/moderation', label: 'Moderation', icon: '🚩' },
   { href: '/admin/analytics', label: 'Analytics', icon: '📊' },
+  { href: '/admin/users', label: 'Users', icon: '👥' },
+  { href: '/admin/shop', label: 'Madness Shop', icon: '🛒' },
+  { href: '/admin/reels', label: 'Signals', icon: '📡' },
+  { href: '/admin/challenges', label: 'Lab', icon: '🎯' },
+  { href: '/admin/achievements', label: 'Achievements', icon: '🏆' },
+  { href: '/admin/moderation', label: 'Moderation', icon: '🚩' },
+  { href: '/admin/chat', label: 'Chat', icon: '💬' },
   { href: '/admin/health', label: 'Health', icon: '💻' },
   { href: '/admin/audit', label: 'Audit', icon: '📜' },
 ];
 
 export default function AdminShell({
   title,
+  subtitle,
   children,
+  actions,
 }: {
   title: string;
+  subtitle?: string;
   children: ReactNode;
+  actions?: ReactNode;
 }) {
   const pathname = usePathname();
-  const [open, setOpen] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+  const me = getUser();
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <aside
-        className="sidebar"
-        style={{
-          width: open ? 220 : 64,
-          transition: 'width 0.2s',
-          borderRight: '1px solid #23234A',
-          padding: open ? 24 : 12,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 32 }}>
-          <h2
-            style={{
-              fontWeight: 700,
-              fontSize: 24,
-              flex: 1,
-              opacity: open ? 1 : 0,
-              transition: 'opacity 0.2s',
-            }}
-          >
-            Outverse Admin
-          </h2>
+    <div className={`admin-root admin-shell${collapsed ? ' admin-sidebar--collapsed-parent' : ''}`}>
+      <aside className={`admin-sidebar${collapsed ? ' admin-sidebar--collapsed' : ''}`}>
+        <div className="admin-sidebar__brand">
+          {!collapsed && <span>Outverse Admin</span>}
           <button
             type="button"
-            onClick={() => setOpen(!open)}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#F5F6FA',
-              fontSize: 22,
-              cursor: 'pointer',
-            }}
-            title="Toggle sidebar"
+            className="admin-sidebar__toggle"
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label="Toggle sidebar"
           >
-            {open ? '⏪' : '⏩'}
+            {collapsed ? '⏩' : '⏪'}
           </button>
         </div>
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {NAV.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              style={{
-                color: pathname === link.href ? '#FF3B3B' : '#F5F6FA',
-                textDecoration: 'none',
-                fontWeight: pathname === link.href ? 700 : 500,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                background: pathname === link.href ? '#23234A' : 'none',
-                borderRadius: 8,
-                padding: open ? '6px 12px' : '6px',
-              }}
-            >
-              <span>{link.icon}</span>
-              {open && link.label}
-            </Link>
-          ))}
+        <nav>
+          {NAV.map((link) => {
+            const active =
+              link.href === '/admin'
+                ? pathname === '/admin'
+                : pathname?.startsWith(link.href);
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`admin-nav-link${active ? ' admin-nav-link--active' : ''}`}
+                title={link.label}
+              >
+                <span>{link.icon}</span>
+                {!collapsed && <span>{link.label}</span>}
+              </Link>
+            );
+          })}
         </nav>
-        <Link
-          href="/"
-          style={{
-            display: 'block',
-            marginTop: 24,
-            fontSize: 12,
-            color: '#aaa',
-            textDecoration: 'none',
-          }}
-        >
-          ← Main app
-        </Link>
+        <div style={{ marginTop: 'auto', paddingTop: '1rem' }}>
+          {!collapsed && me && (
+            <p style={{ fontSize: '0.72rem', color: 'var(--admin-muted)', marginBottom: '0.5rem' }}>
+              @{me.username}
+            </p>
+          )}
+          <Link href="/" className="admin-nav-link" style={{ fontSize: '0.78rem' }}>
+            <span>←</span>
+            {!collapsed && <span>Main app</span>}
+          </Link>
+        </div>
       </aside>
-      <main style={{ flex: 1, padding: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 24 }}>{title}</h1>
+      <div className="admin-main">
+        <div className="admin-page-head">
+          <div>
+            <h1>{title}</h1>
+            {subtitle && <p>{subtitle}</p>}
+          </div>
+          {actions}
+        </div>
         {children}
-      </main>
+      </div>
     </div>
   );
 }

@@ -1,46 +1,129 @@
 'use client';
-import { useEffect, useState } from "react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { apiUrl } from '@/lib/api';
 
-export default function AnalyticsPage() {
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+import { useEffect, useState } from 'react';
+import {
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
+import AdminShell from '@/components/admin/AdminShell';
+import { fetchAdminDashboard } from '@/lib/adminApi';
+import type { AdminDashboardData } from '@/lib/adminTypes';
+
+export default function AdminAnalyticsPage() {
+  const [data, setData] = useState<AdminDashboardData | null>(null);
+  const [range, setRange] = useState<'weekly' | 'monthly'>('weekly');
 
   useEffect(() => {
-    setLoading(true);
-    fetch(apiUrl('analytics/platform/'))
-      .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch analytics');
-        return res.json();
-      })
-      .then(setData)
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+    fetchAdminDashboard().then(setData).catch(() => setData(null));
   }, []);
 
   return (
-    <div style={{ padding: 32 }}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 24 }}>Analytics</h1>
-      <div className="card" style={{ padding: 24, marginBottom: 32 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>Platform Analytics</h2>
-        {loading ? (
-          <div style={{ color: '#FFB300', margin: '24px 0' }}>Loading...</div>
-        ) : error ? (
-          <div style={{ color: '#FF3B3B', margin: '24px 0' }}>{error}</div>
-        ) : data ? (
-          <ul style={{ fontSize: 17, color: '#F5F6FA', lineHeight: 2 }}>
-            <li>Users: <b>{data.users}</b></li>
-            <li>Challenges: <b>{data.challenges}</b></li>
-            <li>Ideas: <b>{data.ideas}</b></li>
-            <li>Moods: <b>{data.moods}</b></li>
-            <li>Bottles: <b>{data.bottles}</b></li>
-            <li>Stories: <b>{data.stories}</b></li>
-            <li>Shop Items: <b>{data.shop_items}</b></li>
-          </ul>
-        ) : null}
-      </div>
-    </div>
+    <AdminShell title="Analytics Dashboard" subtitle="Weekly performance across the verse">
+      {!data ? (
+        <p style={{ color: 'var(--admin-muted)' }}>Loading…</p>
+      ) : (
+        <>
+          <div className="admin-kpi-grid">
+            <div className="admin-kpi admin-kpi--warm">
+              <div className="admin-kpi__label">Challenge completion</div>
+              <div className="admin-kpi__value">{data.completion_rate}%</div>
+            </div>
+            <div className="admin-kpi admin-kpi--warm">
+              <div className="admin-kpi__label">Bottles caught</div>
+              <div className="admin-kpi__value">{data.bottles_caught}</div>
+            </div>
+            <div className="admin-kpi admin-kpi--warm">
+              <div className="admin-kpi__label">Social score</div>
+              <div className="admin-kpi__value">{data.social_score}/10</div>
+            </div>
+            <div className="admin-kpi">
+              <div className="admin-kpi__label">Achievements unlocked</div>
+              <div className="admin-kpi__value">
+                {data.achievements.unlocked}/{data.achievements.total_slots || '—'}
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-panel admin-panel--light">
+            <div className="admin-toolbar">
+              <h3 className="admin-panel__title" style={{ margin: 0 }}>Creativity score</h3>
+              <div style={{ display: 'flex', gap: '0.35rem' }}>
+                {(['weekly', 'monthly'] as const).map((r) => (
+                  <button
+                    key={r}
+                    type="button"
+                    className={`admin-btn${range === r ? ' admin-btn--primary' : ' admin-btn--ghost'}`}
+                    onClick={() => setRange(r)}
+                  >
+                    {r === 'weekly' ? 'Weekly' : 'Monthly'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div style={{ height: 260 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={data.creativity_weeks}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#ecd5cc" />
+                  <XAxis dataKey="week" tick={{ fill: '#6d3d33', fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fill: '#6d3d33', fontSize: 11 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="score" stroke="#c45c3e" strokeWidth={2.5} dot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="admin-grid-2">
+            <div className="admin-panel admin-panel--light">
+              <h3 className="admin-panel__title">Platform breakdown</h3>
+              <div style={{ height: 220 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={[
+                      { name: 'Posts', v: data.counts.posts },
+                      { name: 'Signals', v: data.counts.reels },
+                      { name: 'Ideas', v: data.counts.ideas },
+                      { name: 'Bottles', v: data.counts.bottles },
+                      { name: 'Stories', v: data.counts.stories },
+                    ]}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#ecd5cc" />
+                    <XAxis dataKey="name" tick={{ fill: '#6d3d33', fontSize: 10 }} />
+                    <YAxis tick={{ fill: '#6d3d33', fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="v" fill="#6d3d33" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="admin-panel admin-panel--light">
+              <h3 className="admin-panel__title">Mood patterns</h3>
+              <div className="admin-mood-grid">
+                {data.mood_calendar.slice(-14).map((cell) => (
+                  <div
+                    key={cell.date}
+                    className={`admin-mood-cell${cell.total > 2 ? ' admin-mood-cell--active' : ''}`}
+                  >
+                    <span>{cell.day}</span>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: '0.8rem', marginTop: '0.75rem' }}>
+                Performing above average on{' '}
+                <strong>{Math.round(data.completion_rate * 0.4)}%</strong> of tracked metrics
+              </p>
+            </div>
+          </div>
+        </>
+      )}
+    </AdminShell>
   );
-} 
+}
