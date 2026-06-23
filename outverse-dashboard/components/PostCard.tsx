@@ -4,10 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Comments from './Comments';
 import PostEngagementBar from './PostEngagementBar';
 import ShareCosmicPanel from './ShareCosmicPanel';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import PostMediaGallery from './PostMediaGallery';
-import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon, BookmarkIcon, LinkIcon } from '@heroicons/react/24/outline';
+import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon, BookmarkIcon, LinkIcon, FlagIcon } from '@heroicons/react/24/outline';
 import { BookmarkIcon as BookmarkSolid } from '@heroicons/react/24/solid';
 import LinkPreview from './LinkPreview';
 import { formatRelativeTime } from '../utils/dateFormatter';
@@ -118,7 +118,9 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
   const [linkCopied, setLinkCopied] = useState(false);
   const [shareCount, setShareCount] = useState(stats.shares);
   const [commentsCount, setCommentsCount] = useState(stats.comments);
+  const [viewCount, setViewCount] = useState(stats.views);
   const [reactionBusy, setReactionBusy] = useState(false);
+  const viewedRef = useRef(false);
 
   useEffect(() => {
     setSaved(isSavedProp);
@@ -170,6 +172,18 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
   useEffect(() => {
     fetchComments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  useEffect(() => {
+    if (!id || viewedRef.current) return;
+    viewedRef.current = true;
+    apiFetch(`posts/${id}/increment_views/`, { method: 'POST' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.views != null) setViewCount(data.views);
+        else setViewCount((v) => v + 1);
+      })
+      .catch(() => {});
   }, [id]);
 
   const hasMedia =
@@ -376,6 +390,41 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
     }
   };
 
+  const handleReportPost = async () => {
+    if (!id || !getUser()) return;
+    if (!window.confirm('Report this post to moderators?')) return;
+    setMenuOpen(false);
+    try {
+      await apiFetchJson('moderation/flagged/', {
+        method: 'POST',
+        json: {
+          type: 'post',
+          content: `post:${id} @${user.name}: ${displayText.slice(0, 200)}`,
+          reporter: getUser()!.username,
+        },
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleReportComment = async (commentId: number, snippet: string) => {
+    if (!id || !getUser()) return;
+    if (!window.confirm('Report this comment to moderators?')) return;
+    try {
+      await apiFetchJson('moderation/flagged/', {
+        method: 'POST',
+        json: {
+          type: 'comment',
+          content: `post:${id} comment:${commentId}: ${snippet.slice(0, 200)}`,
+          reporter: getUser()!.username,
+        },
+      });
+    } catch {
+      /* ignore */
+    }
+  };
+
   const handleCopyLink = async () => {
     if (!id || typeof window === 'undefined') return;
     const url = `${window.location.origin}/post/${id}`;
@@ -504,6 +553,31 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
               )}
             </div>
           )}
+          {!isOwner && id && getUser() && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
+                className="p-1 rounded-full text-text-secondary hover:text-text hover:bg-surface transition"
+                title="Report post"
+              >
+                <EllipsisHorizontalIcon className="h-6 w-6" />
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-9 w-36 bg-background rounded-lg shadow-xl border border-surface z-20 overflow-hidden">
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={handleReportPost}
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-text hover:bg-surface text-left"
+                  >
+                    <FlagIcon className="h-4 w-4" /> Report
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <div className="mb-4">
@@ -585,7 +659,7 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
         onReaction={handleReaction}
         selectedReaction={selectedReaction?.emoji}
         reactionCounts={reactionCounts}
-        views={stats.views}
+        views={viewCount}
         commentsCount={commentsCount}
         sharesCount={shareCount}
         commentsOpen={commentsOpen}
@@ -610,6 +684,7 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
         onReply={handleReply}
         onEditComment={handleEditComment}
         onDeleteComment={handleDeleteComment}
+        onReportComment={handleReportComment}
         onCommentReaction={handleCommentReaction}
         user={{ id: currentUser.id, name: currentUser.name }}
         postOwner={{ id: user.id ?? 0, name: user.name }}

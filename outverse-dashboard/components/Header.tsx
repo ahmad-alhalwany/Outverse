@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { type AuthUser, getUser, logout } from '@/lib/auth';
+import { type AuthUser, getUser, logout, refreshSession } from '@/lib/auth';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { apiUrl } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
@@ -134,7 +134,7 @@ const Header = () => {
   }, [pathname]);
 
   useEffect(() => {
-    setUser(getUser());
+    refreshSession().then((u) => setUser(u ?? getUser()));
     fetchNotifications();
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
@@ -481,6 +481,11 @@ const Header = () => {
                       <a href="/settings" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">
                         Settings
                       </a>
+                      {user.is_staff && (
+                        <a href="/admin" className="block px-4 py-3 text-sm text-vault font-semibold hover:bg-surface transition-colors border-t border-surface">
+                          Admin panel
+                        </a>
+                      )}
                       <button onClick={handleLogout} className="w-full text-left px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">
                         Sign out
                       </button>

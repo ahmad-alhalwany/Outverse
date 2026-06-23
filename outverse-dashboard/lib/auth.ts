@@ -7,6 +7,7 @@ export type AuthUser = {
   first_name?: string;
   last_name?: string;
   avatar?: string | null;
+  is_staff?: boolean;
 };
 const TOKEN_KEY = 'outverse_token';
 const USER_KEY = 'outverse_user';
@@ -109,4 +110,33 @@ export async function logout() {
     /* ignore network errors on logout */
   }
   clearAuth();
+}
+
+/** Validate token and refresh user fields (e.g. is_staff) from the API. */
+export async function refreshSession(): Promise<AuthUser | null> {
+  if (!getToken()) return null;
+  try {
+    const res = await fetch(apiUrl('users/me/'), { headers: authHeaders() });
+    if (!res.ok) {
+      if (res.status === 401) clearAuth();
+      return null;
+    }
+    const data = await res.json();
+    const prev = getUser();
+    const updated: AuthUser = {
+      id: data.id,
+      username: data.username,
+      email: data.email,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      avatar: data.avatar,
+      is_staff: data.is_staff,
+    };
+    if (prev?.id === updated.id && getToken()) {
+      setAuth(getToken()!, updated);
+    }
+    return updated;
+  } catch {
+    return getUser();
+  }
 }

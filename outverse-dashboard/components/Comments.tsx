@@ -7,6 +7,7 @@ import {
   FaceSmileIcon,
   PaperAirplaneIcon,
   XMarkIcon,
+  FlagIcon,
 } from '@heroicons/react/24/outline';
 import CommentMediaPicker, { type PickerTab } from './comments/CommentMediaPicker';
 import { FaEdit, FaTrash, FaThumbtack, FaSpinner } from 'react-icons/fa';
@@ -40,6 +41,7 @@ interface CommentsProps {
   onReply?: (parentId: number, data: { text: string; gifUrl?: string; stickerUrl?: string; time: string }) => void;
   onEditComment?: (commentId: number, newText: string) => void;
   onDeleteComment?: (commentId: number) => void;
+  onReportComment?: (commentId: number, snippet: string) => void;
   onCommentReaction?: (commentId: number, reactionEmoji: string) => void;
   user: User;
   postOwner: User;
@@ -53,6 +55,7 @@ export default function Comments({
   onReply,
   onEditComment,
   onDeleteComment,
+  onReportComment,
   onCommentReaction,
   user,
   postOwner,
@@ -194,6 +197,16 @@ export default function Comments({
               {(user.id === comment.user.id || user.id === postOwner.id) && (
                 <button type="button" onClick={() => setShowConfirmDelete(comment.id)} className="cosmic-comments__tool !w-7 !h-7 text-red-400" title="Delete">
                   <FaTrash size={12} />
+                </button>
+              )}
+              {user.id !== comment.user.id && onReportComment && (
+                <button
+                  type="button"
+                  onClick={() => onReportComment(comment.id, comment.text || '')}
+                  className="cosmic-comments__tool !w-7 !h-7"
+                  title="Report"
+                >
+                  <FlagIcon className="h-4 w-4" />
                 </button>
               )}
             </div>

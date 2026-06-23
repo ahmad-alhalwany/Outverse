@@ -81,3 +81,15 @@ npm run build
 3. Share — opens cosmic panel, copy link `/reels?focus={id}`
 4. Bell — notification opens focused reel
 5. `/profile/{id}` → Signals tab
+
+### Admin panel
+
+```bash
+# Grant staff (required for /admin)
+cd backend
+python manage.py promote_staff YOUR_USERNAME
+```
+
+Re-login in the dashboard, then open `/admin` (also linked from account menu when staff).
+
+Staff-only API: `GET /api/analytics/dashboard/`, shop/challenge CRUD, profile PATCH, moderation review.
