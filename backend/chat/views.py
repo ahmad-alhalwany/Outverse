@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
@@ -49,7 +49,7 @@ def _is_online(presence):
 
 
 def friend_dict(user, viewer_id, request):
-    presence, _ = UserPresence.objects.get_or_create(user=user)
+    presence = getattr(user, 'presence', None)
     return {
         'id': user.id,
         'username': user.username,
@@ -113,6 +113,8 @@ class FriendsListView(ChatAuthView):
             )
 
         me = request.user
+        users = users.select_related('presence')
+        me = User.objects.select_related('presence').filter(pk=request.user.pk).first() or request.user
         results = [friend_dict(u, uid, request) for u in users[:50]]
         payload = {'friends': results, 'me': friend_dict(me, uid, request)}
         return Response(payload)
@@ -325,6 +327,87 @@ class RoomListCreateView(ChatAuthView):
         return Response(serializer.data, status=201)
 
 
+class RoomDetailView(ChatAuthView):
+
+    def _get_room(self, room_id):
+        return ChatRoom.objects.filter(pk=room_id).prefetch_related('members').first()
+
+    def patch(self, request, room_id):
+        room = self._get_room(room_id)
+        if not room:
+            return Response({'error': 'Not found.'}, status=404)
+        if room.created_by_id != self.uid:
+            return Response({'error': 'Forbidden.'}, status=403)
+        name = (request.data.get('name') or '').strip()
+        if not name:
+            return Response({'error': 'name is required.'}, status=400)
+        room.name = name[:120]
+        room.save(update_fields=['name'])
+        return Response(ChatRoomSerializer(room, context={'request': request}).data)
+
+
+class RoomMembersView(ChatAuthView):
+
+    def _get_room(self, room_id):
+        return ChatRoom.objects.filter(pk=room_id).prefetch_related('members').first()
+
+    def post(self, request, room_id):
+        room = self._get_room(room_id)
+        if not room:
+            return Response({'error': 'Not found.'}, status=404)
+        if room.created_by_id != self.uid:
+            return Response({'error': 'Forbidden.'}, status=403)
+        member_ids = request.data.get('member_ids') or []
+        added = []
+        for member_id in member_ids:
+            try:
+                member_id = int(member_id)
+            except (TypeError, ValueError):
+                continue
+            if member_id == self.uid:
+                continue
+            if User.objects.filter(pk=member_id).exists():
+                room.members.add(member_id)
+                added.append(member_id)
+        room.refresh_from_db()
+        return Response({
+            'added_member_ids': added,
+            'room': ChatRoomSerializer(room, context={'request': request}).data,
+        })
+
+    def delete(self, request, room_id):
+        room = self._get_room(room_id)
+        if not room:
+            return Response({'error': 'Not found.'}, status=404)
+        member_id = request.data.get('member_id')
+        try:
+            member_id = int(member_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'member_id is required.'}, status=400)
+        if room.created_by_id != self.uid and member_id != self.uid:
+            return Response({'error': 'Forbidden.'}, status=403)
+        room.members.remove(member_id)
+        room.refresh_from_db()
+        return Response(ChatRoomSerializer(room, context={'request': request}).data)
+
+
+class RoomLeaveView(ChatAuthView):
+
+    def post(self, request, room_id):
+        room = ChatRoom.objects.filter(pk=room_id).first()
+        if not room:
+            return Response({'error': 'Not found.'}, status=404)
+        if not user_in_room(self.uid, room_id):
+            return Response({'error': 'Forbidden.'}, status=403)
+        room.members.remove(self.uid)
+        if room.created_by_id == self.uid:
+            next_member = room.members.exclude(pk=self.uid).first()
+            if next_member:
+                room.created_by = next_member
+                room.save(update_fields=['created_by'])
+        return Response({'left': True})
+
+
 class RoomMessagesView(ChatAuthView):
 
     def get(self, request, room_id):
@@ -429,12 +512,14 @@ class SharedSpaceView(ChatAuthView):
                 'href': f'/lab?challenge={ch.id}',
             })
 
-        stories = Story.objects.filter(status='open').order_by(
+        stories = Story.objects.filter(status='open').annotate(
+            segment_count=Count('segments')
+        ).order_by(
             '-is_featured', '-updated_at'
         )[:4]
         story_rows = []
         for st in stories[:2]:
-            segs = Segment.objects.filter(story=st).count()
+            segs = st.segment_count
             words = segs * 180
             story_rows.append({
                 'id': st.id,

@@ -8,13 +8,26 @@ export type AuthUser = {
   last_name?: string;
   avatar?: string | null;
   is_staff?: boolean;
+  is_verified?: boolean;
+  onboarding_completed?: boolean;
+  interests?: string[];
 };
-const TOKEN_KEY = 'outverse_token';
 const USER_KEY = 'outverse_user';
+const CSRF_COOKIE_KEY = 'csrftoken';
+const SESSION_COOKIE_KEYS = ['sessionid', 'outverse_session', 'authjs.session-token', '__Secure-authjs.session-token'];
+
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function hasSessionCookie(): boolean {
+  return SESSION_COOKIE_KEYS.some((key) => !!readCookie(key));
+}
 
 export function getToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem(TOKEN_KEY);
+  return null;
 }
 
 export function getUser(): AuthUser | null {
@@ -28,30 +41,32 @@ export function getUser(): AuthUser | null {
   }
 }
 
-/** Returns the logged-in user id, or 1 as a fallback while auth is optional. */
-export function getCurrentUserId(): number {
-  return getUser()?.id ?? 1;
+/** @deprecated Prefer useAuthUser / useProfileHref in render to avoid hydration mismatch. */
+export function getCurrentUserId(): number | null {
+  return getUser()?.id ?? null;
 }
 
 export function isAuthenticated(): boolean {
-  return !!getToken();
+  return hasSessionCookie() || !!getUser();
 }
 
-export function setAuth(token: string, user: AuthUser) {
+export function setAuth(_token: string | null, user: AuthUser | null) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(TOKEN_KEY, token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+  if (user) {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(USER_KEY);
+  }
 }
 
 export function clearAuth() {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
 }
 
 export function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return token ? { Authorization: `Token ${token}` } : {};
+  const csrfToken = readCookie(CSRF_COOKIE_KEY);
+  return csrfToken ? { 'X-CSRFToken': csrfToken } : {};
 }
 
 /** fetch wrapper that injects the auth token automatically. */
@@ -60,18 +75,23 @@ export async function authFetch(input: string, init: RequestInit = {}) {
     ...(init.headers as Record<string, string> | undefined),
     ...authHeaders(),
   };
-  return fetch(input, { ...init, headers });
+  return fetch(input, { ...init, headers, credentials: 'include' });
 }
 
 export async function login(username: string, password: string): Promise<AuthUser> {
   const res = await fetch(apiUrl('users/login/'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ username, password }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || 'Login failed. Check your credentials.');
-  setAuth(data.token, data.user);
+  if (!res.ok) {
+    const error = new Error(data.error || 'Login failed. Check your credentials.') as Error & { code?: string };
+    if (data.code) error.code = data.code;
+    throw error;
+  }
+  setAuth(null, data.user);
   return data.user as AuthUser;
 }
 
@@ -87,6 +107,7 @@ export async function register(payload: RegisterPayload): Promise<AuthUser> {
   const res = await fetch(apiUrl('users/register/'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(payload),
   });
   const data = await res.json().catch(() => ({}));
@@ -99,13 +120,56 @@ export async function register(payload: RegisterPayload): Promise<AuthUser> {
       'Registration failed.';
     throw new Error(firstError);
   }
-  setAuth(data.token, data.user);
+  setAuth(null, data.user);
   return data.user as AuthUser;
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  const res = await fetch(apiUrl('users/verify-email/'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Verification failed.');
+}
+
+export async function forgotPassword(email: string): Promise<string> {
+  const res = await fetch(apiUrl('users/forgot-password/'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Unable to send reset email.');
+  return data.message as string;
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  const res = await fetch(apiUrl('users/reset-password/'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Unable to reset password.');
+}
+
+export async function checkUsernameAvailability(username: string): Promise<boolean> {
+  const res = await fetch(apiUrl(`users/check-username/?username=${encodeURIComponent(username)}`), {
+    credentials: 'include',
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Unable to check username.');
+  return Boolean(data.available);
 }
 
 export async function logout() {
   try {
-    await fetch(apiUrl('users/logout/'), { method: 'POST', headers: authHeaders() });
+    await fetch(apiUrl('users/logout/'), { method: 'POST', headers: authHeaders(), credentials: 'include' });
   } catch {
     /* ignore network errors on logout */
   }
@@ -114,9 +178,8 @@ export async function logout() {
 
 /** Validate token and refresh user fields (e.g. is_staff) from the API. */
 export async function refreshSession(): Promise<AuthUser | null> {
-  if (!getToken()) return null;
   try {
-    const res = await fetch(apiUrl('users/me/'), { headers: authHeaders() });
+    const res = await fetch(apiUrl('users/me/'), { headers: authHeaders(), credentials: 'include' });
     if (!res.ok) {
       if (res.status === 401) clearAuth();
       return null;
@@ -131,9 +194,12 @@ export async function refreshSession(): Promise<AuthUser | null> {
       last_name: data.last_name,
       avatar: data.avatar,
       is_staff: data.is_staff,
+      is_verified: data.is_verified,
+      onboarding_completed: data.onboarding_completed,
+      interests: Array.isArray(data.interests) ? data.interests : [],
     };
-    if (prev?.id === updated.id && getToken()) {
-      setAuth(getToken()!, updated);
+    if (prev?.id === updated.id || hasSessionCookie()) {
+      setAuth(null, updated);
     }
     return updated;
   } catch {

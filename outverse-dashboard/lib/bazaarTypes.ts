@@ -6,9 +6,12 @@ export type BazaarIdea = {
   cover_url: string;
   status: string;
   roles_needed: string[];
+  tags?: string[];
   funding_goal: number | null;
   funding_raised: number;
   supporters: number;
+  collaboration_request_count?: number;
+  discussion_count?: number;
   owner: {
     id?: number;
     username: string;
@@ -18,6 +21,25 @@ export type BazaarIdea = {
   };
   collaborators_count: number;
   created_at: string;
+};
+
+export type BazaarCollaborationRequest = {
+  id: number;
+  idea: number;
+  role: string;
+  message: string;
+  status: string;
+  created_at: string;
+  user: BazaarIdea['owner'];
+};
+
+export type BazaarIdeaComment = {
+  id: number;
+  idea: number;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  user: BazaarIdea['owner'];
 };
 
 export const BAZAAR_CATEGORIES = [

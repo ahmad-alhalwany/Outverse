@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
-import { wsUrl } from '@/lib/ws';
+import { resolveWsUrl, type UploadProgress } from '@/lib/ws';
 
 export type WsRoomMessage = {
   type: string;
@@ -29,6 +29,7 @@ export function useRoomWebSocket({
 }: Options) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const generationRef = useRef(0);
   const onMessageRef = useRef(onMessage);
   const onTypingRef = useRef(onTyping);
 
@@ -43,30 +44,50 @@ export function useRoomWebSocket({
       return;
     }
 
-    const url = wsUrl(`/ws/room/${roomId}/`);
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    let cancelled = false;
+    const generation = ++generationRef.current;
+    let socket: WebSocket | null = null;
 
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
+    void resolveWsUrl('room', { room_id: roomId }).then((url) => {
+      if (cancelled || generationRef.current !== generation) return;
+      const ws = new WebSocket(url);
+      socket = ws;
+      wsRef.current = ws;
 
-    ws.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data);
-        if (data.type === 'room.message') {
-          onMessageRef.current(data as WsRoomMessage);
-        } else if (data.type === 'room.typing') {
-          onTypingRef.current?.(data.user_id, data.is_typing);
+      ws.onopen = () => {
+        if (generationRef.current !== generation || wsRef.current !== ws) return;
+        setConnected(true);
+      };
+      ws.onclose = () => {
+        if (generationRef.current !== generation || wsRef.current !== ws) return;
+        setConnected(false);
+      };
+      ws.onerror = () => {
+        if (generationRef.current !== generation || wsRef.current !== ws) return;
+        setConnected(false);
+      };
+
+      ws.onmessage = (ev) => {
+        if (generationRef.current !== generation || wsRef.current !== ws) return;
+        try {
+          const data = JSON.parse(ev.data);
+          if (data.type === 'room.message') {
+            onMessageRef.current(data as WsRoomMessage);
+          } else if (data.type === 'room.typing') {
+            onTypingRef.current?.(data.user_id, data.is_typing);
+          }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
-      }
-    };
+      };
+    });
 
     return () => {
-      ws.close();
-      wsRef.current = null;
+      cancelled = true;
+      if (wsRef.current === socket) {
+        wsRef.current = null;
+      }
+      socket?.close();
     };
   }, [roomId]);
 
@@ -99,17 +120,45 @@ export function useRoomWebSocket({
   );
 
   const uploadFile = useCallback(
-    async (file: File, messageType?: string) => {
+    async (
+      file: File,
+      messageType?: string,
+      onProgress?: (progress: UploadProgress) => void,
+    ) => {
       if (!roomId) return null;
-      const form = new FormData();
-      form.append('file', file);
-      if (messageType) form.append('message_type', messageType);
-      const res = await apiFetch(`chat/rooms/${roomId}/upload/`, {
-        method: 'POST',
-        body: form,
+      return new Promise<WsRoomMessage | null>((resolve) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `/api/chat/rooms/${roomId}/upload/`, true);
+        xhr.withCredentials = true;
+        const token = localStorage.getItem('token');
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Token ${token}`);
+        }
+        xhr.upload.onprogress = (event) => {
+          if (!event.lengthComputable) return;
+          onProgress?.({
+            loaded: event.loaded,
+            total: event.total,
+            percent: Math.round((event.loaded / event.total) * 100),
+          });
+        };
+        xhr.onload = () => {
+          if (xhr.status < 200 || xhr.status >= 300) {
+            resolve(null);
+            return;
+          }
+          try {
+            resolve(JSON.parse(xhr.responseText) as WsRoomMessage);
+          } catch {
+            resolve(null);
+          }
+        };
+        xhr.onerror = () => resolve(null);
+        const form = new FormData();
+        form.append('file', file);
+        if (messageType) form.append('message_type', messageType);
+        xhr.send(form);
       });
-      if (!res.ok) return null;
-      return res.json() as Promise<WsRoomMessage>;
     },
     [roomId],
   );

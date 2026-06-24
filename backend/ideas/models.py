@@ -55,3 +55,42 @@ class Idea(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class CollaborationRequest(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_ACCEPTED = "accepted"
+    STATUS_REJECTED = "rejected"
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_ACCEPTED, "Accepted"),
+        (STATUS_REJECTED, "Rejected"),
+    ]
+
+    idea = models.ForeignKey(Idea, on_delete=models.CASCADE, related_name="collaboration_requests")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="idea_collaboration_requests")
+    role = models.CharField(max_length=120)
+    message = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        unique_together = ("idea", "user", "role")
+
+    def __str__(self):
+        return f"{self.user} -> {self.idea} ({self.role})"
+
+
+class IdeaComment(models.Model):
+    idea = models.ForeignKey(Idea, on_delete=models.CASCADE, related_name="idea_comments")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="idea_comments")
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"{self.user} on {self.idea}"

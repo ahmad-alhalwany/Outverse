@@ -6,18 +6,14 @@ import { motion } from 'framer-motion';
 import { HashtagIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
-import { mapPost } from '@/utils/postMapper';
+import { mapPost, type ApiPost } from '@/utils/postMapper';
 import { apiFetch } from '@/lib/api';
-
-import { apiUrl } from '@/lib/api';
-
-const POSTS_API = apiUrl('posts/');
 
 export default function TagPage() {
   const params = useParams();
   const raw = Array.isArray(params.tag) ? params.tag[0] : params.tag;
   const tag = raw ? decodeURIComponent(raw) : '';
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<ApiPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 

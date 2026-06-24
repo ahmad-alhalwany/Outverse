@@ -13,7 +13,7 @@ import {
 import type { ReelCommentItem } from '@/lib/reelTypes';
 import PostReactions from '../PostReactions';
 import { reelAuthorName } from '@/lib/reelTypes';
-import { formatRelativeTime } from '@/utils/dateFormatter';
+import RelativeTime from '@/components/RelativeTime';
 import { useLocale } from '../LocaleProvider';
 
 function CommentBody({ c }: { c: ReelCommentItem }) {
@@ -139,7 +139,7 @@ export default function ReelCommentRow({
       <div className="reel-comments-sheet__item-head">
         <strong>@{reelAuthorName(comment.user)}</strong>
         <span className="reel-comments-sheet__time">
-          {formatRelativeTime(new Date(comment.created_at))}
+          <RelativeTime date={comment.created_at} className="reel-comment__time block" />
         </span>
       </div>
 

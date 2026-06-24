@@ -9,12 +9,17 @@ import { reelPagePath } from '@/lib/fetchReel';
 function ReelsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initial =
-    searchParams.get('feed') === 'following' ? 'following' : 'all';
-  const [feed, setFeed] = useState<'all' | 'following'>(initial);
-  const tag = searchParams.get('tag');
-  const focusRaw = searchParams.get('focus');
-  const focusId = focusRaw ? parseInt(focusRaw, 10) : null;
+  const [feed, setFeed] = useState<'all' | 'following'>('all');
+  const [tag, setTag] = useState<string | null>(null);
+  const [focusId, setFocusId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setFeed(searchParams.get('feed') === 'following' ? 'following' : 'all');
+    setTag(searchParams.get('tag'));
+    const focusRaw = searchParams.get('focus');
+    const id = focusRaw ? parseInt(focusRaw, 10) : NaN;
+    setFocusId(Number.isFinite(id) ? id : null);
+  }, [searchParams]);
 
   useEffect(() => {
     if (focusId && Number.isFinite(focusId)) {

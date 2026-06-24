@@ -1,27 +1,37 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  TrashIcon,
   PaperAirplaneIcon,
   Squares2X2Icon,
   Cog6ToothIcon,
   MapPinIcon,
   LinkIcon,
 } from '@heroicons/react/24/outline';
-import WorldShell from '@/components/world/WorldShell';
 import EmotionVaultMap, { type VaultMapMarker } from '@/components/vault/EmotionVaultMap';
 import Link from 'next/link';
 import { readVaultMapStyle, type VaultMapStyle } from '@/lib/vaultMapStyle';
 import { readSettingsPrefs } from '@/lib/settingsPrefs';
-import { formatRelativeTime } from '../../utils/dateFormatter';
+import RelativeTime from '../../components/RelativeTime';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import { searchLocation } from '@/lib/geocode';
 import { formatBottleTimeLeft } from '@/utils/bottleTime';
-
+import {
+  DEMO_BOTTLES,
+  DEMO_DASHBOARD,
+  demoMarkers,
+  demoPlaceLabels,
+  moodSummaryRows,
+  shouldUseVaultDemo,
+} from '@/lib/vaultDemoData';
+import { getUser } from '@/lib/auth';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { apiUrl } from '@/lib/api';
+import './vault.css';
 
 const BASE = apiUrl('bottles');
 
@@ -105,6 +115,7 @@ type ApiBottle = {
   location_lat: number | null;
   location_lng: number | null;
   created_at: string;
+  caught_at?: string | null;
   expires_at?: string;
   is_mine?: boolean;
 };
@@ -115,6 +126,7 @@ type CaughtBottle = {
   created_at: string;
   sender_anon_id: string;
 };
+type PlaceLabelMap = Record<number, string>;
 
 function EmotionVaultContent() {
   const C = useVaultColors();
@@ -133,56 +145,104 @@ function EmotionVaultContent() {
   const [recent, setRecent] = useState<ApiBottle[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
-  const [placeLabels, setPlaceLabels] = useState<Record<number, string>>({});
-  const [mapStyle, setMapStyle] = useState<VaultMapStyle>(() =>
-    typeof window !== 'undefined' ? readVaultMapStyle() : 'street',
-  );
+  const [placeLabels, setPlaceLabels] = useState<PlaceLabelMap>({});
+  const [mapStyle, setMapStyle] = useState<VaultMapStyle>('street');
   const [showOwnOnMap, setShowOwnOnMap] = useState(true);
   const [hideOthersRecent, setHideOthersRecent] = useState(true);
+  const [demoMode, setDemoMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<'vault' | 'catches'>('vault');
+  const [caughtBottles, setCaughtBottles] = useState<ApiBottle[]>([]);
+  const [emotionFilter, setEmotionFilter] = useState<string>('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const authUser = useAuthUser();
+
+  useEffect(() => {
+    setMapStyle(readVaultMapStyle());
+  }, []);
 
   const loadData = useCallback(async () => {
     const prefs = readSettingsPrefs();
     setShowOwnOnMap(prefs.showOwnMessageOnMap);
     setHideOthersRecent(prefs.hideOthersInRecent);
+    let gotMarkers: VaultMapMarker[] = [];
+    let gotRecent: ApiBottle[] = [];
+    let gotDashboard: Dashboard | null = null;
+    const params = new URLSearchParams();
+    if (emotionFilter !== 'all') params.set('emotion', emotionFilter);
+    if (startDate) params.set('start_date', startDate);
+    if (endDate) params.set('end_date', endDate);
+    const filterQs = params.toString();
     try {
-      const [dRes, mRes, rRes, mineRes] = await Promise.all([
+      const [dRes, mRes, rRes, mineRes, caughtRes] = await Promise.all([
         apiFetch('bottles/dashboard/'),
         apiFetch('bottles/map/'),
         apiFetch('bottles/recent/'),
-        apiFetch('bottles/my_bottles/?active=1'),
+        apiFetch(`bottles/my_bottles/?active=1${filterQs ? `&${filterQs}` : ''}`),
+        apiFetch(`bottles/caught/${filterQs ? `?${filterQs}` : ''}`),
       ]);
-      if (dRes.ok) setDashboard(await dRes.json());
+      if (dRes.ok) {
+        gotDashboard = await dRes.json();
+        setDashboard(gotDashboard);
+      }
       if (mRes.ok) {
         const data: ApiBottle[] = await mRes.json();
-        setMarkers(
-          data
-            .filter((b) => b.location_lat != null && b.location_lng != null)
-            .map((b) => {
-              const em = emotionMeta(b.emotion_type);
-              return {
-                id: b.id,
-                lat: b.location_lat as number,
-                lng: b.location_lng as number,
-                color: em.color,
-                emoji: em.emoji,
-                label: em.label,
-                expiresAt: b.expires_at,
-                isMine: b.is_mine,
-                message: b.message,
-                showOwnMessage: prefs.showOwnMessageOnMap,
-              };
-            }),
-        );
+        gotMarkers = data
+          .filter((b) => b.location_lat != null && b.location_lng != null)
+          .map((b) => {
+            const em = emotionMeta(b.emotion_type);
+            return {
+              id: b.id,
+              lat: b.location_lat as number,
+              lng: b.location_lng as number,
+              color: em.color,
+              emoji: em.emoji,
+              label: em.label,
+              expiresAt: b.expires_at,
+              isMine: b.is_mine,
+              message: b.message,
+              showOwnMessage: prefs.showOwnMessageOnMap,
+            };
+          });
+        setMarkers(gotMarkers);
       }
-      if (rRes.ok) setRecent(await rRes.json());
+      if (rRes.ok) {
+        gotRecent = await rRes.json();
+        setRecent(gotRecent);
+      }
       if (mineRes.ok) {
         const mine = await mineRes.json();
         setMyActive(Array.isArray(mine) ? mine : []);
       }
+      if (caughtRes.ok) {
+        const caught = await caughtRes.json();
+        setCaughtBottles(Array.isArray(caught) ? caught : []);
+      }
+
+      const apiEmpty = gotMarkers.length === 0 && gotRecent.length === 0;
+      const explicitDemo = process.env.NEXT_PUBLIC_ENABLE_VAULT_DEMO === 'true';
+      if (explicitDemo && shouldUseVaultDemo(apiEmpty)) {
+        setDemoMode(true);
+        setDashboard(DEMO_DASHBOARD);
+        setMarkers(demoMarkers(prefs.showOwnMessageOnMap));
+        setRecent(DEMO_BOTTLES as ApiBottle[]);
+        setPlaceLabels(demoPlaceLabels());
+      } else {
+        setDemoMode(false);
+      }
     } catch {
-      // backend offline — keep empty states
+      const explicitDemo = process.env.NEXT_PUBLIC_ENABLE_VAULT_DEMO === 'true';
+      if (explicitDemo) {
+        setDemoMode(true);
+        setDashboard(DEMO_DASHBOARD);
+        setMarkers(demoMarkers(prefs.showOwnMessageOnMap));
+        setRecent(DEMO_BOTTLES as ApiBottle[]);
+        setPlaceLabels(demoPlaceLabels());
+      } else {
+        setDemoMode(false);
+      }
     }
-  }, []);
+  }, [emotionFilter, startDate, endDate]);
 
   useEffect(() => {
     loadData();
@@ -278,7 +338,7 @@ function EmotionVaultContent() {
     let cancelled = false;
     (async () => {
       const { reverseGeocodeLabel } = await import('@/lib/geocode');
-      const next: Record<number, string> = {};
+      const next: PlaceLabelMap = {};
       for (const b of recent) {
         if (b.location_lat == null || b.location_lng == null) continue;
         const label = await reverseGeocodeLabel(b.location_lat, b.location_lng);
@@ -307,8 +367,8 @@ function EmotionVaultContent() {
   const happyDays = timeline.filter((t) => t.emotion && POSITIVE_MOODS.has(t.emotion)).length;
   const happyPct = timeline.length ? Math.round((happyDays / 30) * 100) : 0;
   const vaultColors = {
-    brown: C.brown,
-    brownDk: C.brownDk,
+    brown: '#1a1a1a',
+    brownDk: '#1a1a1a',
     white: C.white,
     text: C.text,
     text2: C.text2,
@@ -316,33 +376,82 @@ function EmotionVaultContent() {
     btnShadow: C.btnShadow,
   };
 
+  const displayRecent = demoMode ? recent : recent;
+  const previewMessage = (b: ApiBottle) => {
+    if (demoMode && b.message) return b.message;
+    if (b.is_mine && b.message) return b.message;
+    if (!hideOthersRecent) return b.message || null;
+    return null;
+  };
+
+  const deleteBottle = async (id: number) => {
+    if (!window.confirm('Delete this bottle permanently?')) return;
+    try {
+      const res = await apiFetch(`bottles/${id}/`, { method: 'DELETE' });
+      if (!res.ok) return;
+      setMyActive((prev) => prev.filter((b) => b.id !== id));
+      if (previewBottle?.id === id) {
+        closeBottlePreview();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
   return (
-    <WorldShell colors={{ cream: C.cream, text: C.text }}>
-          <div className="flex items-center justify-between gap-3 mb-6">
-            <div>
-              <h1 className="text-2xl font-bold" style={{ color: C.brown }}>
-                Emotion Vault
-              </h1>
-              <p className="text-sm mt-0.5" style={{ color: C.text2 }}>
-                Global map of drifting bottles — each vanishes after 24 hours
-              </p>
+    <div className="vault-page">
+      <div className="vault-page__inner">
+        <header className="vault-header">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="vault-header__title">Emotion Vault</h1>
+            {demoMode && <span className="vault-demo-badge">Demo data</span>}
+          </div>
+          <div className="vault-header__search">
+            <div className="vault-header__search-wrap">
+              <MapPinIcon className="vault-header__search-icon" />
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearchSubmit()}
+                placeholder="Search location…"
+              />
             </div>
-            <Link
-              href="/settings"
-              className="p-2.5 rounded-xl shrink-0 inline-flex"
-              style={{ background: C.white, color: C.text2, border: `1px solid ${C.line}` }}
-              aria-label="Settings"
-            >
+          </div>
+          <div className="vault-header__actions">
+            <Link href="/settings" className="vault-icon-btn" aria-label="Settings">
               <Cog6ToothIcon className="h-5 w-5" />
             </Link>
+            <Link href={authUser?.id ? `/profile/${authUser.id}` : '/login'} className="vault-avatar">
+              {(authUser?.username || '?').slice(0, 2).toUpperCase()}
+            </Link>
           </div>
+        </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* LEFT */}
-          <div className="lg:col-span-3 order-2 lg:order-1 space-y-6" id="timeline">
+          <div className="lg:col-span-3 order-2 lg:order-1 space-y-4" id="timeline">
+            <div className="rounded-3xl p-4" style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h2 className="text-sm font-bold" style={{ color: C.text }}>Vault Filters</h2>
+                <div className="flex rounded-full p-1" style={{ background: C.card2 }}>
+                  <button type="button" onClick={() => setActiveTab('vault')} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: activeTab === 'vault' ? C.white : 'transparent', color: activeTab === 'vault' ? C.brown : C.text2 }}>My Vault</button>
+                  <button type="button" onClick={() => setActiveTab('catches')} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: activeTab === 'catches' ? C.white : 'transparent', color: activeTab === 'catches' ? C.brown : C.text2 }}>My Catches</button>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <select value={emotionFilter} onChange={(e) => setEmotionFilter(e.target.value)} className="w-full rounded-2xl px-3 py-2 text-sm outline-none" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text }}>
+                  <option value="all">All emotions</option>
+                  {EMOTIONS.map((emotion) => (
+                    <option key={emotion.key} value={emotion.key}>{emotion.label}</option>
+                  ))}
+                </select>
+                <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full rounded-2xl px-3 py-2 text-sm outline-none" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text }} />
+                <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full rounded-2xl px-3 py-2 text-sm outline-none" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text }} />
+              </div>
+            </div>
             <MoodTimeline timeline={timeline} />
             <MonthlySummary insights={insights} happyPct={happyPct} />
-            <MoodInsights insights={insights} />
           </div>
 
           {/* CENTER */}
@@ -351,7 +460,7 @@ function EmotionVaultContent() {
               markers={markers}
               variant={theme === 'dark' ? 'dark' : 'light'}
               colors={vaultColors}
-              height={480}
+              height={520}
               onThrow={() => setThrowOpen(true)}
               onCatch={() => setCatchOpen(true)}
               searchQuery={searchQuery}
@@ -368,45 +477,75 @@ function EmotionVaultContent() {
               </p>
             )}
 
-            {/* stats bar */}
-            <div
-              className="flex flex-wrap items-center justify-between gap-2 mt-4 px-4 py-3 rounded-xl text-sm"
-              style={{ background: C.card2, border: `1px solid ${C.line}` }}
-            >
-              <span className="flex items-center gap-2" style={{ color: C.text2 }}>
-                Current mood:
+            <div className="vault-stats-bar">
+              <span className="flex items-center gap-2 flex-wrap">
+                Current Mood:
                 {currentMood ? (
-                  <span className="px-2.5 py-1 rounded-full font-medium" style={{ background: `${currentMood.color}26`, color: currentMood.color }}>
+                  <span
+                    className="vault-mood-pill"
+                    style={{ background: `${currentMood.color}20`, color: currentMood.color }}
+                  >
                     {currentMood.emoji} {currentMood.label}
                   </span>
                 ) : (
-                  <span style={{ color: C.text2 }}>—</span>
+                  <span>—</span>
                 )}
               </span>
-              <span style={{ color: C.text2 }}>
-                <b style={{ color: C.text }}>{thrown}</b> thrown · <b style={{ color: C.text }}>{caught}</b> caught
+              <span>
+                <strong style={{ color: 'var(--vault-text)' }}>{thrown}</strong> bottles thrown ·{' '}
+                <strong style={{ color: 'var(--vault-text)' }}>{caught}</strong> bottles caught
               </span>
+            </div>
+
+            <div className="mt-5 rounded-3xl p-4" style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold" style={{ color: C.text }}>{activeTab === 'vault' ? 'My Bottles' : 'My Catches'}</h2>
+                <span className="text-xs" style={{ color: C.text2 }}>{activeTab === 'vault' ? myActive.length : caughtBottles.length} entries</span>
+              </div>
+              <div className="space-y-3">
+                {(activeTab === 'vault' ? myActive : caughtBottles).length === 0 ? (
+                  <p className="text-sm" style={{ color: C.text2 }}>
+                    {activeTab === 'vault' ? 'No bottles match these filters.' : 'No catches match these filters.'}
+                  </p>
+                ) : (
+                  (activeTab === 'vault' ? myActive : caughtBottles).map((bottle) => {
+                    const emotion = emotionMeta(bottle.emotion_type);
+                    return (
+                      <div key={bottle.id} className="rounded-2xl p-4" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold" style={{ background: `${emotion.color}22`, color: emotion.color }}>
+                              {emotion.emoji} {emotion.label}
+                            </span>
+                            <p className="mt-2 text-sm leading-relaxed" style={{ color: C.text }}>{bottle.message || 'Caught bottle'}</p>
+                            <p className="mt-2 text-xs" style={{ color: C.text2 }}>
+                              <RelativeTime date={activeTab === 'catches' && bottle.caught_at ? bottle.caught_at : bottle.created_at} />
+                            </p>
+                          </div>
+                          {activeTab === 'vault' && (
+                            <button type="button" onClick={() => deleteBottle(bottle.id)} className="rounded-full p-2" style={{ background: C.white, color: C.brown, border: `1px solid ${C.line}` }} aria-label="Delete bottle">
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
 
           {/* RIGHT */}
-          <div className="lg:col-span-3 order-3 space-y-4" id="bottles">
-            <div className="hidden lg:flex flex-col gap-3">
-              <button
-                onClick={() => setThrowOpen(true)}
-                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-semibold text-white transition hover:scale-[1.02]"
-                style={{ background: C.brownDk, boxShadow: C.btnShadow }}
-              >
+          <div className="lg:col-span-3 order-3 space-y-3" id="bottles">
+            <div className="hidden lg:flex flex-col gap-2">
+              <button type="button" onClick={() => setThrowOpen(true)} className="vault-btn-primary">
                 <PaperAirplaneIcon className="h-5 w-5" />
-                Throw bottle
+                Throw a Bottle
               </button>
-              <button
-                onClick={() => setCatchOpen(true)}
-                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-semibold transition"
-                style={{ background: C.white, color: C.text, border: `1px solid ${C.line}` }}
-              >
+              <button type="button" onClick={() => setCatchOpen(true)} className="vault-btn-secondary">
                 <Squares2X2Icon className="h-5 w-5" />
-                Catch bottle
+                Catch a Bottle
               </button>
             </div>
 
@@ -446,54 +585,50 @@ function EmotionVaultContent() {
               </div>
             )}
 
-            <h3 className="text-sm font-semibold" style={{ color: C.text }}>Recent drifting bottles</h3>
-            {recent.length === 0 && (
-              <div className="rounded-xl p-4 text-sm" style={{ background: C.card2, color: C.text2, border: `1px solid ${C.line}` }}>
-                No drifting bottles right now — throw one with location to appear on the map for 24 hours. 🍶
+            <h3 className="text-sm font-semibold pt-1" style={{ color: 'var(--vault-text)' }}>
+              Recent Bottles
+            </h3>
+            {displayRecent.length === 0 && (
+              <div className="vault-card text-sm" style={{ color: 'var(--vault-muted)' }}>
+                No drifting bottles right now — throw one with a location to appear on the map.
               </div>
             )}
-            {recent.map((b) => {
+            {displayRecent.map((b) => {
               const m = emotionMeta(b.emotion_type);
               const place =
                 placeLabels[b.id] ??
+                (b as ApiBottle & { place?: string }).place ??
                 (b.location_lat != null ? 'On map' : null);
+              const msg = previewMessage(b);
               return (
                 <button
                   key={b.id}
                   type="button"
                   onClick={() => openBottlePreview(b)}
-                  className="w-full rounded-xl p-4 text-left transition hover:opacity-90"
-                  style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
+                  className="vault-recent-card"
                 >
                   {place && (
-                    <div className="flex items-center gap-1.5 text-xs font-medium mb-2" style={{ color: C.brown }}>
+                    <div className="vault-recent-card__place">
                       <MapPinIcon className="h-3.5 w-3.5 shrink-0" />
                       {place}
                     </div>
                   )}
-                  {b.message && (!hideOthersRecent || b.is_mine) && (
-                    <p className="text-sm line-clamp-2 mb-2" style={{ color: C.text }}>
-                      {b.is_mine ? b.message : ''}
-                    </p>
-                  )}
-                  {!b.is_mine && hideOthersRecent && (
-                    <p className="text-xs mb-2 italic" style={{ color: C.text2 }}>
-                      Message hidden — catch a bottle to read it
+                  {msg ? (
+                    <p className="vault-recent-card__msg">{msg}</p>
+                  ) : (
+                    <p className="vault-recent-card__msg" style={{ fontStyle: 'italic', color: 'var(--vault-muted)' }}>
+                      Message hidden — catch to read
                     </p>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: `${m.color}22`, color: m.color }}>
+                    <span
+                      className="px-2 py-0.5 rounded-full text-xs font-medium"
+                      style={{ background: `${m.color}18`, color: m.color }}
+                    >
                       {m.emoji} {m.label}
                     </span>
-                    <span className="text-xs" style={{ color: C.text2 }}>
-                      {formatRelativeTime(new Date(b.created_at))}
-                    </span>
+                    <RelativeTime date={b.created_at} className="text-xs" style={{ color: 'var(--vault-muted)' }} />
                   </div>
-                  {b.expires_at && (
-                    <p className="text-[11px] mt-2" style={{ color: C.text2 }}>
-                      ⏳ Vanishes in {formatBottleTimeLeft(b.expires_at)}
-                    </p>
-                  )}
                 </button>
               );
             })}
@@ -509,6 +644,8 @@ function EmotionVaultContent() {
         {catchOpen && (
           <CatchBottleModal onClose={() => setCatchOpen(false)} onCaught={loadData} />
         )}
+      </AnimatePresence>
+      <AnimatePresence>
         {(previewBottle || previewMissing) && (
           <BottlePreviewModal
             bottle={previewBottle}
@@ -535,20 +672,18 @@ function EmotionVaultContent() {
           />
         )}
       </AnimatePresence>
-    </WorldShell>
+      </div>
+    </div>
   );
 }
 
 export default function EmotionVaultPage() {
-  const C = useVaultColors();
   return (
     <Suspense
       fallback={
-        <WorldShell colors={{ cream: C.cream, text: C.text }}>
-          <div className="py-20 text-center text-sm" style={{ color: C.text2 }}>
-            Loading vault…
-          </div>
-        </WorldShell>
+        <div className="vault-page min-h-screen flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
+        </div>
       }
     >
       <EmotionVaultContent />
@@ -559,11 +694,10 @@ export default function EmotionVaultPage() {
 // ----------------------------- Sub-components -----------------------------
 
 function MoodTimeline({ timeline }: { timeline: TimelineDay[] }) {
-  const C = useVaultColors();
   return (
-    <div className="rounded-2xl p-4" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
-      <h3 className="text-sm font-semibold mb-3" style={{ color: C.text }}>Mood timeline (30 days)</h3>
-      <div className="grid grid-cols-7 gap-1.5">
+    <div className="vault-card">
+      <h3 className="vault-card__title">Your Mood Timeline</h3>
+      <div className="vault-timeline-grid">
         {timeline.map((t) => {
           const has = !!t.emotion;
           const m = emotionMeta(t.emotion);
@@ -571,14 +705,15 @@ function MoodTimeline({ timeline }: { timeline: TimelineDay[] }) {
             <div
               key={t.day}
               title={has ? `Day ${t.day} · ${m.label}` : `Day ${t.day}`}
-              className="aspect-square rounded-lg flex flex-col items-center justify-center text-[10px]"
-              style={{
-                background: has ? `${m.color}22` : C.white,
-                border: `1px solid ${has ? `${m.color}40` : C.line}`,
-              }}
+              className={`vault-timeline-cell${t.day === 1 ? ' vault-timeline-cell--active' : ''}`}
+              style={
+                has
+                  ? { background: `${m.color}14`, borderColor: `${m.color}35` }
+                  : undefined
+              }
             >
-              <span style={{ color: C.text2, lineHeight: 1 }}>{t.day}</span>
-              <span className="text-[13px] mt-0.5" style={{ lineHeight: 1 }}>{has ? m.emoji : '·'}</span>
+              <span>{t.day}</span>
+              <span className="vault-timeline-cell__emoji">{has ? m.emoji : '·'}</span>
             </div>
           );
         })}
@@ -588,81 +723,37 @@ function MoodTimeline({ timeline }: { timeline: TimelineDay[] }) {
 }
 
 function MonthlySummary({ insights, happyPct }: { insights: Insight[]; happyPct: number }) {
-  const C = useVaultColors();
-  const top = insights.slice(0, 3);
-  const fallback = [
-    { emotion: 'joy', pct: happyPct || 0 },
-    { emotion: 'sad', pct: 0 },
-    { emotion: 'calm', pct: 0 },
-  ];
-  const rows = top.length ? top : fallback;
+  const rows =
+    insights.length > 0
+      ? moodSummaryRows(insights)
+      : moodSummaryRows(DEMO_DASHBOARD.insights);
 
   return (
-    <div className="vault-happy-card" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-      <h3 className="text-sm font-semibold mb-3" style={{ color: C.text }}>Monthly summary</h3>
-      <div className="space-y-2.5">
-        {rows.map((it) => {
-          const m = emotionMeta(it.emotion);
-          return (
-            <div key={it.emotion}>
-              <div className="flex justify-between text-xs mb-1">
-                <span style={{ color: C.text }}>{m.label}</span>
-                <span className="font-semibold" style={{ color: m.color }}>{it.pct}%</span>
-              </div>
-              <div className="h-1.5 rounded-full overflow-hidden" style={{ background: C.progressBg }}>
-                <div className="h-full rounded-full" style={{ width: `${it.pct}%`, background: m.color }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+    <div className="vault-card">
+      <h3 className="vault-card__title">Monthly Summary</h3>
+      {rows.map((row) => (
+        <div key={row.key}>
+          <div className="vault-summary-row">
+            <span>
+              {row.emoji} {row.label}
+            </span>
+            <span style={{ color: row.color, fontWeight: 600 }}>{row.pct}%</span>
+          </div>
+          <div className="vault-summary-bar">
+            <div className="vault-summary-bar__fill" style={{ width: `${row.pct}%`, background: row.color }} />
+          </div>
+        </div>
+      ))}
       {happyPct > 0 && (
-        <p className="text-xs mt-3" style={{ color: C.text2 }}>
-          Positive mood days this month: <b style={{ color: C.brown }}>{happyPct}%</b>
+        <p className="text-xs mt-2" style={{ color: 'var(--vault-muted)' }}>
+          Positive mood days: <strong>{happyPct}%</strong>
         </p>
       )}
     </div>
   );
 }
 
-function MoodInsights({ insights }: { insights: Insight[] }) {
-  const C = useVaultColors();
-  return (
-    <div className="rounded-2xl p-4" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
-      <h3 className="text-sm font-semibold mb-3" style={{ color: C.text }}>Mood insights</h3>
-      {insights.length === 0 ? (
-        <p className="text-sm" style={{ color: C.text2 }}>Throw some bottles to see your mood insights.</p>
-      ) : (
-        <div className="space-y-3">
-          {insights.map((it) => {
-            const m = emotionMeta(it.emotion);
-            return (
-              <div key={it.emotion}>
-                <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="flex items-center gap-1.5" style={{ color: C.text }}>
-                    <span>{m.emoji}</span> {m.label}
-                  </span>
-                  <span className="font-semibold" style={{ color: m.color }}>{it.pct}%</span>
-                </div>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: C.progressBg }}>
-                  <motion.div
-                    className="h-full rounded-full"
-                    style={{ background: m.color }}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${it.pct}%` }}
-                    transition={{ duration: 0.8 }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function ModalShell({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   const C = useVaultColors();
   return (
     <motion.div
@@ -678,7 +769,7 @@ function ModalShell({ children, onClose }: { children: React.ReactNode; onClose:
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.92, y: 20 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl p-6 relative"
+        className="w-full max-w-md rounded-2xl p-6 relative max-h-[90vh] overflow-y-auto"
         style={{ background: C.cream, boxShadow: C.modalShadow, border: `1px solid ${C.line}` }}
       >
         <button
@@ -882,7 +973,7 @@ function BottlePreviewModal({
             </p>
           )}
           <p className="text-xs mt-2" style={{ color: C.text2 }}>
-            {formatRelativeTime(new Date(bottle.created_at))}
+            <RelativeTime date={bottle.created_at} className="text-xs block" style={{ color: C.text2 }} />
           </p>
           <div className="flex flex-wrap gap-2 mt-5">
             <button
@@ -968,7 +1059,7 @@ function CatchBottleModal({ onClose, onCaught }: { onClose: () => void; onCaught
                 <span className="px-3 py-1 rounded-full text-sm font-medium" style={{ background: `${m.color}22`, color: m.color }}>
                   {m.emoji} {m.label}
                 </span>
-                <span className="text-xs" style={{ color: C.text2 }}>{formatRelativeTime(new Date(caught.created_at))}</span>
+                <RelativeTime date={caught.created_at} className="text-xs block" style={{ color: C.text2 }} />
               </div>
               <p className="text-lg leading-relaxed whitespace-pre-line" style={{ color: C.text }}>{caught.message}</p>
               <div className="text-xs mt-4" style={{ color: C.text2 }}>👤 From anonymous traveler #{caught.sender_anon_id}</div>

@@ -52,7 +52,7 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   const headers = new Headers(init.headers as HeadersInit);
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
   const url = path.startsWith('http') ? path : apiUrl(path);
-  return fetch(url, { ...init, headers });
+  return fetch(url, { ...init, headers, credentials: 'include' });
 }
 
 /** JSON POST/PATCH/DELETE with auth */
@@ -68,6 +68,7 @@ export async function apiFetchJson(
   return fetch(url, {
     ...rest,
     headers,
+    credentials: 'include',
     body: json !== undefined ? JSON.stringify(json) : rest.body,
   });
 }

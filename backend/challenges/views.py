@@ -1,4 +1,4 @@
-from rest_framework import viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
@@ -47,11 +47,20 @@ class ChallengeViewSet(viewsets.ModelViewSet):
         ctype = request.query_params.get('type')
         if ctype and ctype != 'all':
             qs = qs.filter(type=ctype)
-        return Response(ChallengeSerializer(qs[:12], many=True).data)
+        page = max(int(request.query_params.get('page', 1) or 1), 1)
+        page_size = max(min(int(request.query_params.get('page_size', 12) or 12), 24), 1)
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = list(qs[start:end])
+        return Response({
+            'results': ChallengeSerializer(items, many=True).data,
+            'page': page,
+            'page_size': page_size,
+            'has_more': qs.count() > end,
+        })
 
     @action(detail=False, methods=['get'])
     def user_entries(self, request):
-        """Submissions for a user (?user=id for profiles, else authenticated user)."""
         viewer = user_from_request(request)
         user_id = request.query_params.get('user') or request.query_params.get('user_id')
         if not user_id and viewer:
@@ -60,24 +69,10 @@ class ChallengeViewSet(viewsets.ModelViewSet):
             return Response([])
         subs = (
             Submission.objects.filter(user_id=user_id)
-            .select_related('challenge')
-            .order_by('-submitted_at')[:24]
+            .select_related('challenge', 'user')
+            .order_by('-submitted_at')
         )
-        results = []
-        for s in subs:
-            results.append({
-                'id': s.id,
-                'content': s.content,
-                'submitted_at': s.submitted_at,
-                'is_approved': s.is_approved,
-                'challenge': {
-                    'id': s.challenge_id,
-                    'title': s.challenge.title,
-                    'type': s.challenge.type,
-                    'cover_url': s.challenge.cover_url,
-                },
-            })
-        return Response(results)
+        return Response(SubmissionSerializer(subs, many=True).data)
 
     @action(detail=False, methods=['get'])
     def stats(self, request):
@@ -105,8 +100,6 @@ class ChallengeViewSet(viewsets.ModelViewSet):
                 user=user,
                 content=content,
             )
-            return Response(
-                SubmissionSerializer(submission).data, status=201
-            )
-        subs = challenge.submissions.all()[:20]
+            return Response(SubmissionSerializer(submission).data, status=201)
+        subs = challenge.submissions.select_related('challenge', 'user').all()[:20]
         return Response(SubmissionSerializer(subs, many=True).data)

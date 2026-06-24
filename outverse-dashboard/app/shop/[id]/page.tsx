@@ -128,6 +128,7 @@ export default function ShopProductPage() {
           canAfford={balance == null || balance >= item.price}
           balance={balance}
           onBuy={() => void buy()}
+          accessUrl={owned && item.type === 'digital' ? item.cover_url || item.cover : null}
         />
       )}
       {toast && (

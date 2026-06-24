@@ -9,11 +9,11 @@ import {
   UserCircleIcon,
 } from '@heroicons/react/24/outline';
 import ReelsIcon from '@/components/icons/ReelsIcon';
-import { getCurrentUserId } from '@/lib/auth';
+import { useProfileHref } from '@/lib/hooks/useAuthUser';
 
 export default function HomeMobileNav() {
   const pathname = usePathname();
-  const profileHref = `/profile/${getCurrentUserId()}`;
+  const profileHref = useProfileHref();
 
   const items = [
     { href: '/', label: 'Home', icon: HomeIcon, match: (p: string) => p === '/' },

@@ -61,8 +61,8 @@ const CosmicVideoPlayer: React.FC<CosmicVideoPlayerProps> = ({
       const playVideo = async () => {
         try {
           await videoRef.current?.play();
-        } catch (error) {
-          console.log('Auto-play prevented by browser');
+        } catch {
+          return;
         }
       };
       playVideo();

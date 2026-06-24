@@ -145,6 +145,19 @@ export default function ReelsDiscoverPage() {
             );
           })}
 
+          {Object.entries(data.by_tag || {}).map(([tag, reels]) => {
+            if (!reels.length) return null;
+            return (
+              <Lane
+                key={tag}
+                title={`#${tag}`}
+                icon={<SparklesIcon className="h-5 w-5 text-violet-300" />}
+                reels={reels}
+                onOpen={openReel}
+              />
+            );
+          })}
+
           {data.top_tags.length > 0 && (
             <section className="reels-discover__tags">
               <h2>{t('reels.tags')}</h2>

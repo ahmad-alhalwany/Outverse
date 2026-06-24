@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import ChatRoom, Conversation, Message, RoomMessage, UserPresence
@@ -81,19 +82,50 @@ class RoomMessageSerializer(serializers.ModelSerializer):
 class ChatRoomSerializer(serializers.ModelSerializer):
     member_count = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
+    created_by_id = serializers.IntegerField(source='created_by.id', read_only=True)
 
     class Meta:
         model = ChatRoom
-        fields = ['id', 'name', 'member_count', 'last_message', 'created_at']
+        fields = [
+            'id', 'name', 'member_count', 'members',
+            'last_message', 'created_at', 'created_by_id',
+        ]
 
     def get_member_count(self, obj):
-        return obj.members.count() + 1
+        return getattr(obj, 'member_count', obj.members.count() + 1)
 
     def get_last_message(self, obj):
-        msg = obj.messages.order_by('-created_at').first()
+        msg = getattr(obj, 'prefetched_last_message', None)
+        if msg is None:
+            msg = obj.messages.order_by('-created_at').first()
         if not msg:
             return None
         return RoomMessageSerializer(msg, context=self.context).data
+
+    def get_members(self, obj):
+        request = self.context.get('request')
+        members = getattr(obj, 'prefetched_members', None)
+        if members is None:
+            members = obj.members.all()
+        rows = []
+        for member in members:
+            if not member:
+                continue
+            avatar = None
+            if getattr(member, 'avatar', None) and member.avatar:
+                avatar = (
+                    request.build_absolute_uri(member.avatar.url)
+                    if request
+                    else member.avatar.url
+                )
+            rows.append({
+                'id': member.id,
+                'username': member.username,
+                'name': user_display_name(member),
+                'avatar': avatar,
+            })
+        return rows
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -109,18 +141,15 @@ class ConversationSerializer(serializers.ModelSerializer):
 
     def get_peer(self, obj):
         viewer_id = self.context.get('viewer_id')
-        peer_id = obj.peer_id_for(viewer_id)
-        peer = User.objects.filter(pk=peer_id).first()
+        peer = getattr(obj, 'prefetched_peer', None)
+        if peer is None:
+            peer_id = obj.peer_id_for(viewer_id)
+            peer = User.objects.filter(pk=peer_id).first()
         if not peer:
             return None
         request = self.context.get('request')
-        from django.utils import timezone
-        from datetime import timedelta
-
-        from .models import UserPresence
-
-        presence, _ = UserPresence.objects.get_or_create(user=peer)
-        online = presence.last_seen >= timezone.now() - timedelta(minutes=5)
+        presence = getattr(peer, 'presence', None)
+        online = bool(presence and presence.last_seen >= timezone.now() - timezone.timedelta(minutes=5))
         avatar = None
         if getattr(peer, 'avatar', None) and peer.avatar:
             avatar = (
@@ -134,19 +163,19 @@ class ConversationSerializer(serializers.ModelSerializer):
             'username': peer.username,
             'name': full or peer.username,
             'avatar': avatar,
-            'status_message': presence.status_message or 'Exploring the cosmos',
-            'mood_icon': presence.mood_icon,
+            'status_message': (presence.status_message if presence else '') or 'Exploring the cosmos',
+            'mood_icon': presence.mood_icon if presence else 'sun',
             'is_online': online,
         }
 
     def get_last_message(self, obj):
-        msg = obj.messages.order_by('-created_at').first()
+        msg = getattr(obj, 'prefetched_last_message', None)
+        if msg is None:
+            msg = obj.messages.order_by('-created_at').first()
         if not msg:
             return None
         return MessageSerializer(msg, context=self.context).data
 
     def get_unread_count(self, obj):
         viewer_id = self.context.get('viewer_id')
-        return obj.messages.filter(is_read=False).exclude(
-            sender_id=viewer_id
-        ).count()
+        return getattr(obj, 'unread_count', obj.messages.filter(is_read=False).exclude(sender_id=viewer_id).count())

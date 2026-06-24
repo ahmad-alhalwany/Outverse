@@ -1,5 +1,7 @@
-from django.conf import settings
 from django.db import models
+from django.conf import settings
+
+from outverse.upload_validators import validate_image_upload
 
 
 class ShopItem(models.Model):
@@ -19,11 +21,11 @@ class ShopItem(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField()
     price = models.IntegerField(help_text='Price in Outverse coins')
-    type = models.CharField(max_length=20, choices=ITEM_TYPES, default='digital')
+    type = models.CharField(max_length=20, choices=ITEM_TYPES, default='digital', db_index=True)
     category = models.CharField(
         max_length=20, choices=CATEGORY_CHOICES, default='art'
     )
-    image = models.ImageField(upload_to='shop_items/', null=True, blank=True)
+    image = models.ImageField(upload_to='shop_items/', null=True, blank=True, validators=[validate_image_upload])
     cover_url = models.URLField(blank=True)
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -35,8 +37,8 @@ class ShopItem(models.Model):
     rating = models.FloatField(default=0)
     sales_count = models.IntegerField(default=0)
     is_featured = models.BooleanField(default=False)
-    is_available = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    is_available = models.BooleanField(default=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -55,11 +57,12 @@ class Transaction(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='transactions',
+        db_index=True,
     )
     item = models.ForeignKey(ShopItem, on_delete=models.CASCADE)
     amount = models.IntegerField()
     status = models.CharField(
-        max_length=20, choices=STATUS_CHOICES, default='pending'
+        max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True
     )
     timestamp = models.DateTimeField(auto_now_add=True)
 

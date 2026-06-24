@@ -76,6 +76,7 @@ export interface AdminProfile {
   mood_history: unknown[];
   achievements: Array<Record<string, unknown>>;
   status: 'active' | 'suspended';
+  is_staff?: boolean;
 }
 
 export interface AdminShopItem {
@@ -125,4 +126,58 @@ export interface AdminFlagged {
   reporter: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at?: string;
+}
+
+export interface AdminIdea {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+  cover_url: string;
+  supporters: number;
+  owner: { id: number; username: string };
+  created_at: string;
+}
+
+export interface AdminBottle {
+  id: number;
+  message: string;
+  emotion_type: string;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  created_at: string;
+  is_opened?: boolean;
+  caught_by?: number | null;
+}
+
+export interface AdminStory {
+  id: number;
+  title: string;
+  premise: string;
+  genre: string;
+  status: string;
+  max_segments: number;
+  segment_count: number;
+  contributors_count: number;
+  owner: { id?: number; username: string } | null;
+  updated_at: string;
+}
+
+export interface AdminPost {
+  id: number;
+  text: string;
+  created_at: string;
+  comments_count: number;
+  likes_count: number;
+  shares_count: number;
+  user: { id: number; username: string };
+}
+
+export interface AdminComment {
+  id: number;
+  text: string;
+  created_at: string;
+  post: number;
+  user: { id: number; username: string };
 }

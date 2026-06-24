@@ -119,7 +119,7 @@ export default function AdminShopPage() {
       <div className="admin-grid-2">
         <div className="admin-panel">
           <h3 className="admin-panel__title">All products</h3>
-          <div className="admin-table-wrap">
+          <div className="admin-table-wrap admin-table--desktop">
             <table className="admin-table">
               <thead>
                 <tr>
@@ -146,6 +146,19 @@ export default function AdminShopPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="admin-mobile-cards">
+            {items.map((item) => (
+              <div key={item.id} className="admin-mobile-card">
+                <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Name</span><span className="admin-mobile-card__value">{item.name}</span></div>
+                <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Price</span><span className="admin-mobile-card__value">{item.price}</span></div>
+                <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Status</span><span className="admin-mobile-card__value">{item.is_available ? 'Visible' : 'Hidden'}{item.is_featured ? ' · Featured' : ''}</span></div>
+                <div className="admin-actions-wrap">
+                  <button type="button" className="admin-btn admin-btn--ghost" onClick={() => openEdit(item)}>Edit</button>
+                  <button type="button" className="admin-btn admin-btn--danger" onClick={() => remove(item.id)}>Delete</button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

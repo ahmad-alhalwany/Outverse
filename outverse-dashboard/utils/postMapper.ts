@@ -1,16 +1,45 @@
-import { formatRelativeTime } from './dateFormatter';
 import { mediaUrl } from '@/lib/api';
 
 export { mediaUrl as fullMediaUrl };
 
-function userFullName(user: any) {
+type PostUser = {
+  id?: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  avatar?: string | null;
+};
+
+type PostMedia = {
+  media_type: 'image' | 'video' | string;
+  media_file: string;
+};
+
+type ApiPost = {
+  id?: number;
+  user?: PostUser | null;
+  media?: PostMedia[];
+  views?: number;
+  comments_count?: number;
+  shares_count?: number;
+  mood?: string;
+  tags?: string[];
+  is_saved?: boolean;
+  created_at?: string;
+  reaction_counts?: Record<string, number>;
+  text?: string;
+};
+
+export type { ApiPost };
+
+function userFullName(user: PostUser) {
   if (user.first_name || user.last_name) {
     return `${user.first_name || ''} ${user.last_name || ''}`.trim();
   }
   return user.username || '';
 }
 
-export function mapPost(post: any) {
+export function mapPost(post: ApiPost) {
   const user = post.user
     ? {
         id: post.user.id,
@@ -21,13 +50,13 @@ export function mapPost(post: any) {
 
   const images = post.media
     ? post.media
-        .filter((m: any) => m.media_type === 'image')
-        .map((m: any) => mediaUrl(m.media_file))
+        .filter((media) => media.media_type === 'image')
+        .map((media) => mediaUrl(media.media_file))
     : [];
   const videos = post.media
     ? post.media
-        .filter((m: any) => m.media_type === 'video')
-        .map((m: any) => mediaUrl(m.media_file))
+        .filter((media) => media.media_type === 'video')
+        .map((media) => mediaUrl(media.media_file))
     : [];
 
   const stats = {
@@ -38,6 +67,8 @@ export function mapPost(post: any) {
 
   return {
     ...post,
+    id: post.id,
+    text: post.text || '',
     user,
     userId: post.user?.id,
     images,
@@ -46,6 +77,7 @@ export function mapPost(post: any) {
     mood: post.mood || '',
     tags: post.tags || [],
     is_saved: !!post.is_saved,
-    time: formatRelativeTime(new Date(post.created_at)),
+    created_at: post.created_at || '',
+    time: post.created_at || '',
   };
 }

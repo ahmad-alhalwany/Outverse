@@ -1,16 +1,17 @@
 'use client';
 
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import Comments from './Comments';
 import PostEngagementBar from './PostEngagementBar';
 import ShareCosmicPanel from './ShareCosmicPanel';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import Link from 'next/link';
 import PostMediaGallery from './PostMediaGallery';
 import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon, BookmarkIcon, LinkIcon, FlagIcon } from '@heroicons/react/24/outline';
 import { BookmarkIcon as BookmarkSolid } from '@heroicons/react/24/solid';
 import LinkPreview from './LinkPreview';
-import { formatRelativeTime } from '../utils/dateFormatter';
+import RelativeTime from './RelativeTime';
 import { getUser } from '@/lib/auth';
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
 import { countsToEmojiMap, COSMIC_REACTIONS, REACTION_TYPE_BY_EMOJI, EMOJI_BY_REACTION_TYPE } from '@/lib/reactions';
@@ -88,7 +89,7 @@ function mapComment(c: Record<string, unknown>): CommentType {
       avatar: commentMediaUrl((c.user as { avatar?: string })?.avatar),
     },
     text: (c.text as string) || '',
-    time: formatRelativeTime(new Date(c.created_at as string)),
+    time: (c.created_at as string) || '',
     gifUrl: (c.gif_url as string) || undefined,
     stickerUrl: (c.sticker_url as string) || undefined,
     reactionCounts: countsToEmojiMap(c.reaction_counts as Record<string, number>),
@@ -97,7 +98,7 @@ function mapComment(c: Record<string, unknown>): CommentType {
   };
 }
 
-export default function PostCard({ variant = 'default', id, user, time, text, mood, tags, reaction_counts, my_reaction, is_saved: isSavedProp = false, images, videos, audio, description, stats, onDeleted, onUpdated, onSavedChange }: PostCardProps) {
+function PostCard({ variant = 'default', id, user, time, text, mood, tags, reaction_counts, my_reaction, is_saved: isSavedProp = false, images, videos, audio, description, stats, onDeleted, onUpdated, onSavedChange }: PostCardProps) {
   const [showShare, setShowShare] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -121,6 +122,7 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
   const [viewCount, setViewCount] = useState(stats.views);
   const [reactionBusy, setReactionBusy] = useState(false);
   const viewedRef = useRef(false);
+  const [allowMotion, setAllowMotion] = useState(false);
 
   useEffect(() => {
     setSaved(isSavedProp);
@@ -143,7 +145,7 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
     }
   }, [my_reaction]);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     if (!id) return;
     try {
       const res = await apiFetch(`comments/?post=${id}`);
@@ -156,7 +158,7 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
     } catch {
       /* keep existing comments on error */
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     const me = getUser();
@@ -171,8 +173,7 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
 
   useEffect(() => {
     fetchComments();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  }, [fetchComments]);
 
   useEffect(() => {
     if (!id || viewedRef.current) return;
@@ -185,6 +186,13 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
       })
       .catch(() => {});
   }, [id]);
+
+  useEffect(() => {
+    // Defer word-level motion until the card has been in the viewport a beat;
+    // this avoids blocking the initial mount/render of long feeds.
+    const handle = requestAnimationFrame(() => setAllowMotion(true));
+    return () => cancelAnimationFrame(handle);
+  }, []);
 
   const hasMedia =
     (images?.some((u) => mediaUrl(u)) ?? false) ||
@@ -443,21 +451,20 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
   const shareUrl =
     id && typeof window !== 'undefined' ? `${window.location.origin}/post/${id}` : '';
 
-  // تقسيم النص إلى كلمات
   const words = displayText.split(' ');
 
-  // متغيرات Framer Motion
+  // Lightweight word-level motion config; kept static to avoid re-computation.
   const container = {
     hidden: {},
     visible: {
       transition: {
-        staggerChildren: 0.06,
+        staggerChildren: 0.03,
       },
     },
   };
   const wordAnim = {
-    hidden: (i: number) => ({ opacity: 0, y: 20 * Math.sin(i * 0.5) }),
-    visible: (i: number) => ({ opacity: 1, y: 0, transition: { type: 'spring', stiffness: 400, damping: 20, delay: i * 0.02 } }),
+    hidden: { opacity: 0.3, y: 4 },
+    visible: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 400, damping: 25 } },
   };
 
   // استخراج أول رابط من النص
@@ -466,26 +473,26 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ boxShadow: '0 8px 32px 0 rgba(80,120,255,0.18)' }}
-      className={`${variant === 'premium' ? 'post-card-premium' : 'card'} p-6 mb-0 transition-all duration-300`}
+      transition={{ duration: 0.25 }}
+      className={`${variant === 'premium' ? 'post-card-premium' : 'card'} p-6 mb-0 hover:shadow-xl transition-shadow duration-300`}
     >
       <div className="flex items-center mb-4">
         {user.id ? (
           <Link href={`/profile/${user.id}`} className="flex items-center group">
-            <img src={user.avatar || DEFAULT_AVATAR} alt={user.name} className="w-9 h-9 rounded-full mr-3 object-cover" />
+            <Image src={user.avatar || DEFAULT_AVATAR} alt={`${user.name} avatar`} width={36} height={36} className="w-9 h-9 rounded-full mr-3 object-cover" unoptimized />
             <div>
               <div className="font-semibold text-text group-hover:underline">{user.name}</div>
-              <div className="text-xs text-text-secondary">{time}</div>
+              <RelativeTime date={time} className="text-xs text-text-secondary block" />
             </div>
           </Link>
         ) : (
           <div className="flex items-center">
-            <img src={user.avatar || DEFAULT_AVATAR} alt={user.name} className="w-9 h-9 rounded-full mr-3 object-cover" />
+            <Image src={user.avatar || DEFAULT_AVATAR} alt={`${user.name} avatar`} width={36} height={36} className="w-9 h-9 rounded-full mr-3 object-cover" unoptimized />
             <div>
               <div className="font-semibold text-text">{user.name}</div>
-              <div className="text-xs text-text-secondary">{time}</div>
+              <RelativeTime date={time} className="text-xs text-text-secondary block" />
             </div>
           </div>
         )}
@@ -608,20 +615,18 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
             </div>
           </div>
         ) : (
-        /* نص متحرك كلمة كلمة مع تأثير wave وhover */
+        /* Lightweight word-level reveal; disabled on mount to avoid feed jank. */
         <motion.p
-          className="text-text mb-2 flex flex-wrap gap-x-1 gap-y-2"
+          className="text-text mb-2 flex flex-wrap gap-x-1 gap-y-1"
           variants={container}
           initial="hidden"
-          animate="visible"
+          animate={allowMotion ? 'visible' : 'hidden'}
         >
           {words.map((word, i) => (
             <motion.span
-              key={i}
-              custom={i}
+              key={`${i}-${word}`}
               variants={wordAnim}
-              className="inline-block cursor-pointer transition-colors duration-200"
-              whileHover={{ y: -6, color: '#1976d2' }}
+              className="inline-block cursor-pointer transition-colors duration-200 hover:text-lab"
             >
               {word}
             </motion.span>
@@ -691,4 +696,6 @@ export default function PostCard({ variant = 'default', id, user, time, text, mo
       />
     </motion.div>
   );
-} 
+}
+
+export default memo(PostCard); 

@@ -18,9 +18,5 @@ class FlaggedContentViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = user_from_request(self.request)
-        reporter = (
-            user.username
-            if user
-            else (self.request.data.get('reporter') or 'anonymous')
-        )
+        reporter = user.username if user else 'anonymous'
         serializer.save(reporter=reporter[:100])

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { wsUrl } from '@/lib/ws';
+import { resolveWsUrl } from '@/lib/ws';
 
 export type SignalPayload = Record<string, unknown> & { type: string };
 
@@ -13,6 +13,7 @@ type Options = {
 export function useSignalWebSocket({ enabled = true, onSignal }: Options) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const generationRef = useRef(0);
   const onSignalRef = useRef(onSignal);
 
   useEffect(() => {
@@ -22,33 +23,54 @@ export function useSignalWebSocket({ enabled = true, onSignal }: Options) {
   useEffect(() => {
     if (!enabled) return;
 
-    const url = wsUrl('/ws/signal/');
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    let cancelled = false;
+    const generation = ++generationRef.current;
+    let socket: WebSocket | null = null;
+    let ping: ReturnType<typeof setInterval> | null = null;
 
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onerror = () => setConnected(false);
+    void resolveWsUrl('signal').then((url) => {
+      if (cancelled || generationRef.current !== generation) return;
+      const ws = new WebSocket(url);
+      socket = ws;
+      wsRef.current = ws;
 
-    ws.onmessage = (ev) => {
-      try {
-        const data = JSON.parse(ev.data) as SignalPayload;
-        onSignalRef.current(data);
-      } catch {
-        /* ignore */
-      }
-    };
+      ws.onopen = () => {
+        if (generationRef.current !== generation || wsRef.current !== ws) return;
+        setConnected(true);
+      };
+      ws.onclose = () => {
+        if (generationRef.current !== generation || wsRef.current !== ws) return;
+        setConnected(false);
+      };
+      ws.onerror = () => {
+        if (generationRef.current !== generation || wsRef.current !== ws) return;
+        setConnected(false);
+      };
 
-    const ping = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'presence.ping' }));
-      }
-    }, 30000);
+      ws.onmessage = (ev) => {
+        if (generationRef.current !== generation || wsRef.current !== ws) return;
+        try {
+          const data = JSON.parse(ev.data) as SignalPayload;
+          onSignalRef.current(data);
+        } catch {
+          /* ignore */
+        }
+      };
+
+      ping = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'presence.ping' }));
+        }
+      }, 30000);
+    });
 
     return () => {
-      clearInterval(ping);
-      ws.close();
-      wsRef.current = null;
+      cancelled = true;
+      if (ping) clearInterval(ping);
+      if (wsRef.current === socket) {
+        wsRef.current = null;
+      }
+      socket?.close();
     };
   }, [enabled]);
 

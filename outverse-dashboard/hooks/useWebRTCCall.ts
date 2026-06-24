@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { getChatRuntimeConfig } from '@/lib/ws';
 import type { SignalPayload } from './useSignalWebSocket';
 
 const DEFAULT_ICE: RTCConfiguration = {
@@ -44,8 +44,7 @@ export function useWebRTCCall(
   const iceConfigRef = useRef<RTCConfiguration>(DEFAULT_ICE);
 
   useEffect(() => {
-    apiFetch('chat/config/')
-      .then((r) => (r.ok ? r.json() : null))
+    getChatRuntimeConfig()
       .then((data) => {
         if (data?.ice_servers?.length) {
           iceConfigRef.current = { iceServers: data.ice_servers };
@@ -257,7 +256,6 @@ export function useWebRTCCall(
     incoming,
     callKind,
     muted,
-    remoteMuted,
     localVideoRef,
     remoteVideoRef,
     startCall,
@@ -267,6 +265,5 @@ export function useWebRTCCall(
     handleSignal,
     toggleMute,
     cleanup,
-    setRemoteMuted,
   };
 }

@@ -47,7 +47,9 @@ export interface ReelItem {
   likes_count: number;
   comments_count: number;
   is_liked: boolean;
+  is_saved?: boolean;
   is_featured?: boolean;
+  is_active?: boolean;
   created_at: string;
 }
 

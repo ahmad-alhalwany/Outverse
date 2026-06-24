@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import Image from 'next/image';
 import CosmicVideoPlayer from './CosmicVideoPlayer';
 import { apiFetch } from '@/lib/api';
 import { STORIES_API, mapStoryFromApi, groupStoriesByUser, type StoryItem, type StoryRing } from '@/lib/storyUtils';
@@ -24,6 +25,7 @@ function StarfieldBG() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     let animationId: number;
+    let paused = document.hidden;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = SIDEBAR_WIDTH * dpr;
     canvas.height = window.innerHeight * dpr;
@@ -41,6 +43,10 @@ function StarfieldBG() {
     }));
 
     function draw() {
+      if (paused) {
+        animationId = requestAnimationFrame(draw);
+        return;
+      }
       if (!ctx) return;
       ctx.clearRect(0, 0, SIDEBAR_WIDTH, window.innerHeight);
       for (const star of stars) {
@@ -62,8 +68,15 @@ function StarfieldBG() {
       }
       animationId = requestAnimationFrame(draw);
     }
+    const handleVisibilityChange = () => {
+      paused = document.hidden;
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     draw();
-    return () => cancelAnimationFrame(animationId);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      cancelAnimationFrame(animationId);
+    };
   }, []);
 
   return (
@@ -209,7 +222,7 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
   const prevStoryRef = useRef<any>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const durationRef = useRef<number>(0);
   const startTimeRef = useRef<number>(0);
 
@@ -255,50 +268,42 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
     }
   }, [story]);
 
-  // Timer logic
+  const advanceStory = useCallback(() => {
+    if (mediaIdx < allMedia.length - 1) {
+      setMediaIdx((current) => current + 1);
+      setProgress(0);
+      startTimeRef.current = 0;
+    } else if (hasNext) {
+      onNext();
+    } else {
+      onClose();
+    }
+  }, [allMedia.length, hasNext, mediaIdx, onClose, onNext]);
+
   useEffect(() => {
-    // لا نحتاج للتايمر للفيديوهات، سنعتمد على انتهاء الفيديو
     if (isVideo) return;
-    
     if (!timerActive || isPaused) return;
-    
-    // إعادة تعيين وقت البداية إذا لم يكن محدداً
     if (startTimeRef.current === 0) {
       startTimeRef.current = Date.now();
     }
-    
-    let localDuration = durationRef.current || duration;
-    
+    const localDuration = durationRef.current || duration;
+
     function tick() {
       const elapsed = Date.now() - startTimeRef.current;
-      const progressValue = Math.min(elapsed / localDuration, 1); // من 0 إلى 1
-      
-      // تحديث سلس مع requestAnimationFrame
+      const progressValue = Math.min(elapsed / localDuration, 1);
       requestAnimationFrame(() => {
         setProgress(progressValue);
       });
-      
       if (elapsed < localDuration) {
-        timerRef.current = setTimeout(tick, 16); // تحديث كل 16ms (60fps) للسلاسة
+        timerRef.current = setTimeout(tick, 80);
       } else {
         setProgress(1);
-        // انتقل للوسائط التالية أو للقصة التالية
-        if (mediaIdx < allMedia.length - 1) {
-          setMediaIdx(mediaIdx + 1);
-          setProgress(0);
-          startTimeRef.current = 0; // إعادة تعيين وقت البداية
-        } else if (hasNext) {
-          onNext();
-        } else {
-          // إغلاق الستوري عند انتهاء آخر ستوري
-          onClose();
-        }
+        advanceStory();
       }
     }
     tick();
     return () => { if (timerRef.current) { clearTimeout(timerRef.current); } };
-    // eslint-disable-next-line
-  }, [story, timerActive, mediaIdx, allMedia.length, hasNext, onNext, isVideo, isPaused]);
+  }, [advanceStory, duration, isPaused, isVideo, timerActive, story]);
 
   // For video: set duration to video length (max 30s)
   const handleVideoMeta = (e: React.SyntheticEvent<HTMLVideoElement>) => {
@@ -309,106 +314,44 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
     setTimerActive(false); // إيقاف التايمر العادي للفيديوهات
   };
 
-  // إضافة event listener لانتهاء الفيديو وتحديث التايمر
   useEffect(() => {
-    if (!isVideo) return;
-    
-    const handleVideoEnded = () => {
-      // عند انتهاء الفيديو، انتقل للوسيط التالي أو القصة التالية
-      if (mediaIdx < allMedia.length - 1) {
-        setMediaIdx(mediaIdx + 1);
-        setProgress(0);
-      } else if (hasNext) {
-        onNext();
-      } else {
-        // إغلاق الستوري عند انتهاء آخر ستوري
-        onClose();
-      }
-    };
+    const videoElement = videoRef.current;
+    if (!isVideo || !videoElement) return;
 
+    const handleVideoEnded = () => advanceStory();
     const handleTimeUpdate = () => {
-      if (isPaused) return; // لا تحديث إذا كان متوقف
-      
-      const videoElement = document.querySelector('video');
-      if (videoElement && videoElement.duration > 0) {
-        // تحديث التايمر حسب وقت الفيديو الحالي (من 0 إلى 1)
-        const currentTime = videoElement.currentTime;
-        const duration = videoElement.duration;
-        const progressValue = currentTime / duration; // من 0 إلى 1
-        
-        // تحديث أكثر سلاسة مع requestAnimationFrame
-        requestAnimationFrame(() => {
-          setProgress(progressValue);
-        });
-      }
+      if (isPaused || videoElement.duration <= 0) return;
+      requestAnimationFrame(() => {
+        setProgress(videoElement.currentTime / videoElement.duration);
+      });
     };
-
     const handleLoadedMetadata = () => {
-      const videoElement = document.querySelector('video');
-      if (videoElement) {
-        // إعادة تعيين التايمر عند تحميل الفيديو
-        setProgress(0);
-        setTimerActive(false);
-        
-        // بدء تحديث التايمر فوراً وبشكل سلس
-        const updateProgress = () => {
-          if (videoElement && videoElement.duration > 0) {
-            const currentTime = videoElement.currentTime;
-            const duration = videoElement.duration;
-            const progressValue = currentTime / duration;
-            
-            // تحديث سلس مع requestAnimationFrame
-            requestAnimationFrame(() => {
-              setProgress(progressValue);
-            });
-          }
-        };
-        
-        // تحديث أولي
-        updateProgress();
-      }
+      setProgress(0);
+      setTimerActive(false);
     };
+    const handlePlay = () => setProgress(0);
 
-    const handlePlay = () => {
-      // عند بدء التشغيل، تأكد من تحديث التايمر
-      const videoElement = document.querySelector('video');
-      if (videoElement) {
-        requestAnimationFrame(() => {
-          setProgress(0);
-        });
-      }
+    videoElement.addEventListener('ended', handleVideoEnded);
+    videoElement.addEventListener('timeupdate', handleTimeUpdate);
+    videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
+    videoElement.addEventListener('play', handlePlay);
+
+    return () => {
+      videoElement.removeEventListener('ended', handleVideoEnded);
+      videoElement.removeEventListener('timeupdate', handleTimeUpdate);
+      videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      videoElement.removeEventListener('play', handlePlay);
     };
-    
-    // إضافة event listeners للفيديو الحالي
-    const videoElement = document.querySelector('video');
-    if (videoElement) {
-      videoElement.addEventListener('ended', handleVideoEnded);
-      videoElement.addEventListener('timeupdate', handleTimeUpdate);
-      videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
-      videoElement.addEventListener('play', handlePlay);
-      
-      return () => {
-        videoElement.removeEventListener('ended', handleVideoEnded);
-        videoElement.removeEventListener('timeupdate', handleTimeUpdate);
-        videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
-        videoElement.removeEventListener('play', handlePlay);
-      };
-    }
-  }, [isVideo, mediaIdx, allMedia.length, hasNext, onNext]);
+  }, [advanceStory, isPaused, isVideo]);
 
-  // ضبط التايمر حسب نوع الوسيط
   useEffect(() => {
     if (isVideo) {
-      // للفيديوهات، نعتمد على انتهاء الفيديو
       setTimerActive(false);
-      setProgress(0); // إعادة تعيين التايمر عند تغيير الوسيط
+      setProgress(0);
     } else {
-      // للصور والنصوص، نستخدم التايمر العادي
       setTimerActive(true);
-      setProgress(0); // إعادة تعيين التايمر عند تغيير الوسيط
+      setProgress(0);
     }
-    
-    // إعادة تعيين حالة الإيقاف عند تغيير الوسيط
     setIsPaused(false);
     setPauseStartTime(null);
     setElapsedBeforePause(0);
@@ -420,29 +363,11 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
   
   // تحسين الأداء مع useMemo
   const memoizedProgress = React.useMemo(() => normalizedProgress, [normalizedProgress]);
-  // Pause timer when video is paused, resume when playing
-  const handleVideoPlay = () => {
-    if (isVideo) {
-      // للفيديوهات، لا نحتاج للتايمر العادي
-      setTimerActive(false);
-    } else {
-      setTimerActive(true);
-      // إعادة تعيين التايمر عند بدء الفيديو
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-      setProgress(0);
-    }
-  };
-  const handleVideoPause = () => setTimerActive(false);
-
-  // Reset timer on manual navigation
   useEffect(() => {
     setProgress(0);
     setTimerActive(true);
     durationRef.current = isVideo ? durationRef.current : duration;
-    // eslint-disable-next-line
-  }, [direction]);
+  }, [direction, duration, isVideo]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -484,21 +409,13 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
     }
   };
 
-  // دالة إيقاف/تشغيل الستوري
   const togglePause = () => {
     if (isPaused) {
-      // استئناف الستوري
       setIsPaused(false);
       setTimerActive(true);
-      
       if (isVideo) {
-        // استئناف الفيديو
-        const videoElement = document.querySelector('video');
-        if (videoElement) {
-          videoElement.play();
-        }
+        videoRef.current?.play().catch(() => {});
       } else {
-        // استئناف التايمر العادي
         if (pauseStartTime && elapsedBeforePause > 0) {
           const remainingTime = durationRef.current - elapsedBeforePause;
           startTimeRef.current = Date.now() - (durationRef.current - remainingTime);
@@ -507,18 +424,11 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
         }
       }
     } else {
-      // إيقاف الستوري
       setIsPaused(true);
       setTimerActive(false);
-      
       if (isVideo) {
-        // إيقاف الفيديو
-        const videoElement = document.querySelector('video');
-        if (videoElement) {
-          videoElement.pause();
-        }
+        videoRef.current?.pause();
       } else {
-        // حفظ الوقت المنقضي قبل الإيقاف
         const elapsed = Date.now() - startTimeRef.current;
         setElapsedBeforePause(elapsed);
         setPauseStartTime(Date.now());
@@ -564,8 +474,7 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
           <div className="story-viewer-header">
             <div className="flex items-center gap-2.5 min-w-0 flex-1">
               {avatarSrc ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={avatarSrc} alt="" className="story-viewer-avatar" />
+                <Image src={avatarSrc} alt={`${displayName} avatar`} width={40} height={40} className="story-viewer-avatar" unoptimized />
               ) : (
                 <span className="story-viewer-avatar story-viewer-avatar--fallback">
                   {displayName.slice(0, 2).toUpperCase()}
@@ -595,17 +504,17 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
           ) : allMedia.length > 0 ? (
             <div className="story-viewer-media">
               {isVideo ? (
-                <CosmicVideoPlayer
+                <video
+                  ref={videoRef}
                   src={currentMedia.url}
-                  style={{ width: '100%', height: '100%' }}
-                  isStory
+                  className="w-full h-full object-cover"
                   autoPlay
                   muted
-                  loop={false}
+                  playsInline
+                  onLoadedMetadata={handleVideoMeta}
                 />
               ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={currentMedia.url} alt="" className="w-full h-full object-cover" />
+                <Image src={currentMedia.url} alt={story.text ? `Story media from ${displayName}` : `${displayName} story media`} fill className="w-full h-full object-cover" unoptimized />
               )}
               <div className="story-viewer-vignette" />
             </div>
@@ -679,10 +588,21 @@ export function AddStoryModal({ onClose, onCreated }: { onClose: () => void; onC
   const handleMediaFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (mediaPreview) {
+        URL.revokeObjectURL(mediaPreview);
+      }
       setMediaFile(file);
       setMediaPreview(URL.createObjectURL(file));
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (mediaPreview) {
+        URL.revokeObjectURL(mediaPreview);
+      }
+    };
+  }, [mediaPreview]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -739,8 +659,7 @@ export function AddStoryModal({ onClose, onCreated }: { onClose: () => void; onC
             {mediaFile?.type.startsWith('video') ? (
               <video src={mediaPreview} controls className="w-full max-h-40 rounded-lg" />
             ) : (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={mediaPreview} alt="preview" className="w-full max-h-40 rounded-lg object-cover" />
+              <Image src={mediaPreview} alt="Story media preview" width={320} height={160} className="w-full max-h-40 rounded-lg object-cover" unoptimized />
             )}
           </div>
         )}

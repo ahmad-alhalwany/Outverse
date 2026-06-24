@@ -41,6 +41,7 @@ type Props = {
   canAfford: boolean;
   balance: number | null;
   onBuy: () => void;
+  accessUrl?: string | null;
 };
 
 export default function ProductDetailView({
@@ -49,6 +50,7 @@ export default function ProductDetailView({
   canAfford,
   balance,
   onBuy,
+  accessUrl,
 }: Props) {
   const { theme } = useTheme();
   const { t } = useLocale();
@@ -155,6 +157,17 @@ export default function ProductDetailView({
                 ? t('shop.notEnoughCoins')
                 : `${t('shop.unlockFor')} ${item.price} ✨`}
           </button>
+          {owned && item.type === 'digital' && accessUrl && (
+            <a
+              href={accessUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 block w-full py-3 rounded-xl font-semibold text-center"
+              style={{ background: C.card2, color: C.brownDk, border: `1px solid ${C.line}` }}
+            >
+              {t('shop.downloadAccess')}
+            </a>
+          )}
         </div>
       </article>
     </div>

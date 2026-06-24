@@ -1,12 +1,14 @@
-from django.db import models
 from django.conf import settings
+from django.db import models
+
+from outverse.upload_validators import validate_image_upload, validate_video_upload
 
 class Post(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='posts')
     text = models.TextField(blank=True)
     mood = models.CharField(max_length=20, blank=True)
     tags = models.JSONField(default=list, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     views = models.PositiveIntegerField(default=0)
     comments_count = models.PositiveIntegerField(default=0)
     likes_count = models.PositiveIntegerField(default=0)
@@ -32,6 +34,13 @@ class PostMedia(models.Model):
     def __str__(self):
         return f"{self.media_type.capitalize()} for Post {self.post.id}"
 
+    def clean(self):
+        super().clean()
+        if self.media_type == 'video':
+            validate_video_upload(self.media_file)
+        else:
+            validate_image_upload(self.media_file)
+
 
 class Reaction(models.Model):
     REACTION_TYPES = [
@@ -50,7 +59,7 @@ class Reaction(models.Model):
         related_name='reactions',
     )
     type = models.CharField(max_length=20, choices=REACTION_TYPES)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         unique_together = ('post', 'user')
@@ -78,7 +87,7 @@ class Comment(models.Model):
     text = models.TextField(blank=True)
     gif_url = models.URLField(max_length=500, blank=True)
     sticker_url = models.URLField(max_length=500, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ['created_at']

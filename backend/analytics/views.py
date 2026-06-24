@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.core.cache import cache
 from django.db.models import Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -21,16 +22,21 @@ from users.models import Profile, User
 
 
 class PlatformAnalyticsView(APIView):
+    permission_classes = [IsAdminUser]
+
     def get(self, request):
-        data = {
-            'users': User.objects.count(),
-            'challenges': Challenge.objects.count(),
-            'ideas': Idea.objects.count(),
-            'moods': Mood.objects.count(),
-            'bottles': MessageBottle.objects.count(),
-            'stories': Story.objects.count(),
-            'shop_items': ShopItem.objects.count(),
-        }
+        data = cache.get('analytics:platform')
+        if data is None:
+            data = {
+                'users': User.objects.count(),
+                'challenges': Challenge.objects.count(),
+                'ideas': Idea.objects.count(),
+                'moods': Mood.objects.count(),
+                'bottles': MessageBottle.objects.count(),
+                'stories': Story.objects.count(),
+                'shop_items': ShopItem.objects.count(),
+            }
+            cache.set('analytics:platform', data, 300)
         return Response(data)
 
 
@@ -38,6 +44,9 @@ class AdminDashboardView(APIView):
     permission_classes = [IsAdminUser]
 
     def get(self, request):
+        cached = cache.get('analytics:admin_dashboard')
+        if cached is not None:
+            return Response(cached)
         now = timezone.now()
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=28)
@@ -167,7 +176,7 @@ class AdminDashboardView(APIView):
             )
         )
 
-        return Response({
+        payload = {
             'counts': {
                 'users': User.objects.count(),
                 'active_users': active_users,
@@ -211,4 +220,6 @@ class AdminDashboardView(APIView):
                 .annotate(c=Count('id'))
                 .values_list('type', 'c')
             ),
-        })
+        }
+        cache.set('analytics:admin_dashboard', payload, 300)
+        return Response(payload)

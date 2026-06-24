@@ -120,12 +120,14 @@ export default function SavedPostsPage() {
                 transition={{ delay: Math.min(idx * 0.04, 0.2) }}
                 className="mb-8"
               >
-                <PostCard
-                  {...post}
-                  variant="premium"
-                  onSavedChange={handleSavedChange}
-                  onDeleted={() => handleSavedChange(post.id, false)}
-                />
+                {post.id != null && (
+                  <PostCard
+                    {...post}
+                    variant="premium"
+                    onSavedChange={handleSavedChange}
+                    onDeleted={() => handleSavedChange(post.id!, false)}
+                  />
+                )}
               </motion.div>
             ))}
           </AnimatePresence>

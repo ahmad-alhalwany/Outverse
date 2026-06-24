@@ -1,6 +1,7 @@
+from django.db import transaction
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
 
 from outverse.auth_utils import require_user, user_from_request
@@ -53,6 +54,24 @@ class StoryViewSet(viewsets.ModelViewSet):
             return err
         return super().create(request, *args, **kwargs)
 
+    def update(self, request, *args, **kwargs):
+        story = self.get_object()
+        user = user_from_request(request)
+        if not user:
+            return Response({'error': 'Authentication required.'}, status=401)
+        if story.owner_id != user.id and not user.is_staff:
+            return Response({'error': 'Not allowed.'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        story = self.get_object()
+        user = user_from_request(request)
+        if not user:
+            return Response({'error': 'Authentication required.'}, status=401)
+        if story.owner_id != user.id and not user.is_staff:
+            return Response({'error': 'Not allowed.'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=False, methods=['get'])
     def featured(self, request):
         stories = Story.objects.filter(is_featured=True).order_by('-updated_at')[:6]
@@ -68,28 +87,30 @@ class StoryViewSet(viewsets.ModelViewSet):
             user, err = require_user(request)
             if err:
                 return err
-            if story.status == 'completed':
-                return Response(
-                    {'error': 'This story is already complete.'}, status=400
-                )
             content = (request.data.get('content') or '').strip()
             if not content:
                 return Response({'error': 'Content is required.'}, status=400)
-            count = story.segments.count()
-            if count >= story.max_segments:
-                story.status = 'completed'
-                story.save(update_fields=['status'])
-                return Response({'error': 'This story is full.'}, status=400)
-            segment = Segment.objects.create(
-                story=story,
-                author=user,
-                content=content,
-                order=count + 1,
-            )
-            story.save(update_fields=['updated_at'])
-            if story.segments.count() >= story.max_segments:
-                story.status = 'completed'
-                story.save(update_fields=['status'])
+            with transaction.atomic():
+                story = Story.objects.select_for_update().get(pk=story.pk)
+                if story.status == 'completed':
+                    return Response(
+                        {'error': 'This story is already complete.'}, status=400
+                    )
+                count = story.segments.select_for_update().count()
+                if count >= story.max_segments:
+                    story.status = 'completed'
+                    story.save(update_fields=['status'])
+                    return Response({'error': 'This story is full.'}, status=400)
+                segment = Segment.objects.create(
+                    story=story,
+                    author=user,
+                    content=content,
+                    order=count + 1,
+                )
+                story.save(update_fields=['updated_at'])
+                if count + 1 >= story.max_segments:
+                    story.status = 'completed'
+                    story.save(update_fields=['status'])
             serializer = SegmentSerializer(
                 segment, context=self.get_serializer_context()
             )

@@ -10,22 +10,34 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name',
-            'bio', 'avatar', 'location', 'is_staff',
+            'id', 'username', 'first_name', 'last_name',
+            'bio', 'avatar', 'location', 'is_verified', 'onboarding_completed', 'interests',
         ]
-        read_only_fields = ['id', 'is_staff']
+        read_only_fields = ['id']
+
+
+class PrivateUserSerializer(UserSerializer):
+    class Meta:
+        model = User
+        fields = [
+            'id', 'username', 'email', 'first_name', 'last_name',
+            'bio', 'avatar', 'location', 'is_staff', 'is_verified', 'onboarding_completed', 'interests',
+        ]
+        read_only_fields = ['id', 'is_staff', 'is_verified']
 
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'bio', 'location', 'avatar']
+        fields = ['first_name', 'last_name', 'bio', 'location', 'avatar', 'interests', 'onboarding_completed']
         extra_kwargs = {
             'first_name': {'required': False},
             'last_name': {'required': False},
             'bio': {'required': False, 'allow_blank': True},
             'location': {'required': False, 'allow_blank': True},
             'avatar': {'required': False},
+            'interests': {'required': False},
+            'onboarding_completed': {'required': False},
         }
 
 
@@ -58,12 +70,29 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    token = serializers.CharField()
+    new_password = serializers.CharField(write_only=True, min_length=6)
+
+
+class UsernameAvailabilitySerializer(serializers.Serializer):
+    username = serializers.CharField()
+
+    def validate_username(self, value):
+        return value.strip()
+
+
 class ProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    cover_photo = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Profile
         fields = [
             'id', 'user', 'mood_history', 'points',
-            'achievements', 'status',
+            'achievements', 'status', 'cover_photo',
         ]

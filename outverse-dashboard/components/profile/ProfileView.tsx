@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import EditProfileModal from '@/components/profile/EditProfileModal';
 import FollowListModal from '@/components/profile/FollowListModal';
 import { formatBottleTimeLeft } from '@/utils/bottleTime';
 import {
+  SparklesIcon,
   MapPinIcon,
   PencilSquareIcon,
   HeartIcon,
@@ -14,7 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useTheme } from '@/components/ThemeProvider';
 import { apiUrl, mediaUrl } from '@/lib/api';
-import { getCurrentUserId, getUser } from '@/lib/auth';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import {
   emotionMeta,
@@ -69,12 +71,39 @@ interface Profile {
   bio: string | null;
   location?: string;
   avatar: string | null;
+  cover_photo?: string | null;
   posts_count: number;
   reels_count?: number;
   followers_count: number;
   following_count: number;
   is_following: boolean;
+  points?: number;
+  achievements?: string[];
+  status?: string;
 }
+
+type ChallengeEntry = {
+  id: number;
+  content?: string;
+  is_approved?: boolean;
+  challenge?: { id?: number; title?: string };
+};
+
+type ForgeStory = {
+  id: number;
+  title: string;
+  cover_url?: string;
+  segment_count?: number;
+  max_segments?: number;
+  genre?: string;
+};
+
+type BottleEntry = {
+  id: number;
+  emotion_type: string;
+  message: string;
+  expires_at?: string;
+};
 
 interface TimelineDay {
   day: number;
@@ -116,37 +145,40 @@ export default function ProfileView({ userId }: ProfileViewProps) {
   const { theme } = useTheme();
   const C = PALETTES[theme];
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<ReturnType<typeof mapPost>[]>([]);
   const [timeline, setTimeline] = useState<TimelineDay[]>([]);
-  const [stories, setStories] = useState<any[]>([]);
-  const [challenges, setChallenges] = useState<any[]>([]);
-  const [bottles, setBottles] = useState<any[]>([]);
+  const [stories, setStories] = useState<ForgeStory[]>([]);
+  const [challenges, setChallenges] = useState<ChallengeEntry[]>([]);
+  const [bottles, setBottles] = useState<BottleEntry[]>([]);
   const [tab, setTab] = useState<TabKey>('posts');
+  const [suggestions, setSuggestions] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
 
-  const isOwnProfile = String(getCurrentUserId()) === String(userId);
+  const authUser = useAuthUser();
+  const isOwnProfile = authUser ? String(authUser.id) === String(userId) : false;
 
   const load = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const [profileRes, postsRes, moodRes, storiesRes, challRes, bottlesRes] =
+      const [profileRes, postsRes, moodRes, storiesRes, challRes, bottlesRes, suggestionsRes] =
         await Promise.all([
           apiFetch(`users/${userId}/`),
           apiFetch(`posts/?author=${userId}`),
           apiFetch(`bottles/dashboard/?user=${userId}`),
-          fetch(apiUrl(`forge/stories/?owner=${userId}`)),
+          apiFetch(`forge/stories/?owner=${userId}`),
           apiFetch(`challenges/user_entries/?user=${userId}`),
           isOwnProfile
             ? apiFetch('bottles/my_bottles/?active=1')
             : Promise.resolve(new Response(JSON.stringify([]), { status: 200 })),
+          apiFetch(`users/suggestions/?exclude=${userId}`),
         ]);
       if (profileRes.ok) setProfile(await profileRes.json());
       if (postsRes.ok) {
         const data = await postsRes.json();
-        setPosts(Array.isArray(data) ? data : []);
+        setPosts(Array.isArray(data) ? data.map(mapPost) : []);
       }
       if (moodRes.ok) {
         const mood = await moodRes.json();
@@ -155,12 +187,13 @@ export default function ProfileView({ userId }: ProfileViewProps) {
       if (storiesRes.ok) setStories(await storiesRes.json());
       if (challRes.ok) setChallenges(await challRes.json());
       if (bottlesRes.ok) setBottles(await bottlesRes.json());
+      if (suggestionsRes.ok) setSuggestions(await suggestionsRes.json());
     } catch {
       /* offline */
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, isOwnProfile]);
 
   useEffect(() => {
     load();
@@ -186,7 +219,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
     }
   };
 
-  const mappedPosts = useMemo(() => posts.map((p) => mapPost(p)), [posts]);
+  const mappedPosts = useMemo(() => posts, [posts]);
   const weeklyMood = useMemo(() => timeline.slice(-7), [timeline]);
   const happyPct = useMemo(() => happyDaysPercent(timeline), [timeline]);
 
@@ -208,6 +241,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
 
   const name = displayName(profile);
   const avatarSrc = profile.avatar ? mediaUrl(profile.avatar) : '';
+  const coverSrc = profile.cover_photo ? mediaUrl(profile.cover_photo) : '';
 
   return (
     <div
@@ -215,7 +249,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
       style={{ background: C.cream, color: C.text, boxShadow: C.shadowSm }}
     >
       {/* Cover + edit */}
-      <div className="relative h-36 sm:h-44" style={{ background: C.cover }}>
+      <div
+        className="relative h-36 sm:h-44 bg-cover bg-center"
+        style={{ background: coverSrc ? `url(${coverSrc}) center/cover` : C.cover }}
+      >
         {isOwnProfile && (
           <button
             type="button"
@@ -235,11 +272,14 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         <div className="flex flex-col sm:flex-row sm:items-end gap-4">
           {avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={avatarSrc}
-              alt={name}
+              alt={`${name} avatar`}
+              width={96}
+              height={96}
               className="w-24 h-24 rounded-full object-cover border-4 shrink-0"
               style={{ borderColor: C.cream, boxShadow: C.shadowSm }}
+              unoptimized
             />
           ) : (
             <span
@@ -386,6 +426,65 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         </div>
       </div>
 
+      <div className="mx-4 sm:mx-6 mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div
+          className="rounded-2xl p-4"
+          style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
+        >
+          <div className="flex items-center gap-2 mb-3">
+            <SparklesIcon className="h-5 w-5" style={{ color: C.brown }} />
+            <h2 className="text-sm font-bold">Achievements</h2>
+          </div>
+          <div className="flex items-center justify-between rounded-xl px-4 py-3 mb-3" style={{ background: C.card2 }}>
+            <span className="text-sm" style={{ color: C.text2 }}>Points balance</span>
+            <span className="text-lg font-bold" style={{ color: C.brown }}>{formatCount(profile.points ?? 0)}</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(profile.achievements ?? []).length === 0 ? (
+              <p className="text-sm" style={{ color: C.text2 }}>No achievements unlocked yet.</p>
+            ) : (
+              (profile.achievements ?? []).map((achievement) => (
+                <span
+                  key={achievement}
+                  className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold"
+                  style={{ background: C.card2, color: C.brown, border: `1px solid ${C.line}` }}
+                >
+                  ✦ {achievement}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+
+        <aside
+          className="rounded-2xl p-4"
+          style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
+        >
+          <h2 className="text-sm font-bold mb-3">Suggested Users</h2>
+          <div className="space-y-3">
+            {suggestions.length === 0 ? (
+              <p className="text-sm" style={{ color: C.text2 }}>No suggestions right now.</p>
+            ) : (
+              suggestions.map((suggested) => (
+                <Link key={suggested.id} href={`/profile/${suggested.id}`} className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:opacity-90" style={{ background: C.card2 }}>
+                  {suggested.avatar ? (
+                    <Image src={mediaUrl(suggested.avatar)} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover" unoptimized />
+                  ) : (
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: `linear-gradient(135deg, ${C.brown}, ${C.brownDk})` }}>
+                      {initials(displayName(suggested))}
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold" style={{ color: C.text }}>{displayName(suggested)}</p>
+                    <p className="truncate text-xs" style={{ color: C.text2 }}>@{suggested.username}</p>
+                  </div>
+                </Link>
+              ))
+            )}
+          </div>
+        </aside>
+      </div>
+
       {/* Tabs */}
       <div
         className="mx-4 sm:mx-6 mt-6 flex rounded-xl p-1 gap-0.5 overflow-x-auto"
@@ -496,6 +595,13 @@ export default function ProfileView({ userId }: ProfileViewProps) {
 
         {tab === 'reels' && <ProfileReelsGrid userId={userId} palette={C} />}
 
+        {isOwnProfile && tab === 'reels' && (
+          <div className="mt-6">
+            <h3 className="mb-3 text-sm font-bold" style={{ color: C.text }}>Saved Signals</h3>
+            <ProfileReelsGrid userId={userId} palette={C} mode="saved" />
+          </div>
+        )}
+
         {tab === 'challenges' && (
           <div className="grid sm:grid-cols-2 gap-3">
             {challenges.length === 0 ? (
@@ -503,7 +609,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                 No challenge entries yet.
               </p>
             ) : (
-              challenges.map((entry: any) => (
+              challenges.map((entry) => (
                 <Link
                   key={entry.id}
                   href={`/lab?challenge=${entry.challenge?.id ?? entry.id}`}
@@ -537,7 +643,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                 No stories in the forge yet.
               </p>
             ) : (
-              stories.map((story: any) => (
+              stories.map((story) => (
                 <Link
                   key={story.id}
                   href={`/forge?story=${story.id}`}
@@ -573,7 +679,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                 No active drifting bottles — throw one from the emotion map.
               </p>
             ) : (
-              bottles.map((b: any) => {
+              bottles.map((b) => {
                 const m = emotionMeta(b.emotion_type);
                 return (
                   <div

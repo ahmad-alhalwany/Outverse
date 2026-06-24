@@ -7,6 +7,7 @@ export type ShopItem = {
   type_display: string;
   category: string;
   category_display: string;
+  cover_url?: string;
   cover: string;
   rating: number;
   sales_count: number;
@@ -18,6 +19,14 @@ export type ShopItem = {
     last_name?: string;
     avatar?: string | null;
   } | null;
+};
+
+export type ShopTransaction = {
+  id: number;
+  item: ShopItem;
+  amount: number;
+  status: string;
+  timestamp: string;
 };
 
 export function shopCreatorName(c: ShopItem['creator']) {

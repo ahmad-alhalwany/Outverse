@@ -1,11 +1,13 @@
-from django.conf import settings
 from django.db import models
+from django.conf import settings
+
+from outverse.upload_validators import validate_image_upload, validate_video_upload
 
 class Story(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='stories')
     text = models.TextField(blank=True)
-    image = models.ImageField(upload_to='stories/', blank=True, null=True)
-    video = models.FileField(upload_to='stories/', blank=True, null=True)
+    image = models.ImageField(upload_to='stories/', blank=True, null=True, validators=[validate_image_upload])
+    video = models.FileField(upload_to='stories/', blank=True, null=True, validators=[validate_video_upload])
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
     views = models.PositiveIntegerField(default=0)

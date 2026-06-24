@@ -16,13 +16,16 @@ import {
 } from '@/lib/bazaarTypes';
 import {
   MagnifyingGlassIcon,
+  PencilSquareIcon,
   PlusIcon,
   HeartIcon,
+  TrashIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
 
 import { apiUrl, mediaUrl } from '@/lib/api';
+import { getUser } from '@/lib/auth';
 
 const BASE = apiUrl('ideas');
 
@@ -91,6 +94,8 @@ function BazaarContent() {
   const [createOpen, setCreateOpen] = useState(false);
   const [voted, setVoted] = useState<Record<number, boolean>>({});
   const [search, setSearch] = useState('');
+  const [editingIdea, setEditingIdea] = useState<BazaarIdea | null>(null);
+  const [deletingIdea, setDeletingIdea] = useState<BazaarIdea | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -199,7 +204,7 @@ function BazaarContent() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mt-4 border-b" style={{ borderColor: C.line }}>
+        <div className="flex gap-1 mt-4 border-b overflow-x-auto" style={{ borderColor: C.line }}>
           {TABS.map((tabDef) => (
             <button
               key={tabDef.key}
@@ -262,6 +267,8 @@ function BazaarContent() {
                     voted={!!voted[idea.id]}
                     onOpen={() => openIdea(idea)}
                     onVote={() => handleVote(idea.id)}
+                    onEdit={() => setEditingIdea(idea)}
+                    onDelete={() => setDeletingIdea(idea)}
                   />
                 ))}
               </div>
@@ -317,6 +324,26 @@ function BazaarContent() {
 
       <AnimatePresence>
         {createOpen && <CreateIdeaModal onClose={() => setCreateOpen(false)} onCreated={load} />}
+        {editingIdea && (
+          <EditIdeaModal
+            idea={editingIdea}
+            onClose={() => setEditingIdea(null)}
+            onSaved={() => {
+              setEditingIdea(null);
+              void load();
+            }}
+          />
+        )}
+        {deletingIdea && (
+          <DeleteIdeaDialog
+            idea={deletingIdea}
+            onClose={() => setDeletingIdea(null)}
+            onDeleted={() => {
+              setDeletingIdea(null);
+              void load();
+            }}
+          />
+        )}
       </AnimatePresence>
     </WorldShell>
   );
@@ -329,15 +356,21 @@ function IdeaCard({
   voted,
   onOpen,
   onVote,
+  onEdit,
+  onDelete,
 }: {
   idea: BazaarIdea;
   voted: boolean;
   onOpen: () => void;
   onVote: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const C = useBazaarColors();
   const { t, locale } = useLocale();
   const ownerName = bazaarOwnerName(idea);
+  const me = getUser();
+  const canManage = !!(me && idea.owner?.id && me.id === idea.owner.id);
   const pct = idea.funding_goal ? Math.min(100, Math.round((idea.funding_raised / idea.funding_goal) * 100)) : null;
 
   return (
@@ -397,19 +430,148 @@ function IdeaCard({
             <div className="w-6 h-6 rounded-full bg-center bg-cover" style={{ background: idea.owner?.avatar ? `url(${mediaUrl(idea.owner.avatar)})` : C.card }} />
             {ownerName}
           </div>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onVote();
-            }}
-            className="flex items-center gap-1 text-sm font-medium"
-            style={{ color: C.brown }}
-          >
-            {voted ? <HeartSolid className="h-5 w-5" /> : <HeartIcon className="h-5 w-5" />}
-            {idea.supporters}
+          <div className="flex items-center gap-2">
+            {canManage ? (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  className="inline-flex items-center justify-center rounded-lg p-2"
+                  style={{ background: C.card2, color: C.brownDk }}
+                >
+                  <PencilSquareIcon className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  className="inline-flex items-center justify-center rounded-lg p-2 text-white"
+                  style={{ background: C.brownDk }}
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onVote();
+              }}
+              className="flex items-center gap-1 text-sm font-medium"
+              style={{ color: C.brown }}
+            >
+              {voted ? <HeartSolid className="h-5 w-5" /> : <HeartIcon className="h-5 w-5" />}
+              {idea.supporters}
+            </button>
+          </div>
+        </div>
+    </motion.div>
+  );
+}
+
+function EditIdeaModal({ idea, onClose, onSaved }: { idea: BazaarIdea; onClose: () => void; onSaved: () => void }) {
+  const C = useBazaarColors();
+  const { t, locale } = useLocale();
+  const [title, setTitle] = useState(idea.title);
+  const [description, setDescription] = useState(idea.description);
+  const [category, setCategory] = useState(idea.category);
+  const [roles, setRoles] = useState((idea.roles_needed || []).join(', '));
+  const [tags, setTags] = useState((idea.tags || []).join(', '));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const field = { background: C.white, border: `1px solid ${C.line}`, color: C.text } as const;
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const res = await apiFetchJson(`ideas/${idea.id}/`, {
+        method: 'PATCH',
+        json: {
+          title: title.trim(),
+          description: description.trim(),
+          category,
+          roles_needed: roles.split(',').map((r) => r.trim()).filter(Boolean),
+          tags: tags.split(',').map((r) => r.trim()).filter(Boolean),
+        },
+      });
+      if (!res.ok) throw new Error('failed');
+      onSaved();
+    } catch {
+      setError(t('bazaar.updateIdeaFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[1000] flex items-center justify-center p-4" style={{ background: C.overlay, backdropFilter: 'blur(3px)' }} onClick={onClose}>
+      <motion.form initial={{ opacity: 0, scale: 0.92, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.92, y: 20 }} onClick={(e) => e.stopPropagation()} onSubmit={submit} className="w-full max-w-lg rounded-2xl p-6 relative max-h-[90vh] overflow-y-auto" style={{ background: C.cream, boxShadow: C.modalShadow, border: `1px solid ${C.line}` }}>
+        <button type="button" onClick={onClose} className="absolute top-3 right-3 w-9 h-9 rounded-full text-xl flex items-center justify-center" style={{ background: C.card, color: C.text }} aria-label="Close">×</button>
+        <h2 className="text-lg font-semibold mb-4" style={{ color: C.text }}>{t('bazaar.editIdea')}</h2>
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>Title</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} />
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>Description</label>
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none resize-none" style={field} />
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>Category</label>
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field}>
+          {BAZAAR_CATEGORIES.filter((c) => c.key !== 'all').map((c) => (
+            <option key={c.key} value={c.key}>{bazaarCategoryLabel(c.key, locale)}</option>
+          ))}
+        </select>
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>Roles needed</label>
+        <input value={roles} onChange={(e) => setRoles(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} />
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.tagsLabel')}</label>
+        <input value={tags} onChange={(e) => setTags(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} placeholder={t('bazaar.tagsHint')} />
+        {error && <div className="text-sm mt-3" style={{ color: '#c0392b' }}>{error}</div>}
+        <button type="submit" disabled={saving} className="mt-5 w-full rounded-xl py-3 font-semibold text-white disabled:opacity-60" style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}>
+          {saving ? t('bazaar.savingIdea') : t('bazaar.saveIdea')}
+        </button>
+      </motion.form>
+    </motion.div>
+  );
+}
+
+function DeleteIdeaDialog({ idea, onClose, onDeleted }: { idea: BazaarIdea; onClose: () => void; onDeleted: () => void }) {
+  const C = useBazaarColors();
+  const { t } = useLocale();
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  async function confirmDelete() {
+    setDeleting(true);
+    setError('');
+    try {
+      const res = await apiFetchJson(`ideas/${idea.id}/`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('failed');
+      onDeleted();
+    } catch {
+      setError(t('bazaar.deleteIdeaFailed'));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[1000] flex items-center justify-center p-4" style={{ background: C.overlay }} onClick={onClose}>
+      <motion.div initial={{ opacity: 0, scale: 0.94, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.94, y: 20 }} onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl p-6" style={{ background: C.cream, border: `1px solid ${C.line}`, boxShadow: C.modalShadow }}>
+        <h2 className="text-lg font-semibold" style={{ color: C.text }}>{t('bazaar.deleteIdea')}</h2>
+        <p className="text-sm mt-2" style={{ color: C.text2 }}>{t('bazaar.confirmDeleteIdea')}</p>
+        {error && <div className="text-sm mt-3" style={{ color: '#c0392b' }}>{error}</div>}
+        <div className="flex gap-3 mt-5">
+          <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 text-sm font-semibold" style={{ background: C.card2, color: C.text }}>{'Cancel'}</button>
+          <button type="button" onClick={() => void confirmDelete()} disabled={deleting} className="flex-1 rounded-xl py-3 text-sm font-semibold text-white" style={{ background: C.brownDk }}>
+            {deleting ? 'Deleting…' : t('bazaar.deleteIdea')}
           </button>
         </div>
+      </motion.div>
     </motion.div>
   );
 }

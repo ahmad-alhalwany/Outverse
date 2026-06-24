@@ -1,12 +1,17 @@
-from django.conf import settings
 from django.db import models
+from django.conf import settings
+
+from outverse.upload_validators import (
+    validate_audio_upload,
+    validate_video_upload,
+)
 
 
 class ReelMusicTrack(models.Model):
     slug = models.SlugField(max_length=64, unique=True)
     title = models.CharField(max_length=120)
     artist_label = models.CharField(max_length=120, blank=True, default='Outverse')
-    audio_file = models.FileField(upload_to='reels/music/', blank=True, null=True)
+    audio_file = models.FileField(upload_to='reels/music/', blank=True, null=True, validators=[validate_audio_upload])
     source_path = models.CharField(
         max_length=255,
         blank=True,
@@ -47,7 +52,7 @@ class Reel(models.Model):
         on_delete=models.CASCADE,
         related_name='reels',
     )
-    video = models.FileField(upload_to='reels/')
+    video = models.FileField(upload_to='reels/', validators=[validate_video_upload])
     caption = models.TextField(blank=True)
     mood = models.CharField(max_length=20, choices=MOOD_CHOICES, default='cosmic')
     filter_style = models.CharField(
@@ -62,7 +67,7 @@ class Reel(models.Model):
         blank=True,
         related_name='reels',
     )
-    custom_audio = models.FileField(upload_to='reels/audio/', blank=True, null=True)
+    custom_audio = models.FileField(upload_to='reels/audio/', blank=True, null=True, validators=[validate_audio_upload])
     music_start_seconds = models.FloatField(default=0)
     music_end_seconds = models.FloatField(null=True, blank=True)
     duration_seconds = models.PositiveIntegerField(default=0)
@@ -70,7 +75,7 @@ class Reel(models.Model):
     likes_count = models.PositiveIntegerField(default=0)
     comments_count = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    is_active = models.BooleanField(default=True)
+    is_active = models.BooleanField(default=True, db_index=True)
     is_featured = models.BooleanField(default=False)
 
     class Meta:
@@ -91,7 +96,24 @@ class ReelLike(models.Model):
         on_delete=models.CASCADE,
         related_name='likes',
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        unique_together = ('user', 'reel')
+
+
+class SavedReel(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='saved_reels',
+    )
+    reel = models.ForeignKey(
+        Reel,
+        on_delete=models.CASCADE,
+        related_name='saved_by',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         unique_together = ('user', 'reel')
@@ -118,7 +140,7 @@ class ReelComment(models.Model):
     text = models.TextField(blank=True)
     gif_url = models.URLField(max_length=500, blank=True)
     sticker_url = models.URLField(max_length=500, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ['created_at']

@@ -1,19 +1,16 @@
 "use client"
 
-import { useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
+import { useMemo, useRef, useState } from 'react';
 import {
-  PaperClipIcon,
   CameraIcon,
+  PaperAirplaneIcon,
+  PaperClipIcon,
   VideoCameraIcon,
-  SparklesIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
 } from '@heroicons/react/24/outline';
-import { getUser, isAuthenticated } from '@/lib/auth';
-import { apiFetch, apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
-
-const API_URL = apiUrl('posts/');
+import { isAuthenticated } from '@/lib/auth';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
+import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
 
 const popularTags = [
   '#CreativeChallenge', '#DailyInspiration', '#ArtisticJourney', '#CreativeCommunity',
@@ -22,35 +19,39 @@ const popularTags = [
 
 const moods = [
   { emoji: '😊', label: 'Happy' },
-  { emoji: '🎨', label: 'Artsy' },
+  { emoji: '🎨', label: 'Artistic' },
   { emoji: '💡', label: 'Inspired' },
+  { emoji: '🎉', label: 'Energetic' },
   { emoji: '✨', label: 'Spark' },
-  { emoji: '🎉', label: 'Celebratory' },
   { emoji: '🌈', label: 'Colorful' },
   { emoji: '💪', label: 'Empowered' },
   { emoji: '🚀', label: 'Ambitious' },
 ];
 
 export default function CreatePostCard({ onPublished }: { onPublished?: () => void }) {
-  const [expanded, setExpanded] = useState(true);
   const [text, setText] = useState('');
   const [selectedMood, setSelectedMood] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [image, setImage] = useState<string | null>(null);
   const [video, setVideo] = useState<string | null>(null);
+  const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
   const imageInput = useRef<HTMLInputElement>(null);
   const videoInput = useRef<HTMLInputElement>(null);
+  const attachmentInput = useRef<HTMLInputElement>(null);
 
-  const user = getUser();
+  const user = useAuthUser();
   const avatar = user?.avatar ? mediaUrl(user.avatar) : null;
   const displayName = user?.first_name || user?.username || 'You';
+  const visibleTags = useMemo(() => popularTags.slice(0, 6), []);
+  const visibleMoods = useMemo(() => moods.slice(0, 5), []);
 
   const handleTagClick = (tag: string) => {
-    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]));
+    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]));
   };
 
   const resetForm = () => {
@@ -59,6 +60,8 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
     setSelectedTags([]);
     setImage(null);
     setVideo(null);
+    setAttachmentName(null);
+    setAttachmentFile(null);
     setImageFile(null);
     setVideoFile(null);
   };
@@ -68,8 +71,10 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
       setError('Please sign in to publish.');
       return;
     }
+
     setError('');
     setPublishing(true);
+
     try {
       const res = await apiFetchJson('posts/', {
         method: 'POST',
@@ -79,14 +84,18 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
           tags: selectedTags.map((tag) => tag.replace(/^#/, '')),
         },
       });
+
       if (!res.ok) throw new Error('publish failed');
+
       const post = await res.json();
-      const mediaFiles = [imageFile, videoFile].filter(Boolean) as File[];
+      const mediaFiles = [imageFile, videoFile, attachmentFile].filter(Boolean) as File[];
+
       if (mediaFiles.length > 0) {
         const form = new FormData();
-        mediaFiles.forEach((f) => form.append('media', f));
+        mediaFiles.forEach((file) => form.append('media', file));
         await apiFetch(`posts/${post.id}/add_media/`, { method: 'POST', body: form });
       }
+
       resetForm();
       onPublished?.();
     } catch {
@@ -96,130 +105,172 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
     }
   };
 
-  const canPublish = !!(text.trim() || image || video);
+  const canPublish = !!(text.trim() || image || video || attachmentName);
 
   return (
-    <div className="create-post-cosmic mb-6 rounded-2xl p-[2px]">
-      <div className="rounded-[14px] bg-[var(--card-bg)] p-4 sm:p-5">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-3">
+    <div className="create-post-card mb-6">
+      <div className="create-post-card__shell">
+        <div className="create-post-card__header">
+          <div className="flex items-center gap-3 min-w-0">
             {avatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={avatar} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-vault/30" />
+              <Image
+                src={avatar}
+                alt={`${displayName} avatar`}
+                width={44}
+                height={44}
+                className="h-11 w-11 rounded-full object-cover border border-[#d8c7bf]"
+                unoptimized
+              />
             ) : (
-              <span className="w-10 h-10 rounded-full bg-gradient-to-br from-vault to-lab flex items-center justify-center text-white text-sm font-bold">
+              <span className="create-post-card__avatar-fallback">
                 {displayName.slice(0, 2).toUpperCase()}
               </span>
             )}
-            <div>
-              <p className="text-sm font-semibold text-text flex items-center gap-1">
-                <SparklesIcon className="h-4 w-4 text-vault" />
-                Share a spark
-              </p>
-              <p className="text-xs text-text-secondary">What&apos;s moving your creativity?</p>
+            <div className="min-w-0">
+              <p className="create-post-card__eyebrow">{displayName}</p>
+              <p className="create-post-card__subtle">Share your next creative spark</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-            className="p-2 rounded-full text-text-secondary hover:bg-surface transition"
-            aria-expanded={expanded}
-          >
-            {expanded ? <ChevronUpIcon className="h-5 w-5" /> : <ChevronDownIcon className="h-5 w-5" />}
-          </button>
         </div>
 
         <textarea
-          className="w-full min-h-[72px] max-h-40 resize-none rounded-xl border border-vault/15 bg-surface/50 px-4 py-3 text-text placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-vault/40 transition"
-          placeholder="Share your thoughts, art, or inspiration with the cosmos…"
+          className="create-post-card__textarea"
+          placeholder="Express your creativity today..."
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onFocus={() => setExpanded(true)}
         />
 
-        <AnimatePresence>
-          {expanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              {(image || video) && (
-                <div className="mt-3 flex gap-3 flex-wrap">
-                  {image && <img src={image} alt="preview" className="max-h-36 rounded-xl border border-vault/20 object-cover" />}
-                  {video && <video src={video} controls className="max-h-36 rounded-xl border border-vault/20" />}
-                </div>
-              )}
-
-              <div className="flex flex-wrap gap-2 mt-3">
-                <button type="button" className="media-chip" onClick={() => imageInput.current?.click()}>
-                  <CameraIcon className="h-4 w-4" /> Image
-                </button>
-                <input type="file" accept="image/*" ref={imageInput} className="hidden" onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    setImageFile(e.target.files[0]);
-                    setImage(URL.createObjectURL(e.target.files[0]));
-                  }
-                }} />
-                <button type="button" className="media-chip" onClick={() => videoInput.current?.click()}>
-                  <VideoCameraIcon className="h-4 w-4" /> Video
-                </button>
-                <input type="file" accept="video/*" ref={videoInput} className="hidden" onChange={(e) => {
-                  if (e.target.files?.[0]) {
-                    setVideoFile(e.target.files[0]);
-                    setVideo(URL.createObjectURL(e.target.files[0]));
-                  }
-                }} />
+        {(image || video || attachmentName) && (
+          <div className="create-post-card__preview-row">
+            {image && (
+              <Image
+                src={image}
+                alt="Selected post image preview"
+                width={320}
+                height={144}
+                className="create-post-card__preview-media"
+                unoptimized
+              />
+            )}
+            {video && <video src={video} controls className="create-post-card__preview-media" />}
+            {attachmentName && (
+              <div className="create-post-card__attachment-pill">
+                <PaperClipIcon className="h-4 w-4" />
+                <span>{attachmentName}</span>
               </div>
+            )}
+          </div>
+        )}
 
-              <div className="mt-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-2">Mood</p>
-                <div className="flex gap-1.5 flex-wrap">
-                  {moods.map((m) => (
-                    <button
-                      key={m.emoji}
-                      type="button"
-                      className={`text-xl p-1.5 rounded-full border transition ${selectedMood === m.emoji ? 'border-vault bg-vault/15 scale-110' : 'border-transparent hover:border-vault/30'}`}
-                      onClick={() => setSelectedMood(selectedMood === m.emoji ? null : m.emoji)}
-                      title={m.label}
-                    >
-                      {m.emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-2">Tags</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {popularTags.slice(0, 5).map((tag) => (
-                    <button
-                      key={tag}
-                      type="button"
-                      className={`px-2 py-0.5 rounded-full text-[11px] border transition ${selectedTags.includes(tag) ? 'bg-vault text-white border-vault' : 'border-vault/20 text-text-secondary hover:border-vault/50'}`}
-                      onClick={() => handleTagClick(tag)}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
-
-        <div className="flex justify-end mt-4">
+        <div className="create-post-card__toolbar">
           <button
             type="button"
-            className="cosmic-btn !px-6 !py-2.5 text-sm disabled:opacity-40"
+            className="create-post-card__tool"
+            onClick={() => imageInput.current?.click()}
+            aria-label="Add image"
+          >
+            <CameraIcon className="h-5 w-5" />
+          </button>
+          <input
+            type="file"
+            accept="image/*"
+            ref={imageInput}
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.[0]) {
+                setImageFile(e.target.files[0]);
+                setImage(URL.createObjectURL(e.target.files[0]));
+              }
+            }}
+          />
+
+          <button
+            type="button"
+            className="create-post-card__tool"
+            onClick={() => videoInput.current?.click()}
+            aria-label="Add video"
+          >
+            <VideoCameraIcon className="h-5 w-5" />
+          </button>
+          <input
+            type="file"
+            accept="video/*"
+            ref={videoInput}
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.[0]) {
+                setVideoFile(e.target.files[0]);
+                setVideo(URL.createObjectURL(e.target.files[0]));
+              }
+            }}
+          />
+
+          <button
+            type="button"
+            className="create-post-card__tool"
+            onClick={() => attachmentInput.current?.click()}
+            aria-label="Add file"
+          >
+            <PaperClipIcon className="h-5 w-5" />
+          </button>
+          <input
+            type="file"
+            ref={attachmentInput}
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.[0]) {
+                setAttachmentFile(e.target.files[0]);
+                setAttachmentName(e.target.files[0].name);
+              }
+            }}
+          />
+        </div>
+
+        <div className="create-post-card__section">
+          <p className="create-post-card__section-title"># Trending Tags</p>
+          <div className="create-post-card__chips">
+            {visibleTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className={`create-post-card__chip ${selectedTags.includes(tag) ? 'create-post-card__chip--active' : ''}`}
+                onClick={() => handleTagClick(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="create-post-card__section create-post-card__section--mood">
+          <p className="create-post-card__section-heading">How are you feeling?</p>
+          <div className="create-post-card__moods">
+            {visibleMoods.map((mood) => (
+              <button
+                key={mood.emoji}
+                type="button"
+                className={`create-post-card__mood ${selectedMood === mood.emoji ? 'create-post-card__mood--active' : ''}`}
+                onClick={() => setSelectedMood(selectedMood === mood.emoji ? null : mood.emoji)}
+                title={mood.label}
+              >
+                <span className="create-post-card__mood-emoji">{mood.emoji}</span>
+                <span className="create-post-card__mood-label">{mood.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
+
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            className="create-post-card__publish disabled:opacity-40"
             onClick={handlePublish}
             disabled={publishing || !canPublish}
           >
-            {publishing ? 'Publishing…' : 'Publish to Feed'}
+            <PaperAirplaneIcon className="h-4 w-4" />
+            {publishing ? 'Publishing...' : 'Publish'}
           </button>
         </div>
       </div>

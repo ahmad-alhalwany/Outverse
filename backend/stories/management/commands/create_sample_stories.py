@@ -56,7 +56,9 @@ class Command(BaseCommand):
             )
             updated = False
             if created:
-                self.stdout.write(self.style.SUCCESS(f'Created story: {story.user.username} - {story.text[:30]}...'))
+                self.stdout.write(
+                    self.style.SUCCESS(f'Created story for {story.user.username} (id={story.id})')
+                )
             # إضافة صورة إذا وجدت
             if story_data['image_url']:
                 img_file = self.download_file(story_data['image_url'])

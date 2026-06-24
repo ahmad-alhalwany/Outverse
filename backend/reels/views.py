@@ -1,18 +1,21 @@
 from collections import Counter
 
+from django.core.cache import cache
+from django.db import IntegrityError, transaction
 from django.db.models import F, Q
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from notifications.utils import create_notification
 from outverse.auth_utils import require_user, user_from_request
 from users.models import Follow
 
-from .models import Reel, ReelComment, ReelCommentReaction, ReelLike, ReelMusicTrack
+from .models import Reel, ReelComment, ReelCommentReaction, ReelLike, ReelMusicTrack, SavedReel
 from .serializers import (
     ReelCommentSerializer,
     ReelMusicTrackSerializer,
@@ -155,6 +158,13 @@ class ReelCommentViewSet(viewsets.ModelViewSet):
                 comment=comment, user=user, type=rtype
             )
             my_reaction = rtype
+            create_notification(
+                recipient_id=comment.user_id,
+                actor_id=user.id,
+                verb='reaction',
+                reel=comment.reel,
+                text='reacted to your echo on a signal',
+            )
 
         return Response({
             'reaction_counts': reaction_counts_for_comment(comment),
@@ -166,6 +176,9 @@ class ReelDiscoverView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        cached = cache.get('reels:discover')
+        if cached is not None:
+            return Response(cached)
         base = Reel.objects.filter(is_active=True).select_related(
             'user', 'music_track'
         )
@@ -207,14 +220,16 @@ class ReelDiscoverView(APIView):
                 context=ctx,
             ).data
 
-        return Response({
+        payload = {
             'trending': ReelSerializer(trending, many=True, context=ctx).data,
             'featured': ReelSerializer(featured, many=True, context=ctx).data,
             'fresh': ReelSerializer(fresh, many=True, context=ctx).data,
             'by_mood': by_mood,
             'top_tags': top_tags,
             'by_tag': by_tag,
-        })
+        }
+        cache.set('reels:discover', payload, 180)
+        return Response(payload)
 
 
 class ReelViewSet(viewsets.ModelViewSet):
@@ -239,6 +254,9 @@ class ReelViewSet(viewsets.ModelViewSet):
         if viewer:
             ctx['liked_ids'] = set(
                 ReelLike.objects.filter(user=viewer).values_list('reel_id', flat=True)
+            )
+            ctx['saved_ids'] = set(
+                SavedReel.objects.filter(user=viewer).values_list('reel_id', flat=True)
             )
         return ctx
 
@@ -310,34 +328,65 @@ class ReelViewSet(viewsets.ModelViewSet):
         reel.refresh_from_db()
         return Response({'views': reel.views})
 
+    record_view.throttle_classes = [AnonRateThrottle]
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def react(self, request, pk=None):
         user, err = require_user(request)
         if err:
             return err
         reel = self.get_object()
-        like, created = ReelLike.objects.get_or_create(user=user, reel=reel)
-        if not created:
-            like.delete()
-            Reel.objects.filter(pk=reel.pk).update(
-                likes_count=F('likes_count') - 1
-            )
-            reel.refresh_from_db()
-            liked = False
-        else:
-            Reel.objects.filter(pk=reel.pk).update(
-                likes_count=F('likes_count') + 1
-            )
-            reel.refresh_from_db()
-            liked = True
-            create_notification(
-                recipient_id=reel.user_id,
-                actor_id=user.id,
-                verb='reaction',
-                reel=reel,
-                text='liked your signal',
-            )
+        with transaction.atomic():
+            existing = ReelLike.objects.select_for_update().filter(user=user, reel=reel).first()
+            if existing:
+                existing.delete()
+                Reel.objects.filter(pk=reel.pk).update(
+                    likes_count=F('likes_count') - 1
+                )
+                liked = False
+            else:
+                try:
+                    _, created = ReelLike.objects.get_or_create(user=user, reel=reel)
+                except IntegrityError:
+                    created = False
+                liked = created
+                if created:
+                    Reel.objects.filter(pk=reel.pk).update(
+                        likes_count=F('likes_count') + 1
+                    )
+                    create_notification(
+                        recipient_id=reel.user_id,
+                        actor_id=user.id,
+                        verb='reaction',
+                        reel=reel,
+                        text='liked your signal',
+                    )
+        reel.refresh_from_db(fields=['likes_count'])
         return Response({
             'liked': liked,
             'likes_count': reel.likes_count,
         })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def save(self, request, pk=None):
+        user, err = require_user(request)
+        if err:
+            return err
+        reel = self.get_object()
+        existing = SavedReel.objects.filter(user=user, reel=reel).first()
+        if existing:
+            existing.delete()
+            saved = False
+        else:
+            SavedReel.objects.get_or_create(user=user, reel=reel)
+            saved = True
+        return Response({'saved': saved})
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def saved(self, request):
+        user, err = require_user(request)
+        if err:
+            return err
+        qs = Reel.objects.filter(saved_by__user=user, is_active=True).select_related('user', 'music_track').order_by('-saved_by__created_at')
+        serializer = self.get_serializer(qs, many=True)
+        return Response(serializer.data)

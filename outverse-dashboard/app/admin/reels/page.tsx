@@ -56,7 +56,7 @@ export default function AdminReelsPage() {
       </div>
 
       <div className="admin-panel">
-        <div className="admin-table-wrap">
+        <div className="admin-table-wrap admin-table--desktop">
           <table className="admin-table">
             <thead>
               <tr>
@@ -98,6 +98,20 @@ export default function AdminReelsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="admin-mobile-cards">
+          {reels.map((reel) => (
+            <div key={reel.id} className="admin-mobile-card">
+              <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Author</span><span className="admin-mobile-card__value">@{reel.user?.username}</span></div>
+              <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Caption</span><span className="admin-mobile-card__value">{reel.caption || '—'}</span></div>
+              <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Views / Likes</span><span className="admin-mobile-card__value">{reel.views} / {reel.likes_count}</span></div>
+              <div className="admin-actions-wrap">
+                <button type="button" className="admin-btn admin-btn--ghost" onClick={() => toggleFeatured(reel)}>{reel.is_featured ? 'Unfeature' : 'Feature'}</button>
+                <button type="button" className="admin-btn admin-btn--ghost" onClick={() => toggleActive(reel)}>{reel.is_active ? 'Hide' : 'Show'}</button>
+                <button type="button" className="admin-btn admin-btn--danger" onClick={() => remove(reel.id)}>Delete</button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </AdminShell>

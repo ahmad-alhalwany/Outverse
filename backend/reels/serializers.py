@@ -5,7 +5,7 @@ from outverse.auth_utils import user_from_request
 
 from users.models import User
 
-from .models import Reel, ReelComment, ReelMusicTrack
+from .models import Reel, ReelComment, ReelMusicTrack, SavedReel
 
 
 def reaction_counts_for(queryset):
@@ -121,6 +121,7 @@ class ReelSerializer(serializers.ModelSerializer):
         source='music_track', read_only=True
     )
     is_liked = serializers.SerializerMethodField()
+    is_saved = serializers.SerializerMethodField()
 
     class Meta:
         model = Reel
@@ -129,7 +130,7 @@ class ReelSerializer(serializers.ModelSerializer):
             'sound_label', 'music_track', 'music_track_detail', 'custom_audio_url',
             'music_start_seconds', 'music_end_seconds',
             'duration_seconds', 'views', 'likes_count', 'comments_count',
-            'is_liked', 'is_featured', 'created_at', 'is_active',
+            'is_liked', 'is_saved', 'is_featured', 'created_at', 'is_active',
         ]
         read_only_fields = [
             'created_at', 'views', 'likes_count', 'comments_count',
@@ -151,6 +152,16 @@ class ReelSerializer(serializers.ModelSerializer):
         if not viewer:
             return False
         return obj.likes.filter(user_id=viewer.id).exists()
+
+    def get_is_saved(self, obj):
+        saved_ids = self.context.get('saved_ids')
+        if saved_ids is not None:
+            return obj.id in saved_ids
+        request = self.context.get('request')
+        viewer = user_from_request(request) if request else None
+        if not viewer:
+            return False
+        return SavedReel.objects.filter(user_id=viewer.id, reel_id=obj.id).exists()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

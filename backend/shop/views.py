@@ -1,3 +1,6 @@
+from django.core.cache import cache
+from django.db import transaction
+from django.db.models import F
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
@@ -21,7 +24,7 @@ class ShopItemViewSet(viewsets.ModelViewSet):
     serializer_class = ShopItemSerializer
 
     def get_permissions(self):
-        if self.action in ('wallet', 'purchase'):
+        if self.action in ('wallet', 'purchase', 'transactions'):
             return [IsAuthenticated()]
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
             return [IsAdminUser()]
@@ -49,13 +52,17 @@ class ShopItemViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def featured(self, request):
+        cached = cache.get('shop:featured')
+        if cached is not None:
+            return Response(cached)
         items = ShopItem.objects.filter(
             is_available=True, is_featured=True
         ).order_by('-sales_count')[:6]
-        serializer = ShopItemSerializer(
+        payload = ShopItemSerializer(
             items, many=True, context={'request': request}
-        )
-        return Response(serializer.data)
+        ).data
+        cache.set('shop:featured', payload, 300)
+        return Response(payload)
 
     @action(detail=False, methods=['get'])
     def wallet(self, request):
@@ -86,41 +93,58 @@ class ShopItemViewSet(viewsets.ModelViewSet):
             'owned_items': item_serializer.data,
         })
 
-    @action(detail=True, methods=['post'])
-    def purchase(self, request, pk=None):
-        item = self.get_object()
+    @action(detail=False, methods=['get'])
+    def transactions(self, request):
         user, err = require_user(request)
         if err:
             return err
-        if Transaction.objects.filter(
-            user_id=user.id, item=item, status='completed'
-        ).exists():
-            return Response(
-                {'error': 'You already own this item.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        profile = _profile_for_user(user.id)
-        if profile.points < item.price:
-            return Response(
-                {
-                    'error': 'Insufficient coins.',
-                    'balance': profile.points,
-                    'price': item.price,
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        profile.points -= item.price
-        profile.save(update_fields=['points'])
-        transaction = Transaction.objects.create(
-            user_id=user.id,
-            item=item,
-            amount=item.price,
-            status='completed',
+        transactions = (
+            Transaction.objects.filter(user_id=user.id)
+            .select_related('item')
+            .order_by('-timestamp')
         )
-        item.sales_count += 1
-        item.save(update_fields=['sales_count'])
         serializer = TransactionSerializer(
-            transaction, context={'request': request}
+            transactions, many=True, context={'request': request}
+        )
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def purchase(self, request, pk=None):
+        user, err = require_user(request)
+        if err:
+            return err
+        with transaction.atomic():
+            item = ShopItem.objects.select_for_update().get(pk=pk)
+            if Transaction.objects.select_for_update().filter(
+                user_id=user.id, item=item, status='completed'
+            ).exists():
+                return Response(
+                    {'error': 'You already own this item.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            profile = Profile.objects.select_for_update().get_or_create(user=user)[0]
+            if profile.points < item.price:
+                return Response(
+                    {
+                        'error': 'Insufficient coins.',
+                        'balance': profile.points,
+                        'price': item.price,
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            profile.points = F('points') - item.price
+            profile.save(update_fields=['points'])
+            transaction_obj = Transaction.objects.create(
+                user_id=user.id,
+                item=item,
+                amount=item.price,
+                status='completed',
+            )
+            ShopItem.objects.filter(pk=item.pk).update(sales_count=F('sales_count') + 1)
+            profile.refresh_from_db(fields=['points'])
+            item.refresh_from_db(fields=['sales_count'])
+        serializer = TransactionSerializer(
+            transaction_obj, context={'request': request}
         )
         data = serializer.data
         data['balance'] = profile.points

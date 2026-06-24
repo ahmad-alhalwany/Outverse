@@ -1,6 +1,8 @@
-from django.conf import settings
 from django.db import models
+from django.conf import settings
 from django.utils import timezone
+
+from outverse.upload_validators import validate_generic_upload
 
 
 class UserPresence(models.Model):
@@ -13,6 +15,7 @@ class UserPresence(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='presence',
+        db_index=True,
     )
     last_seen = models.DateTimeField(default=timezone.now)
     status_message = models.CharField(max_length=120, blank=True, default='')
@@ -72,15 +75,16 @@ class Message(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='chat_messages_sent',
+        db_index=True,
     )
     text = models.TextField(blank=True)
     message_type = models.CharField(
         max_length=10, choices=MESSAGE_TYPES, default='text'
     )
     attachment = models.FileField(
-        upload_to='chat/attachments/', blank=True, null=True
+        upload_to='chat/attachments/', blank=True, null=True, validators=[validate_generic_upload]
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     is_read = models.BooleanField(default=False)
 
     class Meta:
@@ -96,13 +100,14 @@ class ChatRoom(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='chat_rooms_created',
+        db_index=True,
     )
     members = models.ManyToManyField(
         settings.AUTH_USER_MODEL,
         related_name='chat_rooms',
         blank=True,
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ['-created_at']
@@ -121,15 +126,16 @@ class RoomMessage(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='room_messages_sent',
+        db_index=True,
     )
     text = models.TextField(blank=True)
     message_type = models.CharField(
         max_length=10, choices=MESSAGE_TYPES, default='text'
     )
     attachment = models.FileField(
-        upload_to='chat/room_attachments/', blank=True, null=True
+        upload_to='chat/room_attachments/', blank=True, null=True, validators=[validate_generic_upload]
     )
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
         ordering = ['created_at']

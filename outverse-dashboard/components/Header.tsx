@@ -8,7 +8,7 @@ import { type AuthUser, getUser, logout, refreshSession } from '@/lib/auth';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { apiUrl } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
-import { formatRelativeTime } from '@/utils/dateFormatter';
+import RelativeTime from '@/components/RelativeTime';
 import { 
   HomeIcon,
   BeakerIcon, 
@@ -25,6 +25,7 @@ import {
   MoonIcon
 } from '@heroicons/react/24/outline';
 import { useRef } from 'react';
+import { useLocale } from '@/components/LocaleProvider';
 
 type TabId = 'home' | 'lab' | 'bazaar' | 'vault' | 'story' | 'shop';
 
@@ -41,6 +42,11 @@ const SEARCH_API = apiUrl('search/');
 interface SearchResults {
   users: { id: number; username: string; name: string; avatar: string | null }[];
   posts: { id: number; snippet: string; author: string }[];
+  reels: { id: number; caption: string; author: string; tags: string[] }[];
+  ideas: { id: number; title: string; description: string; owner: string }[];
+  stories: { id: number; title: string; description: string; owner: string }[];
+  bottles: { id: number; message: string; emotion_type: string; sender: string }[];
+  shop: { id: number; name: string; description: string; creator: string; price: number }[];
 }
 
 interface AppNotification {
@@ -82,6 +88,7 @@ const Header = () => {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
+  const { t } = useLocale();
   const [activeTab, setActiveTab] = useState<TabId>(() => tabFromPath(pathname));
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
@@ -89,14 +96,22 @@ const Header = () => {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResults>({ users: [], posts: [] });
+  const [searchResults, setSearchResults] = useState<SearchResults>({
+    users: [],
+    posts: [],
+    reels: [],
+    ideas: [],
+    stories: [],
+    bottles: [],
+    shop: [],
+  });
   const [showSearch, setShowSearch] = useState(false);
   const notifRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const query = searchQuery.trim();
     if (!query) {
-      setSearchResults({ users: [], posts: [] });
+      setSearchResults({ users: [], posts: [], reels: [], ideas: [], stories: [], bottles: [], shop: [] });
       return;
     }
     const handle = setTimeout(async () => {
@@ -115,6 +130,15 @@ const Header = () => {
     setSearchQuery('');
     router.push(path);
   }
+
+  const totalSearchResults =
+    searchResults.users.length +
+    searchResults.posts.length +
+    searchResults.reels.length +
+    searchResults.ideas.length +
+    searchResults.stories.length +
+    searchResults.bottles.length +
+    searchResults.shop.length;
 
   const fetchNotifications = async () => {
     try {
@@ -296,7 +320,7 @@ const Header = () => {
               <MagnifyingGlassIcon className="h-5 w-5 text-text-secondary absolute left-3 top-1/2 transform -translate-y-1/2" />
               {showSearch && searchQuery.trim() && (
                 <div className="absolute left-0 top-12 w-72 bg-background rounded-xl shadow-2xl z-50 overflow-hidden border border-surface max-h-96 overflow-y-auto">
-                  {searchResults.users.length === 0 && searchResults.posts.length === 0 ? (
+                  {totalSearchResults === 0 ? (
                     <div className="px-4 py-6 text-center text-text-secondary text-sm">No results found.</div>
                   ) : (
                     <>
@@ -344,6 +368,19 @@ const Header = () => {
                           ))}
                         </div>
                       )}
+                      <div className="border-t border-surface px-4 py-3">
+                        <Link
+                          href={`/search?q=${encodeURIComponent(searchQuery.trim())}`}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setShowSearch(false);
+                            setSearchQuery('');
+                          }}
+                          className="text-sm font-semibold text-vault hover:underline"
+                        >
+                          See all results
+                        </Link>
+                      </div>
                     </>
                   )}
                 </div>
@@ -428,7 +465,10 @@ const Header = () => {
                             <div className="text-sm text-text font-medium">
                               <span className="font-bold">{n.actor?.username || 'Someone'}</span> {n.text}
                             </div>
-                            <div className="text-xs text-text-secondary mt-0.5">{formatRelativeTime(new Date(n.created_at))}</div>
+                            <RelativeTime
+                              date={n.created_at}
+                              className="text-xs text-text-secondary mt-0.5 block"
+                            />
                           </div>
                           {i < notifications.length - 1 && (
                             <span className="absolute left-8 right-2 bottom-0 h-0.5 bg-gradient-to-r from-purple-400/30 via-blue-400/30 to-transparent rounded-full blur-sm" />
@@ -437,6 +477,15 @@ const Header = () => {
                       ))
                     )}
                   </ul>
+                  <div className="p-3 border-t border-surface text-center">
+                    <Link
+                      href="/notifications"
+                      onClick={() => setShowNotifications(false)}
+                      className="text-sm font-semibold text-vault hover:underline"
+                    >
+                      {t('notifications.viewAll')}
+                    </Link>
+                  </div>
                 </motion.div>
               )}
             </div>

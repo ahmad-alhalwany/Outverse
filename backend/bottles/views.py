@@ -1,6 +1,7 @@
 from collections import Counter
 from datetime import timedelta
 
+from django.db.models import Max, Min
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -40,6 +41,20 @@ def _viewer_context(request):
     return {'request': request}
 
 
+def _random_bottle(qs):
+    bounds = qs.aggregate(min_id=Min('id'), max_id=Max('id'))
+    min_id = bounds['min_id']
+    max_id = bounds['max_id']
+    if min_id is None or max_id is None:
+        return None
+    import random
+    pivot = random.randint(min_id, max_id)
+    bottle = qs.filter(id__gte=pivot).order_by('id').first()
+    if bottle:
+        return bottle
+    return qs.filter(id__lt=pivot).order_by('id').first()
+
+
 class MessageBottleViewSet(viewsets.ModelViewSet):
     queryset = MessageBottle.objects.all()
     serializer_class = BottleThrowSerializer
@@ -47,7 +62,9 @@ class MessageBottleViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('throw', 'catch', 'create'):
             return [IsAuthenticated()]
-        if self.action == 'my_bottles':
+        if self.action in ('my_bottles', 'caught'):
+            return [IsAuthenticated()]
+        if self.action == 'destroy':
             return [IsAuthenticated()]
         return [AllowAny()]
 
@@ -58,6 +75,15 @@ class MessageBottleViewSet(viewsets.ModelViewSet):
         ).data
         data['is_active'] = _bottle_is_drifting(instance)
         return Response(data)
+
+    def destroy(self, request, *args, **kwargs):
+        bottle = self.get_object()
+        user, err = require_user(request)
+        if err:
+            return err
+        if bottle.sender_id != user.id and not user.is_staff:
+            return Response({'detail': 'Not allowed.'}, status=403)
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['post'])
     def throw(self, request):
@@ -80,7 +106,7 @@ class MessageBottleViewSet(viewsets.ModelViewSet):
             expiry_time__gt=timezone.now(),
         ).exclude(sender_id=user.id)
 
-        bottle = qs.order_by('?').first()
+        bottle = _random_bottle(qs)
         if not bottle:
             return Response(
                 {'detail': 'The cosmic sea is empty for now. Try again soon.'},
@@ -102,6 +128,9 @@ class MessageBottleViewSet(viewsets.ModelViewSet):
         if err:
             return err
         active = request.query_params.get('active', '').lower() in ('1', 'true', 'yes')
+        emotion = request.query_params.get('emotion', '').strip().lower()
+        start_date = request.query_params.get('start_date', '').strip()
+        end_date = request.query_params.get('end_date', '').strip()
         qs = MessageBottle.objects.filter(sender_id=user.id)
         if active:
             qs = qs.filter(
@@ -109,9 +138,33 @@ class MessageBottleViewSet(viewsets.ModelViewSet):
                 caught_by__isnull=True,
                 is_opened=False,
             )
+        if emotion:
+            qs = qs.filter(emotion_type=emotion)
+        if start_date:
+            qs = qs.filter(created_at__date__gte=start_date)
+        if end_date:
+            qs = qs.filter(created_at__date__lte=end_date)
         serializer = BottleThrowSerializer(
             qs.order_by('-created_at')[:48], many=True
         )
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def caught(self, request):
+        user, err = require_user(request)
+        if err:
+            return err
+        emotion = request.query_params.get('emotion', '').strip().lower()
+        start_date = request.query_params.get('start_date', '').strip()
+        end_date = request.query_params.get('end_date', '').strip()
+        qs = MessageBottle.objects.filter(caught_by_id=user.id)
+        if emotion:
+            qs = qs.filter(emotion_type=emotion)
+        if start_date:
+            qs = qs.filter(caught_at__date__gte=start_date)
+        if end_date:
+            qs = qs.filter(caught_at__date__lte=end_date)
+        serializer = BottleThrowSerializer(qs.order_by('-caught_at', '-created_at')[:48], many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])

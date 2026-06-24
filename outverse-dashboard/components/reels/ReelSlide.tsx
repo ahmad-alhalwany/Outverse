@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -9,10 +10,12 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import {
+  BookmarkIcon,
   ChatBubbleLeftIcon,
   EyeIcon,
   FlagIcon,
   HeartIcon,
+  PencilSquareIcon,
   ShareIcon,
   SpeakerWaveIcon,
   SpeakerXMarkIcon,
@@ -38,7 +41,7 @@ import {
   type ReelItem,
 } from '@/lib/reelTypes';
 
-import { formatRelativeTime } from '@/utils/dateFormatter';
+import RelativeTime from '@/components/RelativeTime';
 
 import { useLocale } from '../LocaleProvider';
 
@@ -51,9 +54,10 @@ interface ReelSlideProps {
   onLike: (id: number) => Promise<{ liked: boolean; likes_count: number } | null>;
   onView: (id: number) => void;
   onDeleted?: () => void;
+  onSavedChange?: (id: number, saved: boolean) => void;
 }
 
-export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: ReelSlideProps) {
+export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onSavedChange }: ReelSlideProps) {
 
   const { t } = useLocale();
 
@@ -66,9 +70,11 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
   const [likes, setLikes] = useState(reel.likes_count);
 
   const [commentsCount, setCommentsCount] = useState(reel.comments_count);
+  const [saved, setSaved] = useState(Boolean(reel.is_saved));
 
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [muted, setMuted] = useState(true);
 
   const [burst, setBurst] = useState(0);
@@ -78,8 +84,14 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
   const [progress, setProgress] = useState(0);
 
   const [paused, setPaused] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState(reel.caption || '');
+  const [tagsDraft, setTagsDraft] = useState((reel.tags || []).join(', '));
+  const [filterDraft, setFilterDraft] = useState<ReelFilter>((reel.filter_style || 'none') as ReelFilter);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const viewedRef = useRef(false);
+  const progressFrameRef = useRef<number | null>(null);
 
   const lastTap = useRef(0);
 
@@ -108,10 +120,15 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
     setLikes(reel.likes_count);
 
     setCommentsCount(reel.comments_count);
+    setSaved(Boolean(reel.is_saved));
 
     setProgress(0);
+    setCaptionDraft(reel.caption || '');
+    setTagsDraft((reel.tags || []).join(', '));
+    setFilterDraft((reel.filter_style || 'none') as ReelFilter);
+    setEditError('');
 
-  }, [reel.id, reel.is_liked, reel.likes_count, reel.comments_count]);
+  }, [reel.id, reel.is_liked, reel.likes_count, reel.comments_count, reel.is_saved]);
 
 
 
@@ -213,11 +230,11 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
     };
 
     const onTime = () => {
-
-      if (v.duration && Number.isFinite(v.duration)) {
-
-        setProgress((v.currentTime / v.duration) * 100);
-
+      if (v.duration && Number.isFinite(v.duration) && progressFrameRef.current == null) {
+        progressFrameRef.current = window.requestAnimationFrame(() => {
+          setProgress((v.currentTime / v.duration) * 100);
+          progressFrameRef.current = null;
+        });
       }
 
       alignAudio();
@@ -255,6 +272,10 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
     v.addEventListener('pause', onPause);
 
     return () => {
+      if (progressFrameRef.current != null) {
+        window.cancelAnimationFrame(progressFrameRef.current);
+        progressFrameRef.current = null;
+      }
 
       v.removeEventListener('timeupdate', onTime);
 
@@ -350,7 +371,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
     if (!me || isOwner) return;
     if (!window.confirm(t('reels.confirmReportReel'))) return;
     try {
-      await apiFetchJson('moderation/flagged/', {
+      const res = await apiFetchJson('moderation/flagged/', {
         method: 'POST',
         json: {
           type: 'reel',
@@ -358,6 +379,23 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
           reporter: me.username,
         },
       });
+      if (res.ok) {
+        window.alert('Report submitted successfully.');
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const toggleSave = async () => {
+    if (!me) return;
+    try {
+      const res = await apiFetchJson(`reels/${reel.id}/save/`, { method: 'POST' });
+      if (!res.ok) return;
+      const data = await res.json();
+      const nextSaved = Boolean(data.saved);
+      setSaved(nextSaved);
+      onSavedChange?.(reel.id, nextSaved);
     } catch {
       /* ignore */
     }
@@ -371,6 +409,31 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
       if (res.ok) onDeleted?.();
     } catch {
       /* ignore */
+    }
+  };
+
+  const saveEdit = async () => {
+    if (!me || !isOwner) return;
+    setSavingEdit(true);
+    setEditError('');
+    try {
+      const res = await apiFetchJson(`reels/${reel.id}/`, {
+        method: 'PATCH',
+        json: {
+          caption: captionDraft.trim(),
+          tags: tagsDraft
+            .split(',')
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+          filter_style: filterDraft,
+        },
+      });
+      if (!res.ok) throw new Error('failed');
+      window.location.reload();
+    } catch {
+      setEditError(t('reels.updateFailed'));
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -448,6 +511,19 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
 
           <div className="reel-slide__vignette" aria-hidden />
 
+          {!reel.is_active && isOwner && (
+            <div
+              className="absolute left-4 right-4 top-4 rounded-2xl px-4 py-3 text-sm font-medium"
+              style={{
+                background: 'rgba(255, 196, 0, 0.18)',
+                border: '1px solid rgba(255, 196, 0, 0.35)',
+                color: '#fff',
+              }}
+            >
+              This signal is hidden from public feeds due to moderation state.
+            </div>
+          )}
+
 
 
           {active && paused && (
@@ -518,7 +594,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
 
               // eslint-disable-next-line @next/next/no-img-element
 
-              <img src={avatar} alt="" className="reel-slide__avatar" />
+              <Image src={avatar} alt={`${reelAuthorName(reel.user)} avatar`} width={56} height={56} className="reel-slide__avatar" unoptimized />
 
             ) : (
 
@@ -529,6 +605,24 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
           </span>
 
         </Link>
+
+        <button
+
+          type="button"
+
+          className={`reel-slide__action${saved ? ' reel-slide__action--liked' : ''}`}
+
+          onClick={toggleSave}
+
+          aria-label="Save reel"
+
+        >
+
+          <BookmarkIcon className="h-7 w-7" />
+
+          <span>{saved ? 'Saved' : 'Save'}</span>
+
+        </button>
 
 
 
@@ -597,15 +691,26 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
         </button>
 
         {isOwner ? (
-          <button
-            type="button"
-            className="reel-slide__action reel-slide__action--danger"
-            onClick={deleteReel}
-            aria-label={t('reels.deleteReel')}
-          >
-            <TrashIcon className="h-7 w-7" />
-            <span>{t('reels.deleteReel')}</span>
-          </button>
+          <>
+            <button
+              type="button"
+              className="reel-slide__action"
+              onClick={() => setEditOpen(true)}
+              aria-label={t('reels.editReel')}
+            >
+              <PencilSquareIcon className="h-7 w-7" />
+              <span>{t('reels.editReel')}</span>
+            </button>
+            <button
+              type="button"
+              className="reel-slide__action reel-slide__action--danger"
+              onClick={deleteReel}
+              aria-label={t('reels.deleteReel')}
+            >
+              <TrashIcon className="h-7 w-7" />
+              <span>{t('reels.deleteReel')}</span>
+            </button>
+          </>
         ) : (
           <button
             type="button"
@@ -691,7 +796,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
 
         </div>
 
-        <p className="reel-slide__time">{formatRelativeTime(new Date(reel.created_at))}</p>
+        <RelativeTime date={reel.created_at} className="reel-slide__time block" />
 
         {active && (
 
@@ -717,6 +822,75 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted }: R
             postTitle={reel.caption?.slice(0, 80) || t('reels.shareSignalTitle')}
             onClose={() => setShareOpen(false)}
           />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {editOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
+            style={{ background: 'rgba(10,10,34,0.72)', backdropFilter: 'blur(4px)' }}
+            onClick={() => setEditOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.94, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg rounded-3xl p-6"
+              style={{ background: 'rgba(20,20,40,0.96)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >
+              <h3 className="text-lg font-semibold text-white mb-4">{t('reels.editTitle')}</h3>
+              <label className="block text-sm text-white/70 mb-1">{t('reels.captionLabel')}</label>
+              <textarea
+                value={captionDraft}
+                onChange={(e) => setCaptionDraft(e.target.value)}
+                rows={3}
+                className="w-full rounded-2xl px-4 py-3 text-sm outline-none resize-none bg-white/5 text-white border border-white/10"
+              />
+              <label className="block text-sm text-white/70 mt-4 mb-1">
+                {t('reels.tagsLabel')} · {t('reels.tagsHint')}
+              </label>
+              <input
+                value={tagsDraft}
+                onChange={(e) => setTagsDraft(e.target.value)}
+                className="w-full rounded-2xl px-4 py-3 text-sm outline-none bg-white/5 text-white border border-white/10"
+              />
+              <label className="block text-sm text-white/70 mt-4 mb-1">{t('reels.filterLabel')}</label>
+              <select
+                value={filterDraft}
+                onChange={(e) => setFilterDraft(e.target.value as ReelFilter)}
+                className="w-full rounded-2xl px-4 py-3 text-sm outline-none bg-white/5 text-white border border-white/10"
+              >
+                {Object.entries(REEL_FILTER_META).map(([key, meta]) => (
+                  <option key={key} value={key}>
+                    {meta.label}
+                  </option>
+                ))}
+              </select>
+              {editError ? <p className="text-sm text-red-300 mt-3">{editError}</p> : null}
+              <div className="flex gap-3 mt-5">
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(false)}
+                  className="flex-1 rounded-2xl py-3 text-sm font-semibold text-white bg-white/10"
+                >
+                  {t('common.close')}
+                </button>
+                <button
+                  type="button"
+                  onClick={saveEdit}
+                  disabled={savingEdit}
+                  className="flex-1 rounded-2xl py-3 text-sm font-semibold text-white disabled:opacity-60"
+                  style={{ background: 'linear-gradient(90deg, #6a00ff, #a855f7)' }}
+                >
+                  {savingEdit ? t('reels.savingReel') : t('reels.saveReel')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </section>

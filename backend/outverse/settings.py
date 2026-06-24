@@ -10,8 +10,8 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -21,12 +21,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-ph@h%%6vx_4^2xu&xl33=qt^+tk6n@i#vlm#s!amkjrpv_w@ur'
+SECRET_KEY = os.environ['DJANGO_SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']
+_hosts = os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1')
+ALLOWED_HOSTS = [h.strip() for h in _hosts.split(',') if h.strip()]
 
 
 # Application definition
@@ -58,14 +59,13 @@ INSTALLED_APPS = [
     'posts',
     'notifications',
     'chat',
+    'preferences',
     'channels',
 ]
 
 ASGI_APPLICATION = 'outverse.asgi.application'
 
-CHAT_ALLOW_LEGACY_USER_ID = os.environ.get(
-    'CHAT_ALLOW_LEGACY_USER_ID', 'false'
-).lower() in ('1', 'true', 'yes')
+CHAT_ALLOW_LEGACY_USER_ID = False
 
 _redis_url = os.environ.get('REDIS_URL', '').strip()
 if _redis_url:
@@ -121,11 +121,11 @@ WSGI_APPLICATION = 'outverse.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
-        'NAME': 'outverse_db',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres_password',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.environ.get('POSTGRES_DB', 'outverse_db'),
+        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
 
@@ -164,7 +164,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = os.environ.get('DJANGO_STATIC_URL', '/static/')
+STATIC_ROOT = os.environ.get('DJANGO_STATIC_ROOT', os.path.join(BASE_DIR, 'staticfiles'))
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -172,7 +173,13 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # CORS settings
-CORS_ALLOW_ALL_ORIGINS = True
+_cors_origins = os.environ.get('CORS_ALLOWED_ORIGINS', '')
+if _cors_origins.strip():
+    CORS_ALLOWED_ORIGINS = [
+        o.strip() for o in _cors_origins.split(',') if o.strip()
+    ]
+else:
+    CORS_ALLOWED_ORIGINS = []
 
 # ربط النظام بنموذج المستخدم المخصص
 AUTH_USER_MODEL = 'users.User'
@@ -184,12 +191,30 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.TokenAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': int(os.environ.get('DRF_PAGE_SIZE', '20')),
 }
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+ENABLE_HTTPS_SECURITY = os.environ.get(
+    'DJANGO_ENABLE_HTTPS_SECURITY', 'False'
+).lower() in ('true', '1', 'yes')
+SECURE_SSL_REDIRECT = ENABLE_HTTPS_SECURITY
+SESSION_COOKIE_SECURE = ENABLE_HTTPS_SECURITY
+CSRF_COOKIE_SECURE = ENABLE_HTTPS_SECURITY
+SECURE_HSTS_SECONDS = int(
+    os.environ.get('DJANGO_SECURE_HSTS_SECONDS', '31536000' if ENABLE_HTTPS_SECURITY else '0')
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = ENABLE_HTTPS_SECURITY
+SECURE_HSTS_PRELOAD = ENABLE_HTTPS_SECURITY
+SECURE_PROXY_SSL_HEADER = (
+    ('HTTP_X_FORWARDED_PROTO', 'https') if ENABLE_HTTPS_SECURITY else None
+)
+
+MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
+MEDIA_ROOT = os.environ.get('DJANGO_MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
+EMAIL_BACKEND = os.environ.get('DJANGO_EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+DEFAULT_FROM_EMAIL = os.environ.get('DJANGO_DEFAULT_FROM_EMAIL', 'no-reply@outverse.local')

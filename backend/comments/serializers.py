@@ -34,16 +34,22 @@ class CommentSerializer(serializers.ModelSerializer):
 
     def get_replies(self, obj):
         if obj.parent is None:  # فقط للتعليقات الرئيسية
-            replies = Comment.objects.filter(parent=obj).order_by('created_at')
+            replies = getattr(obj, 'prefetched_replies', None)
+            if replies is None:
+                replies = obj.replies.select_related('user').prefetch_related('reactions').order_by('created_at')
             return CommentSerializer(replies, many=True, context=self.context).data
         return []
 
     def get_reactions(self, obj):
-        reactions = CommentReaction.objects.filter(comment=obj)
+        reactions = getattr(obj, 'prefetched_reactions', None)
+        if reactions is None:
+            reactions = obj.reactions.select_related('user').all()
         return CommentReactionSerializer(reactions, many=True).data
 
     def get_reaction_counts(self, obj):
-        reactions = CommentReaction.objects.filter(comment=obj)
+        reactions = getattr(obj, 'prefetched_reactions', None)
+        if reactions is None:
+            reactions = obj.reactions.all()
         counts = {}
         for reaction in reactions:
             counts[reaction.reaction] = counts.get(reaction.reaction, 0) + 1
@@ -52,6 +58,12 @@ class CommentSerializer(serializers.ModelSerializer):
     def get_user_reaction(self, obj):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
+            reactions = getattr(obj, 'prefetched_reactions', None)
+            if reactions is not None:
+                for reaction in reactions:
+                    if reaction.user_id == request.user.id:
+                        return reaction.reaction
+                return None
             try:
                 user_reaction = CommentReaction.objects.get(comment=obj, user=request.user)
                 return user_reaction.reaction

@@ -1,10 +1,11 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import WorldShell from '@/components/world/WorldShell';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { apiFetchJson } from '@/lib/api';
+import { apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ClockIcon,
@@ -12,55 +13,90 @@ import {
   FireIcon,
   TrophyIcon,
   PaperAirplaneIcon,
+  MagnifyingGlassIcon,
+  CheckBadgeIcon,
+  PencilIcon,
+  MusicalNoteIcon,
+  SwatchIcon,
+  ShareIcon,
+  BookmarkIcon,
+  InformationCircleIcon,
 } from '@heroicons/react/24/outline';
-
-import { apiUrl } from '@/lib/api';
 
 const BASE = apiUrl('challenges');
 
 const PALETTES = {
   light: {
     cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    card: '#F8CFC2',
+    card2: '#F7E6DE',
     white: '#FFFFFF',
     brown: '#A0563B',
-    brownDk: '#854330',
+    brownDk: '#8F4E37',
     text: '#3D2B22',
     text2: '#9A8278',
     line: 'rgba(160,86,59,0.14)',
-    headerBg: 'rgba(251,243,238,0.85)',
-    shadow: '0 8px 28px rgba(160,86,59,0.10)',
-    shadowSm: '0 2px 12px rgba(160,86,59,0.06)',
-    btnShadow: '0 6px 18px rgba(160,86,59,0.3)',
+    shadow: '0 18px 40px rgba(160,86,59,0.10)',
+    shadowSm: '0 8px 24px rgba(160,86,59,0.08)',
+    btnShadow: '0 10px 24px rgba(160,86,59,0.22)',
     overlay: 'rgba(61,43,34,0.45)',
+    successBg: '#e8f3ee',
+    successText: '#2f8f6b',
   },
   dark: {
     cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
+    card: '#2a2140',
+    card2: '#231b36',
     white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
+    brown: '#d39a7d',
+    brownDk: '#b97d61',
     text: '#F5F6FA',
     text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
-    headerBg: 'rgba(26,26,46,0.9)',
-    shadow: '0 8px 28px rgba(106,0,255,0.15)',
-    shadowSm: '0 2px 12px rgba(106,0,255,0.12)',
-    btnShadow: '0 6px 18px rgba(106,0,255,0.25)',
+    line: 'rgba(211,154,125,0.18)',
+    shadow: '0 18px 40px rgba(0,0,0,0.28)',
+    shadowSm: '0 8px 24px rgba(0,0,0,0.22)',
+    btnShadow: '0 10px 24px rgba(0,0,0,0.28)',
     overlay: 'rgba(10,10,34,0.65)',
+    successBg: 'rgba(74,222,128,0.15)',
+    successText: '#4ade80',
   },
 };
 
 const CATEGORIES = [
-  { key: 'all', label: 'All' },
-  { key: 'writing', label: 'Writing' },
-  { key: 'art', label: 'Art' },
-  { key: 'music', label: 'Music' },
-  { key: 'experimental', label: 'Experimental' },
-  { key: 'practical', label: 'Practical' },
-];
+  { key: 'all', label: 'All', icon: InformationCircleIcon },
+  { key: 'writing', label: 'Writing', icon: PencilIcon },
+  { key: 'art', label: 'Art', icon: SwatchIcon },
+  { key: 'music', label: 'Music', icon: MusicalNoteIcon },
+  { key: 'experimental', label: 'Experimental', icon: FireIcon },
+  { key: 'practical', label: 'Practical', icon: TrophyIcon },
+] as const;
+
+const FRIENDS = [
+  {
+    name: 'Amy',
+    avatar:
+      'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=160&q=80',
+    active: true,
+  },
+  {
+    name: 'Tom',
+    avatar:
+      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=80',
+    active: false,
+  },
+  {
+    name: 'Sara',
+    avatar:
+      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&q=80',
+    active: false,
+  },
+  {
+    name: 'Mike',
+    avatar:
+      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=160&q=80',
+    active: false,
+  },
+] as const;
 
 type Challenge = {
   id: number;
@@ -75,6 +111,28 @@ type Challenge = {
   participants: number;
 };
 
+type ChallengeSubmission = {
+  id: number;
+  content: string;
+  submitted_at?: string;
+  created_at?: string;
+  is_approved: boolean;
+  user: {
+    id?: number;
+    username: string;
+    first_name?: string;
+    last_name?: string;
+    avatar?: string | null;
+  };
+};
+
+type ArchiveResponse = {
+  results: Challenge[];
+  page: number;
+  page_size: number;
+  has_more: boolean;
+};
+
 type Stats = { participants: number; success_rate: number; challenges: number };
 
 function useLabColors() {
@@ -87,12 +145,13 @@ function typeLabel(key: string) {
 }
 
 function useCountdown(target?: string) {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
-  if (!target) return '--:--:--';
+  if (!target || !now) return '--:--:--';
   const diff = new Date(target).getTime() - now;
   if (diff <= 0) return '00:00:00';
   const h = Math.floor(diff / 3.6e6);
@@ -100,6 +159,26 @@ function useCountdown(target?: string) {
   const s = Math.floor((diff % 6e4) / 1000);
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+function formatDate(value?: string) {
+  if (!value) return 'Just now';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Just now';
+  return date.toLocaleString();
+}
+
+function displayName(user: ChallengeSubmission['user']) {
+  const full = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+  return full || user.username || 'Anonymous';
+}
+
+function challengeMinutes(participants: number) {
+  return Math.max(8, Math.min(18, Math.round(participants / 28)));
+}
+
+function archiveScore(participants: number) {
+  return `${Math.max(76, Math.min(96, 72 + (participants % 25)))}%`;
 }
 
 function WeirdnessLabContent() {
@@ -113,7 +192,10 @@ function WeirdnessLabContent() {
   const [loading, setLoading] = useState(true);
   const [viewChallenge, setViewChallenge] = useState<Challenge | null>(null);
   const [loadError, setLoadError] = useState(false);
-
+  const [archivePage, setArchivePage] = useState(1);
+  const [archiveHasMore, setArchiveHasMore] = useState(false);
+  const [archiveLoadingMore, setArchiveLoadingMore] = useState(false);
+  const [search, setSearch] = useState('');
   const [response, setResponse] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -121,23 +203,44 @@ function WeirdnessLabContent() {
 
   const countdown = useCountdown(daily?.end_date);
 
+  const loadArchive = useCallback(
+    async (page: number, append: boolean) => {
+      const res = await fetch(`${BASE}/archive/?type=${category}&page=${page}&page_size=12`);
+      if (!res.ok) {
+        throw new Error('archive failed');
+      }
+      const data: ArchiveResponse | Challenge[] = await res.json();
+      if (Array.isArray(data)) {
+        setArchive((prev) => (append ? [...prev, ...data] : data));
+        setArchiveHasMore(data.length >= 12);
+        setArchivePage(page);
+        return;
+      }
+      setArchive((prev) => (append ? [...prev, ...data.results] : data.results));
+      setArchiveHasMore(data.has_more);
+      setArchivePage(data.page);
+    },
+    [category],
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const [dRes, aRes, sRes] = await Promise.all([
-        fetch(`${BASE}/daily/`),
-        fetch(`${BASE}/archive/?type=${category}`),
-        fetch(`${BASE}/stats/`),
-      ]);
+      const [dRes, sRes] = await Promise.all([fetch(`${BASE}/daily/`), fetch(`${BASE}/stats/`)]);
       let ok = true;
       if (dRes.ok) {
         const d = await dRes.json();
         setDaily(d && d.id ? d : null);
-      } else ok = false;
-      if (aRes.ok) setArchive(await aRes.json());
-      else ok = false;
-      if (sRes.ok) setStats(await sRes.json());
+      } else {
+        ok = false;
+      }
+      if (sRes.ok) {
+        setStats(await sRes.json());
+      } else {
+        ok = false;
+      }
+      await loadArchive(1, false);
       if (!ok) setLoadError(true);
     } catch {
       setDaily(null);
@@ -146,7 +249,19 @@ function WeirdnessLabContent() {
     } finally {
       setLoading(false);
     }
-  }, [category]);
+  }, [loadArchive]);
+
+  const filteredArchive = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return archive.filter((challenge) => {
+      const matchesQuery =
+        !query ||
+        challenge.title.toLowerCase().includes(query) ||
+        challenge.description.toLowerCase().includes(query);
+      const matchesCategory = category === 'all' || challenge.type === category;
+      return matchesQuery && matchesCategory;
+    });
+  }, [archive, category, search]);
 
   const closeChallengeModal = useCallback(() => {
     setViewChallenge(null);
@@ -154,24 +269,23 @@ function WeirdnessLabContent() {
   }, [router, searchParams]);
 
   const openChallenge = useCallback(
-    (ch: Challenge) => {
-      setViewChallenge(ch);
-      router.replace(`/lab?challenge=${ch.id}`);
+    (challenge: Challenge) => {
+      setViewChallenge(challenge);
+      router.replace(`/lab?challenge=${challenge.id}`);
     },
     [router],
   );
 
   const onChallengeSubmitted = useCallback((challengeId: number, participants: number) => {
-    setDaily((d) => (d && d.id === challengeId ? { ...d, participants } : d));
+    setDaily((current) => (current && current.id === challengeId ? { ...current, participants } : current));
     setArchive((list) =>
-      list.map((c) => (c.id === challengeId ? { ...c, participants } : c)),
+      list.map((challenge) => (challenge.id === challengeId ? { ...challenge, participants } : challenge)),
     );
-    setViewChallenge((v) => (v && v.id === challengeId ? { ...v, participants } : v));
-    load();
-  }, [load]);
+    setViewChallenge((current) => (current && current.id === challengeId ? { ...current, participants } : current));
+  }, []);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   useEffect(() => {
@@ -179,7 +293,7 @@ function WeirdnessLabContent() {
     if (!id) return;
     const num = parseInt(id, 10);
     if (Number.isNaN(num)) return;
-    (async () => {
+    void (async () => {
       try {
         const res = await fetch(`${BASE}/${num}/`);
         if (res.ok) {
@@ -187,7 +301,7 @@ function WeirdnessLabContent() {
           if (data?.id) setViewChallenge(data);
         }
       } catch {
-        /* ignore */
+        return;
       }
     })();
   }, [searchParams]);
@@ -219,24 +333,43 @@ function WeirdnessLabContent() {
     }
   }
 
+  async function loadMoreArchive() {
+    if (archiveLoadingMore || !archiveHasMore) return;
+    setArchiveLoadingMore(true);
+    try {
+      await loadArchive(archivePage + 1, true);
+    } catch {
+      setLoadError(true);
+    } finally {
+      setArchiveLoadingMore(false);
+    }
+  }
+
   return (
     <WorldShell colors={C} maxWidth="max-w-5xl">
-        <div className="mb-5">
-          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: C.brown }}>🧪 Weirdness Lab</h1>
-          <p className="text-sm" style={{ color: C.text2 }}>Daily challenges and a creative archive.</p>
+      <div className="lab-shell">
+        <div className="lab-topbar">
+          <div>
+            <h1 className="lab-title">Daily Challenge</h1>
+            <p className="lab-subtitle">Let your creativity flow</p>
+          </div>
+          <Link href="/lab/history" className="lab-history-link">
+            My Lab History
+          </Link>
         </div>
 
-        {/* Daily challenge hero */}
         {loading ? (
-          <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
+          <div className="rounded-[28px] p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
             Loading today&apos;s challenge…
           </div>
         ) : loadError ? (
-          <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
-            <p className="font-semibold mb-2" style={{ color: C.text }}>Could not load the lab</p>
+          <div className="rounded-[28px] p-10 text-center" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
+            <p className="font-semibold mb-2" style={{ color: C.text }}>
+              Could not load the lab
+            </p>
             <button
               type="button"
-              onClick={() => load()}
+              onClick={() => void load()}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
               style={{ background: C.brownDk }}
             >
@@ -244,118 +377,171 @@ function WeirdnessLabContent() {
             </button>
           </div>
         ) : !daily ? (
-          <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text2 }}>
+          <div
+            className="rounded-[28px] p-10 text-center"
+            style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text2 }}
+          >
             No active daily challenge right now. Check the archive below. ✨
           </div>
         ) : (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="rounded-2xl p-5 md:p-6"
-            style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: C.shadow }}
-          >
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <span className="px-3 py-1 rounded-full text-xs font-semibold text-white" style={{ background: C.brown }}>
-                Daily Challenge
-              </span>
-              <span className="flex items-center gap-1.5 text-sm font-mono" style={{ color: C.brownDk }}>
-                <ClockIcon className="h-4 w-4" /> {countdown}
-              </span>
-            </div>
-
-            <h2 className="text-lg md:text-xl font-bold mt-3" style={{ color: C.text }}>{daily.title}</h2>
-            {daily.description && (
-              <p className="text-sm mt-1" style={{ color: C.text2 }}>{daily.description}</p>
-            )}
-
-            <textarea
-              value={response}
-              onChange={(e) => setResponse(e.target.value)}
-              rows={4}
-              maxLength={1000}
-              placeholder="Share your creative response…"
-              className="w-full rounded-xl px-4 py-3 mt-4 outline-none resize-none text-sm"
-              style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
-            />
-
-            <div className="flex items-center justify-between flex-wrap gap-3 mt-3">
-              <span className="flex items-center gap-1.5 text-sm" style={{ color: C.text2 }}>
-                <UsersIcon className="h-4 w-4" /> {daily.participants.toLocaleString()} participants
-              </span>
-              <div className="flex items-center gap-3">
-                <AnimatePresence>
-                  {submitted && (
-                    <motion.span
-                      initial={{ opacity: 0, x: 8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0 }}
-                      className="text-sm font-medium"
-                      style={{ color: '#2f8f6b' }}
-                    >
-                      Submitted! 🎉
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-                <button
-                  onClick={submit}
-                  disabled={submitting}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white disabled:opacity-60"
-                  style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`, boxShadow: C.btnShadow }}
-                >
-                  <PaperAirplaneIcon className="h-4 w-4" />
-                  {submitting ? 'Submitting…' : 'Submit Challenge'}
-                </button>
+          <>
+            <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="lab-daily-card">
+              <div className="lab-daily-meta">
+                <div className="lab-countdown-pill">
+                  <ClockIcon className="h-4 w-4" />
+                  <span>{countdown} remaining</span>
+                </div>
+                <div className="lab-action-icons">
+                  <button type="button" aria-label="Save challenge" className="lab-icon-btn">
+                    <BookmarkIcon className="h-4 w-4" />
+                  </button>
+                  <button type="button" aria-label="Share challenge" className="lab-icon-btn">
+                    <ShareIcon className="h-4 w-4" />
+                  </button>
+                  <button type="button" aria-label="Challenge info" className="lab-icon-btn">
+                    <InformationCircleIcon className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
+
+              <h2 className="lab-question">{daily.title}</h2>
+
+              <textarea
+                value={response}
+                onChange={(e) => setResponse(e.target.value)}
+                rows={5}
+                maxLength={500}
+                placeholder="Start writing..."
+                className="lab-response-box"
+              />
+
+              <div className="lab-daily-footer">
+                <div className="lab-daily-stats">
+                  <span className="lab-inline-stat">
+                    <UsersIcon className="h-4 w-4" /> {daily.participants.toLocaleString()} people writing
+                  </span>
+                  <span className="lab-inline-stat">
+                    <ClockIcon className="h-4 w-4" /> avg. {challengeMinutes(daily.participants)} min
+                  </span>
+                </div>
+                <div className="lab-submit-wrap">
+                  <AnimatePresence>
+                    {submitted && (
+                      <motion.span
+                        initial={{ opacity: 0, x: 8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0 }}
+                        className="text-sm font-medium"
+                        style={{ color: C.successText }}
+                      >
+                        Submitted! 🎉
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
+                  <button onClick={() => void submit()} disabled={submitting} className="lab-submit-btn">
+                    {submitting ? 'Submitting…' : 'Submit Challenge'}
+                  </button>
+                </div>
+              </div>
+              {error && (
+                <div className="text-sm mt-2" style={{ color: '#c0392b' }}>
+                  {error}
+                </div>
+              )}
+            </motion.section>
+
+            <div className="lab-category-row">
+              {CATEGORIES.filter((item) => item.key !== 'practical').map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={() => setCategory(item.key)}
+                    className={`lab-category-pill ${category === item.key ? 'lab-category-pill--active' : ''}`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
-            {error && <div className="text-sm mt-2" style={{ color: '#c0392b' }}>{error}</div>}
-          </motion.div>
+
+            <section className="lab-section-head">
+              <div className="flex items-center justify-between gap-3">
+                <h3 className="lab-section-title">Challenge Friends</h3>
+                <span className="lab-see-all">See All</span>
+              </div>
+              <div className="lab-friends-row">
+                {FRIENDS.map((friend) => (
+                  <div key={friend.name} className="lab-friend">
+                    <div className="lab-friend-avatar-wrap">
+                      <div className="lab-friend-avatar" style={{ backgroundImage: `url(${friend.avatar})` }} />
+                      <span className={`lab-friend-status ${friend.active ? 'lab-friend-status--active' : ''}`} />
+                    </div>
+                    <span>{friend.name}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </>
         )}
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3 mt-5">
+        <div className="lab-archive-head">
+          <h3 className="lab-section-title">Previous Challenges</h3>
+        </div>
+
+        <div className="relative mb-4">
+          <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.text2 }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search challenges..."
+            className="w-full rounded-full pl-10 pr-4 py-2.5 text-sm outline-none"
+            style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+          />
+        </div>
+
+        {filteredArchive.length === 0 ? (
+          <div
+            className="rounded-[28px] p-8 text-center mt-4"
+            style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text2 }}
+          >
+            No past challenges match your search yet.
+          </div>
+        ) : (
+          <>
+            <div className="lab-archive-grid">
+              {filteredArchive.map((challenge) => (
+                <ArchiveCard
+                  key={challenge.id}
+                  ch={challenge}
+                  isDaily={daily?.id === challenge.id}
+                  onOpen={() => openChallenge(challenge)}
+                />
+              ))}
+            </div>
+            {archiveHasMore && !search.trim() ? (
+              <div className="mt-5 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => void loadMoreArchive()}
+                  disabled={archiveLoadingMore}
+                  className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                  style={{ background: C.brownDk }}
+                >
+                  {archiveLoadingMore ? 'Loading…' : 'Load more challenges'}
+                </button>
+              </div>
+            ) : null}
+          </>
+        )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
           <StatCard icon={UsersIcon} value={stats?.participants ?? 0} label="Participants" />
           <StatCard icon={FireIcon} value={`${stats?.success_rate ?? 0}%`} label="Success Rate" />
           <StatCard icon={TrophyIcon} value={stats?.challenges ?? 0} label="Challenges" />
         </div>
-
-        {/* Category filter */}
-        <div className="flex items-center justify-between mt-8 mb-3">
-          <h3 className="text-lg font-bold" style={{ color: C.text }}>Challenge Archive</h3>
-        </div>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {CATEGORIES.map((c) => (
-            <button
-              key={c.key}
-              onClick={() => setCategory(c.key)}
-              className="px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition"
-              style={{
-                background: category === c.key ? C.brown : C.white,
-                color: category === c.key ? '#fff' : C.text2,
-                border: `1px solid ${category === c.key ? C.brown : C.line}`,
-              }}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Archive grid */}
-        {archive.length === 0 ? (
-          <div className="rounded-2xl p-8 text-center mt-4" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text2 }}>
-            No past challenges in this category yet.
-          </div>
-        ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-            {archive.map((ch) => (
-              <ArchiveCard
-                key={ch.id}
-                ch={ch}
-                isDaily={daily?.id === ch.id}
-                onOpen={() => openChallenge(ch)}
-              />
-            ))}
-          </div>
-        )}
+      </div>
 
       <AnimatePresence>
         {viewChallenge && (
@@ -402,6 +588,25 @@ function ChallengeViewModal({
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [submissions, setSubmissions] = useState<ChallengeSubmission[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(true);
+
+  const loadSubmissions = useCallback(async () => {
+    setLoadingSubmissions(true);
+    try {
+      const res = await fetch(`${BASE}/${ch.id}/submissions/`);
+      if (!res.ok) throw new Error('failed');
+      setSubmissions(await res.json());
+    } catch {
+      setSubmissions([]);
+    } finally {
+      setLoadingSubmissions(false);
+    }
+  }, [ch.id]);
+
+  useEffect(() => {
+    void loadSubmissions();
+  }, [loadSubmissions]);
 
   async function submitEntry() {
     if (!response.trim()) {
@@ -422,6 +627,7 @@ function ChallengeViewModal({
       setSubmitted(true);
       setResponse('');
       onSubmitted(ch.id, ch.participants + 1);
+      await loadSubmissions();
       setTimeout(() => setSubmitted(false), 3000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not submit. Check the connection.');
@@ -444,7 +650,7 @@ function ChallengeViewModal({
         animate={{ scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.94 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl overflow-hidden max-h-[90vh] flex flex-col"
+        className="w-full max-w-2xl rounded-2xl overflow-hidden max-h-[90vh] flex flex-col"
         style={{ background: C.cream, border: `1px solid ${C.line}` }}
       >
         <div
@@ -456,7 +662,13 @@ function ChallengeViewModal({
           }}
         />
         <div className="p-5 relative overflow-y-auto flex-1">
-          <button type="button" onClick={onClose} className="absolute top-3 right-3 w-9 h-9 rounded-full text-lg flex items-center justify-center" style={{ background: C.card, color: C.text }} aria-label="Close">
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-3 right-3 w-9 h-9 rounded-full text-lg flex items-center justify-center"
+            style={{ background: C.card, color: C.text }}
+            aria-label="Close"
+          >
             ×
           </button>
           <div className="flex flex-wrap gap-2 pr-10">
@@ -469,7 +681,10 @@ function ChallengeViewModal({
               </span>
             )}
             {ch.difficulty && (
-              <span className="px-2.5 py-1 rounded-full text-xs" style={{ background: C.white, color: C.text2, border: `1px solid ${C.line}` }}>
+              <span
+                className="px-2.5 py-1 rounded-full text-xs"
+                style={{ background: C.white, color: C.text2, border: `1px solid ${C.line}` }}
+              >
                 {ch.difficulty}
               </span>
             )}
@@ -494,16 +709,20 @@ function ChallengeViewModal({
             className="w-full rounded-xl px-3 py-2.5 mt-4 outline-none resize-none text-sm"
             style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
           />
-          {error && <p className="text-sm mt-2" style={{ color: '#c0392b' }}>{error}</p>}
-          <div className="flex items-center justify-between gap-2 mt-3">
+          {error && (
+            <p className="text-sm mt-2" style={{ color: '#c0392b' }}>
+              {error}
+            </p>
+          )}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3">
             {submitted && (
-              <span className="text-sm font-medium" style={{ color: '#2f8f6b' }}>
+              <span className="text-sm font-medium" style={{ color: C.successText }}>
                 Submitted! 🎉
               </span>
             )}
             <button
               type="button"
-              onClick={submitEntry}
+              onClick={() => void submitEntry()}
               disabled={submitting}
               className="ml-auto flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white disabled:opacity-60"
               style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`, boxShadow: C.btnShadow }}
@@ -511,6 +730,69 @@ function ChallengeViewModal({
               <PaperAirplaneIcon className="h-4 w-4" />
               {submitting ? 'Submitting…' : 'Submit entry'}
             </button>
+          </div>
+
+          <div className="mt-6 border-t pt-5" style={{ borderColor: C.line }}>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h3 className="text-base font-semibold" style={{ color: C.text }}>
+                Community submissions
+              </h3>
+              <span className="text-xs" style={{ color: C.text2 }}>
+                {submissions.length} shown
+              </span>
+            </div>
+            {loadingSubmissions ? (
+              <p className="text-sm" style={{ color: C.text2 }}>
+                Loading submissions…
+              </p>
+            ) : submissions.length === 0 ? (
+              <div className="rounded-2xl p-4 text-sm" style={{ background: C.card2, color: C.text2 }}>
+                No community submissions yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {submissions.map((submission) => (
+                  <div
+                    key={submission.id}
+                    className="rounded-2xl p-4"
+                    style={{ background: C.white, border: `1px solid ${C.line}` }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="h-10 w-10 rounded-full bg-center bg-cover shrink-0"
+                        style={{
+                          background: submission.user.avatar
+                            ? `url(${mediaUrl(submission.user.avatar)}) center/cover`
+                            : `linear-gradient(135deg, ${C.card}, ${C.card2})`,
+                        }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-sm" style={{ color: C.text }}>
+                            {displayName(submission.user)}
+                          </span>
+                          {submission.is_approved ? (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                              style={{ background: C.successBg, color: C.successText }}
+                            >
+                              <CheckBadgeIcon className="h-3.5 w-3.5" />
+                              Approved
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-sm whitespace-pre-wrap" style={{ color: C.text2 }}>
+                          {submission.content}
+                        </p>
+                        <p className="mt-2 text-xs" style={{ color: C.text2 }}>
+                          {formatDate(submission.submitted_at || submission.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -521,10 +803,14 @@ function ChallengeViewModal({
 function StatCard({ icon: Icon, value, label }: { icon: typeof UsersIcon; value: number | string; label: string }) {
   const C = useLabColors();
   return (
-    <div className="rounded-2xl p-4 text-center" style={{ background: C.white, border: `1px solid ${C.line}` }}>
+    <div className="rounded-[24px] p-4 text-center" style={{ background: C.white, border: `1px solid ${C.line}` }}>
       <Icon className="h-5 w-5 mx-auto mb-1.5" style={{ color: C.brown }} />
-      <div className="text-xl font-bold" style={{ color: C.text }}>{value}</div>
-      <div className="text-xs" style={{ color: C.text2 }}>{label}</div>
+      <div className="text-xl font-bold" style={{ color: C.text }}>
+        {value}
+      </div>
+      <div className="text-xs" style={{ color: C.text2 }}>
+        {label}
+      </div>
     </div>
   );
 }
@@ -545,30 +831,22 @@ function ArchiveCard({
       onClick={onOpen}
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl overflow-hidden text-left w-full"
+      className="lab-archive-card"
       style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
     >
       <div
-        className="h-32 bg-center bg-cover"
+        className="lab-archive-image"
         style={{ background: ch.cover_url ? `url(${ch.cover_url}) center/cover` : `linear-gradient(135deg, ${C.card}, ${C.card2})` }}
       />
       <div className="p-4">
-        <div className="flex flex-wrap gap-1.5">
-          <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: C.card2, color: C.brown }}>
-            {typeLabel(ch.type)}
-          </span>
-          {isDaily && (
-            <span className="px-2.5 py-1 rounded-full text-[10px] font-semibold text-white" style={{ background: C.brown }}>
-              Daily
-            </span>
-          )}
-        </div>
-        <h4 className="font-semibold mt-2 leading-snug" style={{ color: C.text }}>{ch.title}</h4>
-        <div className="flex items-center gap-1.5 text-xs mt-2" style={{ color: C.text2 }}>
-          <UsersIcon className="h-3.5 w-3.5" /> {ch.participants.toLocaleString()} participants
+        <h4 className="font-semibold mt-1 leading-snug text-[1.05rem]" style={{ color: C.text }}>
+          {ch.title}
+        </h4>
+        <div className="mt-2 flex items-center justify-between gap-3 text-sm" style={{ color: C.text2 }}>
+          <span>{typeLabel(ch.type)}</span>
+          <span style={{ color: '#A0563B', fontWeight: 700 }}>{isDaily ? 'Today' : archiveScore(ch.participants)}</span>
         </div>
       </div>
     </motion.button>
   );
 }
-

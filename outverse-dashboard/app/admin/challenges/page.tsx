@@ -61,7 +61,7 @@ export default function AdminChallengesPage() {
       <div className="admin-grid-2">
         <div className="admin-panel">
           <h3 className="admin-panel__title">All challenges ({challenges.length})</h3>
-          <div className="admin-table-wrap">
+          <div className="admin-table-wrap admin-table--desktop">
             <table className="admin-table">
               <thead>
                 <tr>
@@ -115,6 +115,23 @@ export default function AdminChallengesPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className="admin-mobile-cards">
+            {challenges.map((c) => (
+              <div key={c.id} className="admin-mobile-card">
+                <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Title</span><span className="admin-mobile-card__value">{c.title}</span></div>
+                <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Type</span><span className="admin-mobile-card__value">{c.type}</span></div>
+                <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Daily</span><span className="admin-mobile-card__value">{c.is_daily ? 'Yes' : 'No'}</span></div>
+                <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Active</span><span className="admin-mobile-card__value">{c.is_active ? 'Yes' : 'No'}</span></div>
+                <div className="admin-actions-wrap">
+                  <button type="button" className="admin-btn admin-btn--ghost" onClick={() => {
+                    setEditId(c.id);
+                    setForm({ title: c.title, description: c.description || '', type: c.type, difficulty: c.difficulty, is_daily: c.is_daily, is_active: c.is_active, end_date: c.end_date.slice(0, 16) });
+                  }}>Edit</button>
+                  <button type="button" className="admin-btn admin-btn--danger" onClick={async () => { if (!window.confirm('Delete challenge?')) return; await deleteChallenge(c.id); load(); }}>Delete</button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 

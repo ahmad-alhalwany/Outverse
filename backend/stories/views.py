@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 
 from outverse.auth_utils import require_user
 
@@ -27,7 +28,7 @@ class StoryViewSet(viewsets.ModelViewSet):
         return ctx
 
     def perform_create(self, serializer):
-        serializer.save()
+        serializer.save(user=self.request.user)
 
     def create(self, request, *args, **kwargs):
         user, err = require_user(request)
@@ -42,3 +43,5 @@ class StoryViewSet(viewsets.ModelViewSet):
         story.save()
         story.refresh_from_db()
         return Response({'views': story.views})
+
+    increment_views.throttle_classes = [AnonRateThrottle]

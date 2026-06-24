@@ -1,15 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getUser } from '@/lib/auth';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import EmotionMap from './EmotionMap';
-
-import { apiUrl } from '@/lib/api';
-
-const POSTS_API = apiUrl('posts/');
-const USERS_API = apiUrl('users/');
 
 interface TrendingPost {
   id: number;
@@ -38,18 +33,6 @@ function initials(name: string) {
   return name ? name.slice(0, 2).toUpperCase() : '??';
 }
 
-const trendingPosts = [
-  { title: 'How I Created a Cosmic Illustration', reactions: 320 },
-  { title: 'Top 10 Space Art Tips', reactions: 275 },
-  { title: 'Nebula Color Palettes', reactions: 210 },
-];
-
-const friendSuggestions = [
-  { name: 'Emma', avatar: 'https://randomuser.me/api/portraits/women/65.jpg', mutual: 3 },
-  { name: 'Noah', avatar: 'https://randomuser.me/api/portraits/men/66.jpg', mutual: 2 },
-  { name: 'Olivia', avatar: 'https://randomuser.me/api/portraits/women/67.jpg', mutual: 1 },
-];
-
 export default function RightSidebar() {
   const [trendingPosts, setTrendingPosts] = useState<TrendingPost[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
@@ -57,7 +40,7 @@ export default function RightSidebar() {
   useEffect(() => {
     let active = true;
 
-    fetch(`${POSTS_API}trending/`)
+    apiFetch('posts/trending/')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (active) setTrendingPosts(Array.isArray(data) ? data : []);
@@ -86,23 +69,21 @@ export default function RightSidebar() {
       if (res.ok) {
         const data = await res.json();
         setCreators((prev) =>
-          prev.map((c) =>
-            c.id === creator.id
+          prev.map((current) =>
+            current.id === creator.id
               ? {
-                  ...c,
+                  ...current,
                   is_following: data.is_following,
                   followers_count: data.followers_count,
                 }
-              : c
-          )
+              : current,
+          ),
         );
       }
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   };
 
-  const trendingTopics = (() => {
+  const trendingTopics = useMemo(() => {
     const counts: Record<string, number> = {};
     trendingPosts.forEach((post) => {
       (post.tags || []).forEach((tag) => {
@@ -114,35 +95,34 @@ export default function RightSidebar() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4)
       .map(([topic, count]) => ({ topic, count }));
-  })();
+  }, [trendingPosts]);
 
   return (
-    <aside className="w-80 pt-20 px-4 hidden xl:block">
-      <div className="card p-4 mb-6">
-        <h3 className="text-xs font-semibold text-text-secondary mb-2">Global Emotion Map</h3>
+    <aside className="home-right-rail w-[320px] pt-20 px-4 hidden xl:block shrink-0">
+      <div className="home-rail-card p-5 mb-5">
+        <h3 className="text-[0.95rem] font-semibold text-text mb-3">Global Emotion Map</h3>
         <EmotionMap />
         <Link
           href="/bottles"
-          className="mt-2 block text-center text-[11px] font-semibold text-vault hover:underline"
+          className="mt-3 block text-center text-[11px] font-semibold text-vault hover:underline"
         >
           Open full vault →
         </Link>
       </div>
 
-      <div className="card p-4 mb-6">
-        <h3 className="text-xs font-semibold text-text-secondary mb-3 flex items-center gap-1">
-          <span>Creators to Follow</span>
+      <div className="home-rail-card p-5 mb-5">
+        <h3 className="text-[0.95rem] font-semibold text-text mb-4 flex items-center gap-1">
+          <span>Active Friends</span>
           <span className="text-bazaar text-base">✨</span>
         </h3>
         {creators.length === 0 ? (
           <p className="text-xs text-text-secondary">No suggestions yet.</p>
         ) : (
-          <ul className="text-xs text-text space-y-2">
+          <ul className="text-xs text-text space-y-3">
             {creators.map((creator) => (
               <li key={creator.id} className="flex items-center justify-between">
                 <Link href={`/profile/${creator.id}`} className="flex items-center gap-2 min-w-0 group">
                   {creator.avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={creator.avatar}
                       alt={creator.username}
@@ -156,7 +136,7 @@ export default function RightSidebar() {
                   <span className="min-w-0">
                     <span className="block font-medium truncate group-hover:underline">{creator.username}</span>
                     <span className="block text-text-secondary text-[10px]">
-                      {creator.followers_count} {creator.followers_count === 1 ? 'follower' : 'followers'}
+                      {creator.is_following ? 'following' : `${creator.followers_count} followers`}
                     </span>
                   </span>
                 </Link>
@@ -178,8 +158,8 @@ export default function RightSidebar() {
         )}
       </div>
 
-      <div className="card p-4 mb-6">
-        <h3 className="text-xs font-semibold text-text-secondary mb-3 flex items-center gap-1">
+      <div className="home-rail-card p-5 mb-5">
+        <h3 className="text-[0.95rem] font-semibold text-text mb-4 flex items-center gap-1">
           <span>Trending Posts</span>
           <span className="text-yellow-400 text-base">🌠</span>
         </h3>
@@ -209,8 +189,8 @@ export default function RightSidebar() {
       </div>
 
       {trendingTopics.length > 0 && (
-        <div className="card p-4">
-          <h3 className="text-xs font-semibold text-text-secondary mb-2">Trending Topics</h3>
+        <div className="home-rail-card p-5">
+          <h3 className="text-[0.95rem] font-semibold text-text mb-3">Trending Topics</h3>
           <ul className="text-xs text-text space-y-1">
             {trendingTopics.map((topic) => (
               <li key={topic.topic}>

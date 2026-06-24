@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import WorldShell from '@/components/world/WorldShell';
@@ -11,6 +12,7 @@ import { shopCreatorName, type ShopItem } from '@/lib/shopTypes';
 import {
   MagnifyingGlassIcon,
   SparklesIcon,
+  ArrowDownTrayIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon } from '@heroicons/react/24/solid';
 
@@ -243,9 +245,19 @@ function ShopContent() {
             <h1 className="text-2xl md:text-3xl font-bold" style={{ color: C.brown }}>🛍️ {t('shop.title')}</h1>
             <p className="text-sm" style={{ color: C.text2 }}>{t('shop.subtitle')}</p>
           </div>
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold shrink-0" style={{ background: C.card, color: C.brownDk }}>
-            <SparklesIcon className="h-4 w-4" />
-            {balance != null ? balance.toLocaleString() : '…'} {t('common.coins')}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Link
+              href="/shop/orders"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold"
+              style={{ background: C.white, color: C.brownDk, border: `1px solid ${C.line}` }}
+            >
+              <ArrowDownTrayIcon className="h-4 w-4" />
+              {t('shop.orderHistory')}
+            </Link>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold" style={{ background: C.card, color: C.brownDk }}>
+              <SparklesIcon className="h-4 w-4" />
+              {balance != null ? balance.toLocaleString() : '…'} {t('common.coins')}
+            </div>
           </div>
         </div>
 
@@ -274,6 +286,19 @@ function ShopContent() {
                   <p className="px-2 py-2 text-xs font-semibold line-clamp-2" style={{ color: C.text }}>
                     {item.name}
                   </p>
+                  {item.type === 'digital' && (item.cover_url || item.cover) ? (
+                    <a
+                      href={item.cover_url || item.cover}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="mx-2 mb-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
+                      style={{ background: C.card2, color: C.brownDk }}
+                    >
+                      <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+                      {t('shop.downloadAccess')}
+                    </a>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -349,7 +374,7 @@ function ShopContent() {
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {TYPES.map((typ) => (
               <button
                 key={typ.key}

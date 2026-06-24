@@ -9,15 +9,11 @@ import PostCard from '@/components/PostCard';
 import { mapPost } from '@/utils/postMapper';
 import { apiFetch } from '@/lib/api';
 
-import { apiUrl } from '@/lib/api';
-
-const POSTS_API = apiUrl('posts/');
-
 export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
-  const [post, setPost] = useState<any | null>(null);
+  const [post, setPost] = useState<ReturnType<typeof mapPost> | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [error, setError] = useState(false);

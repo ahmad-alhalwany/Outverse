@@ -52,7 +52,17 @@ export default function AdminChatPage() {
       )}
       <div className="admin-panel">
         <p style={{ color: 'var(--admin-muted)', fontSize: '0.85rem', margin: 0 }}>
-          Full message CRUD remains in Django admin at <code>/admin/</code> on the API host.
+          Message moderation and stats are shown here. To edit or delete individual chat
+          messages, use{' '}
+          <a
+            href="http://127.0.0.1:8000/admin/"
+            target="_blank"
+            rel="noreferrer"
+            className="text-vault hover:underline"
+          >
+            Django admin
+          </a>
+          .
         </p>
       </div>
     </AdminShell>

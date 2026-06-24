@@ -11,12 +11,33 @@ export type SettingsPrefs = {
   hideOthersInRecent: boolean;
   /** UI language */
   locale: AppLocale;
+  theme: 'light' | 'dark';
+  vaultMapStyle: 'street' | 'cosmic';
+  notificationPrefs: Record<string, boolean>;
+  profileVisibility: 'public' | 'followers' | 'private';
+  bottlePrivacy: 'map_only' | 'catch_only' | 'private';
+  onlineStatusVisible: boolean;
 };
 
 const DEFAULTS: SettingsPrefs = {
   showOwnMessageOnMap: true,
   hideOthersInRecent: true,
   locale: 'en',
+  theme: 'light',
+  vaultMapStyle: 'street',
+  notificationPrefs: {
+    likes: true,
+    comments: true,
+    follows: true,
+    reels: true,
+    ideas: true,
+    stories: true,
+    bottles: true,
+    shop: true,
+  },
+  profileVisibility: 'public',
+  bottlePrivacy: 'map_only',
+  onlineStatusVisible: true,
 };
 
 export function readSettingsPrefs(): SettingsPrefs {

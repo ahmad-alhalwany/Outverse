@@ -13,10 +13,22 @@ class ChallengeUserSerializer(serializers.ModelSerializer):
 
 class SubmissionSerializer(serializers.ModelSerializer):
     user = ChallengeUserSerializer(read_only=True)
+    challenge = serializers.SerializerMethodField()
+    challenge_title = serializers.CharField(source='challenge.title', read_only=True)
+    created_at = serializers.DateTimeField(source='submitted_at', read_only=True)
 
     class Meta:
         model = Submission
-        fields = ['id', 'user', 'content', 'submitted_at', 'is_approved']
+        fields = ['id', 'challenge', 'challenge_title', 'user', 'content', 'submitted_at', 'created_at', 'is_approved']
+        read_only_fields = ['user', 'submitted_at', 'created_at', 'is_approved', 'challenge_title']
+
+    def get_challenge(self, obj):
+        return {
+            'id': obj.challenge_id,
+            'title': obj.challenge.title,
+            'type': obj.challenge.type,
+            'cover_url': obj.challenge.cover_url,
+        }
 
 
 class ChallengeSerializer(serializers.ModelSerializer):

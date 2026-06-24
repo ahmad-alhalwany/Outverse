@@ -32,9 +32,23 @@ API root: `http://127.0.0.1:8000/api/`
 | Report reel comment | `POST /api/moderation/flagged/` type `reel_comment` |
 | Challenges (Lab) | `/api/challenges/` |
 | Ideas (Bazaar) | `/api/ideas/` |
-| Bottles (Vault) | `/api/bottles/` |
+| Bottles (Vault) | `/api/bottles/` — map, recent, throw, catch, dashboard |
+
+```bash
+# Seed all demo data (posts, lab, bazaar, vault, shop, forge, reels, chat, admin queue)
+cd backend
+python manage.py seed_demo_data --username YOUR_USERNAME --clear
+
+# Faster / offline (skips downloading post media from the web)
+python manage.py seed_demo_data --username YOUR_USERNAME --clear --skip-media
+
+# Or seed only bottles
+python manage.py create_sample_bottles --username YOUR_USERNAME --clear
+```
 | Shop | `/api/shop/items/` |
-| Forge | `/api/forge/stories/` |
+| Forge | `/api/forge/stories/` — `GET /featured/` for editor's picks |
+| Admin (staff) | `/admin` — Bazaar ideas, Vault bottles, shop, reels, moderation |
+| Notifications page | `/notifications` — full list + mark read |
 
 ## Frontend (Next.js)
 
@@ -88,8 +102,25 @@ npm run build
 # Grant staff (required for /admin)
 cd backend
 python manage.py promote_staff YOUR_USERNAME
+
+# Or create/update staff + superuser (password via env — never commit)
+set OUTVERSE_ADMIN_PASS=your_password
+python manage.py ensure_staff YOUR_USERNAME
 ```
 
 Re-login in the dashboard, then open `/admin` (also linked from account menu when staff).
 
-Staff-only API: `GET /api/analytics/dashboard/`, shop/challenge CRUD, profile PATCH, moderation review.
+Staff-only API: `GET /api/analytics/dashboard/`, shop/challenge CRUD, profile PATCH, moderation review, ideas/bottles delete.
+
+### Production env
+
+```bash
+# backend/.env
+DJANGO_SECRET_KEY=...
+DJANGO_DEBUG=False
+DJANGO_ALLOWED_HOSTS=yourdomain.com
+CORS_ALLOWED_ORIGINS=https://yourdomain.com
+
+# outverse-dashboard/.env.local
+NEXT_PUBLIC_API_URL=https://api.yourdomain.com
+```

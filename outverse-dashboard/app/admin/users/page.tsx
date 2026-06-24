@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
-import { fetchAdminProfiles, patchProfile } from '@/lib/adminApi';
+import { fetchAdminProfiles, patchProfile, promoteProfileToStaff } from '@/lib/adminApi';
 import type { AdminProfile } from '@/lib/adminTypes';
 
 export default function AdminUsersPage() {
@@ -41,6 +41,16 @@ export default function AdminUsersPage() {
     setModal(null);
   };
 
+  const promote = async (profile: AdminProfile) => {
+    const res = await promoteProfileToStaff(profile.user.id);
+    if (res.ok) {
+      setMsg(`@${profile.user.username} promoted to staff.`);
+      load();
+    } else {
+      setMsg('Promotion failed.');
+    }
+  };
+
   return (
     <AdminShell title="User Management" subtitle="Suspend, activate, and review traveler profiles">
       {msg && (
@@ -59,7 +69,7 @@ export default function AdminUsersPage() {
           />
           <span style={{ color: 'var(--admin-muted)', fontSize: '0.8rem' }}>{filtered.length} profiles</span>
         </div>
-        <div className="admin-table-wrap">
+        <div className="admin-table-wrap admin-table--desktop">
           <table className="admin-table">
             <thead>
               <tr>
@@ -68,6 +78,7 @@ export default function AdminUsersPage() {
                 <th>Points</th>
                 <th>Achievements</th>
                 <th>Status</th>
+                <th>Role</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -83,7 +94,13 @@ export default function AdminUsersPage() {
                       {p.status}
                     </span>
                   </td>
+                  <td>{p.user.id && p.is_staff ? 'Staff' : 'Member'}</td>
                   <td>
+                    {!p.is_staff ? (
+                      <button type="button" className="admin-btn admin-btn--ghost" onClick={() => void promote(p)} style={{ marginRight: 6 }}>
+                        Promote
+                      </button>
+                    ) : null}
                     {p.status === 'active' ? (
                       <button type="button" className="admin-btn admin-btn--danger" onClick={() => setModal({ profile: p, action: 'suspend' })}>
                         Suspend
@@ -98,6 +115,24 @@ export default function AdminUsersPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="admin-mobile-cards">
+          {filtered.map((p) => (
+            <div key={p.id} className="admin-mobile-card">
+              <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">User</span><span className="admin-mobile-card__value">@{p.user.username}</span></div>
+              <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Email</span><span className="admin-mobile-card__value">{p.user.email}</span></div>
+              <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Points</span><span className="admin-mobile-card__value">{p.points}</span></div>
+              <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Role</span><span className="admin-mobile-card__value">{p.is_staff ? 'Staff' : 'Member'}</span></div>
+              <div className="admin-actions-wrap">
+                {!p.is_staff ? <button type="button" className="admin-btn admin-btn--ghost" onClick={() => void promote(p)}>Promote</button> : null}
+                {p.status === 'active' ? (
+                  <button type="button" className="admin-btn admin-btn--danger" onClick={() => setModal({ profile: p, action: 'suspend' })}>Suspend</button>
+                ) : (
+                  <button type="button" className="admin-btn admin-btn--success" onClick={() => setModal({ profile: p, action: 'activate' })}>Activate</button>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

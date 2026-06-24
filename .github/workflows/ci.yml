@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: outverse
+          POSTGRES_PASSWORD: outverse
+          POSTGRES_DB: outverse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint
+        run: |
+          python -m compileall -q .
+
+      - name: Django checks
+        env:
+          DJANGO_SECRET_KEY: ci-secret-key
+          DJANGO_DEBUG: 'False'
+          DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+          POSTGRES_DB: outverse_test
+          POSTGRES_USER: outverse
+          POSTGRES_PASSWORD: outverse
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          python manage.py check --deploy
+          python manage.py migrate
+
+      - name: Run tests
+        env:
+          DJANGO_SECRET_KEY: ci-secret-key
+          DJANGO_DEBUG: 'False'
+          DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+          POSTGRES_DB: outverse_test
+          POSTGRES_USER: outverse
+          POSTGRES_PASSWORD: outverse
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          python manage.py test chat users posts reels --parallel
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./outverse-dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./outverse-dashboard/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
+        run: npm run build

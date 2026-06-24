@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useRef, useEffect } from 'react';
 import useSound from './useSound';
@@ -13,7 +14,7 @@ import CommentMediaPicker, { type PickerTab } from './comments/CommentMediaPicke
 import { FaEdit, FaTrash, FaThumbtack, FaSpinner } from 'react-icons/fa';
 import { MdGif } from 'react-icons/md';
 import PostReactions from './PostReactions';
-import { formatRelativeTime } from '../utils/dateFormatter';
+import RelativeTime from './RelativeTime';
 import { useLocale } from './LocaleProvider';
 import { apiFetch, mediaUrl } from '@/lib/api';
 
@@ -37,10 +38,10 @@ interface CommentItem {
 interface CommentsProps {
   comments: CommentItem[];
   open: boolean;
-  onAddComment: (data: { text: string; gifUrl?: string; stickerUrl?: string }) => void;
-  onReply?: (parentId: number, data: { text: string; gifUrl?: string; stickerUrl?: string; time: string }) => void;
-  onEditComment?: (commentId: number, newText: string) => void;
-  onDeleteComment?: (commentId: number) => void;
+  onAddComment: (data: { text: string; gifUrl?: string; stickerUrl?: string }) => Promise<void> | void;
+  onReply?: (parentId: number, data: { text: string; gifUrl?: string; stickerUrl?: string; time: string }) => Promise<void> | void;
+  onEditComment?: (commentId: number, newText: string) => Promise<void> | void;
+  onDeleteComment?: (commentId: number) => Promise<void> | void;
   onReportComment?: (commentId: number, snippet: string) => void;
   onCommentReaction?: (commentId: number, reactionEmoji: string) => void;
   user: User;
@@ -78,18 +79,24 @@ export default function Comments({
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionUsers, setMentionUsers] = useState<{ id: number; name: string }[]>([]);
+  const mentionAbortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const attachRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!showMentionList || mentionQuery.length < 1) {
+      mentionAbortRef.current?.abort();
       setMentionUsers([]);
       return;
     }
     const timer = setTimeout(async () => {
+      mentionAbortRef.current?.abort();
+      const controller = new AbortController();
+      mentionAbortRef.current = controller;
       try {
         const res = await apiFetch(
           `users/mentions/?q=${encodeURIComponent(mentionQuery)}`,
+          { signal: controller.signal },
         );
         if (res.ok) {
           const data = await res.json();
@@ -102,11 +109,15 @@ export default function Comments({
               : [],
           );
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return;
         setMentionUsers([]);
       }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      mentionAbortRef.current?.abort();
+    };
   }, [showMentionList, mentionQuery]);
 
   const sortedComments = [...comments];
@@ -118,13 +129,13 @@ export default function Comments({
     }
   }
 
-  const handleReply = (parentId: number) => {
+  const handleReply = async (parentId: number) => {
     if (onReply && (replyText.trim() || gifUrl || stickerUrl)) {
-      onReply(parentId, {
+      await onReply(parentId, {
         text: replyText,
         gifUrl: gifUrl || undefined,
         stickerUrl: stickerUrl || undefined,
-        time: formatRelativeTime(new Date()),
+        time: new Date().toISOString(),
       });
       setReplyText('');
       setGifUrl(null);
@@ -133,22 +144,24 @@ export default function Comments({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newComment.trim() && !gifUrl && !stickerUrl) return;
     setAddingComment(true);
-    onAddComment({
-      text: newComment,
-      gifUrl: gifUrl || undefined,
-      stickerUrl: stickerUrl || undefined,
-    });
-    playComment();
-    setTimeout(() => {
+    try {
+      await onAddComment({
+        text: newComment,
+        gifUrl: gifUrl || undefined,
+        stickerUrl: stickerUrl || undefined,
+      });
+      playComment();
       setAddingComment(false);
       setNewComment('');
       setGifUrl(null);
       setStickerUrl(null);
-    }, 400);
+    } finally {
+      setAddingComment(false);
+    }
   };
 
   const handleCommentInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -178,7 +191,7 @@ export default function Comments({
       key={comment.id}
       className={`cosmic-comment${pinnedId === comment.id ? ' cosmic-comment--pinned' : ''}${isReply ? ' mt-2' : ''}`}
     >
-      <img src={comment.user.avatar} alt="" className="cosmic-comment__avatar" style={{ width: isReply ? '1.75rem' : undefined, height: isReply ? '1.75rem' : undefined }} />
+      <Image src={comment.user.avatar} alt={`${comment.user.name} avatar`} width={isReply ? 28 : 40} height={isReply ? 28 : 40} className="cosmic-comment__avatar" style={{ width: isReply ? '1.75rem' : undefined, height: isReply ? '1.75rem' : undefined }} unoptimized />
       <div className="flex-1 min-w-0">
         <div className="cosmic-comment__bubble">
           <div className="flex items-start justify-between gap-2">
@@ -221,11 +234,15 @@ export default function Comments({
                 className="cosmic-comments__input !rounded-lg flex-1"
                 disabled={editingLoading}
               />
-              <button type="button" className="cosmic-comments__send !py-2" onClick={() => {
+              <button type="button" className="cosmic-comments__send !py-2" onClick={async () => {
                 if (onEditComment && editText.trim()) {
                   setEditingLoading(true);
-                  onEditComment(comment.id, editText);
-                  setTimeout(() => { setEditingLoading(false); setEditingId(null); }, 400);
+                  try {
+                    await onEditComment(comment.id, editText);
+                    setEditingId(null);
+                  } finally {
+                    setEditingLoading(false);
+                  }
                 }
               }} disabled={editingLoading}>
                 {editingLoading ? <FaSpinner className="animate-spin" /> : 'Save'}
@@ -240,10 +257,10 @@ export default function Comments({
           ) : null}
 
           {comment.gifUrl && (
-            <img src={mediaUrl(comment.gifUrl) || comment.gifUrl} alt="" className="cosmic-comment__gif mt-2" />
+            <Image src={mediaUrl(comment.gifUrl) || comment.gifUrl} alt={`GIF shared by ${comment.user.name}`} width={240} height={240} className="cosmic-comment__gif mt-2" unoptimized />
           )}
           {comment.stickerUrl && (
-            <img src={mediaUrl(comment.stickerUrl) || comment.stickerUrl} alt="" className="cosmic-comment__sticker mt-2" />
+            <Image src={mediaUrl(comment.stickerUrl) || comment.stickerUrl} alt={`Sticker shared by ${comment.user.name}`} width={160} height={160} className="cosmic-comment__sticker mt-2" unoptimized />
           )}
           {!comment.text?.trim() && !comment.gifUrl && !comment.stickerUrl && (
             <p className="cosmic-comment__text text-text-secondary italic">…</p>
@@ -253,11 +270,15 @@ export default function Comments({
             <div className="mt-2 p-2 rounded-lg bg-surface/50 text-xs">
               Delete this comment?
               <div className="flex gap-2 mt-2">
-                <button type="button" className="cosmic-comments__send !py-1 !px-3 !bg-red-600" onClick={() => {
+                <button type="button" className="cosmic-comments__send !py-1 !px-3 !bg-red-600" onClick={async () => {
                   if (onDeleteComment) {
                     setDeletingLoading(comment.id);
-                    onDeleteComment(comment.id);
-                    setTimeout(() => { setDeletingLoading(null); setShowConfirmDelete(null); }, 400);
+                    try {
+                      await onDeleteComment(comment.id);
+                      setShowConfirmDelete(null);
+                    } finally {
+                      setDeletingLoading(null);
+                    }
                   }
                 }} disabled={deletingLoading === comment.id}>Delete</button>
                 <button type="button" className="text-text-secondary" onClick={() => setShowConfirmDelete(null)}>Cancel</button>
@@ -300,7 +321,7 @@ export default function Comments({
             </div>
           )}
         </div>
-        <div className="cosmic-comment__time">{comment.time}</div>
+        <RelativeTime date={comment.time} className="cosmic-comment__time block" />
       </div>
     </div>
   );
@@ -376,7 +397,7 @@ export default function Comments({
                   {gifUrl && (
                     <div className="cosmic-comments__preview-item">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={gifUrl} alt="" className="cosmic-comment__gif" />
+                      <Image src={gifUrl} alt="Selected GIF preview" width={240} height={240} className="cosmic-comment__gif" unoptimized />
                       <button type="button" className="cosmic-comments__preview-remove" onClick={() => setGifUrl(null)} aria-label={t('picker.close')}>
                         <XMarkIcon className="h-4 w-4" />
                       </button>
@@ -385,7 +406,7 @@ export default function Comments({
                   {stickerUrl && (
                     <div className="cosmic-comments__preview-item">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={mediaUrl(stickerUrl) || stickerUrl} alt="" className="cosmic-comment__sticker" />
+                      <Image src={mediaUrl(stickerUrl) || stickerUrl} alt="Selected sticker preview" width={160} height={160} className="cosmic-comment__sticker" unoptimized />
                       <button type="button" className="cosmic-comments__preview-remove" onClick={() => setStickerUrl(null)} aria-label={t('picker.close')}>
                         <XMarkIcon className="h-4 w-4" />
                       </button>

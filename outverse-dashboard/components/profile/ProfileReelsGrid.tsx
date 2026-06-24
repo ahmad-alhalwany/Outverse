@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { PlayIcon, TrashIcon } from '@heroicons/react/24/solid';
 import { apiFetch } from '@/lib/api';
-import { getCurrentUserId } from '@/lib/auth';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { reelPagePath } from '@/lib/fetchReel';
 import ReelsIcon from '@/components/icons/ReelsIcon';
 import type { ReelItem } from '@/lib/reelTypes';
@@ -24,17 +24,19 @@ interface ProfileReelsGridProps {
     card2: string;
     brown: string;
   };
+  mode?: 'user' | 'saved';
 }
 
-export default function ProfileReelsGrid({ userId, palette: C }: ProfileReelsGridProps) {
+export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: ProfileReelsGridProps) {
   const { t } = useLocale();
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const isOwn = String(getCurrentUserId()) === String(userId);
+  const authUser = useAuthUser();
+  const isOwn = authUser ? String(authUser.id) === String(userId) : false;
 
   const load = () => {
     setLoading(true);
-    apiFetch(`reels/?user=${userId}`)
+    apiFetch(mode === 'saved' ? 'reels/saved/' : `reels/?user=${userId}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => setReels(Array.isArray(data) ? data : []))
       .catch(() => setReels([]))
@@ -43,7 +45,7 @@ export default function ProfileReelsGrid({ userId, palette: C }: ProfileReelsGri
 
   useEffect(() => {
     load();
-  }, [userId]);
+  }, [userId, mode]);
 
   const removeReel = async (e: React.MouseEvent, id: number) => {
     e.preventDefault();
@@ -73,7 +75,7 @@ export default function ProfileReelsGrid({ userId, palette: C }: ProfileReelsGri
       <div className="text-center py-12">
         <ReelsIcon size={40} className="mx-auto mb-3 opacity-70" />
         <p className="text-sm" style={{ color: C.text2 }}>
-          No signals launched yet.
+          {mode === 'saved' ? 'No saved signals yet.' : 'No signals launched yet.'}
         </p>
         {isOwn && (
           <Link

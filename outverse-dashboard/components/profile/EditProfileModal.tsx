@@ -13,6 +13,7 @@ type ProfileShape = {
   bio: string | null;
   location?: string;
   avatar: string | null;
+  cover_photo?: string | null;
 };
 
 type Props = {
@@ -28,7 +29,9 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
   const [bio, setBio] = useState(profile.bio || '');
   const [location, setLocation] = useState(profile.location || '');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
   const [preview, setPreview] = useState(profile.avatar || '');
+  const [coverPreview, setCoverPreview] = useState(profile.cover_photo || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -38,6 +41,13 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
     setPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [avatarFile]);
+
+  useEffect(() => {
+    if (!coverFile) return;
+    const url = URL.createObjectURL(coverFile);
+    setCoverPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [coverFile]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +60,7 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
       fd.append('bio', bio.trim());
       fd.append('location', location.trim());
       if (avatarFile) fd.append('avatar', avatarFile);
+      if (coverFile) fd.append('cover_photo', coverFile);
 
       const res = await authFetch(apiUrl(`users/${profile.id}/update/`), {
         method: 'PATCH',
@@ -68,10 +79,11 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
         bio: data.bio,
         location: data.location,
         avatar: data.avatar,
+        cover_photo: data.cover_photo,
       };
       const token = getToken();
       const u = getUser();
-      if (token && u && u.id === profile.id) {
+      if (u && u.id === profile.id) {
         setAuth(token, {
           ...u,
           first_name: data.first_name,
@@ -117,6 +129,24 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
           ×
         </button>
         <h2 className="text-lg font-bold mb-4 pr-8">Edit profile</h2>
+
+        <div className="mb-4">
+          <div className="h-24 rounded-2xl overflow-hidden mb-2" style={{ background: C.card }}>
+            {coverPreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={coverPreview.startsWith('blob:') ? coverPreview : mediaUrl(coverPreview)} alt="" className="w-full h-full object-cover" />
+            ) : null}
+          </div>
+          <label className="text-sm font-medium cursor-pointer" style={{ color: C.brown }}>
+            Change cover photo
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => setCoverFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+        </div>
 
         <div className="flex items-center gap-4 mb-4">
           {avatarDisplay ? (

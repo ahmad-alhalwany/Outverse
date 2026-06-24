@@ -18,10 +18,14 @@ class NotificationActorSerializer(serializers.Serializer):
 
 class NotificationSerializer(serializers.ModelSerializer):
     actor = NotificationActorSerializer(read_only=True)
+    type = serializers.SerializerMethodField()
 
     class Meta:
         model = Notification
         fields = [
-            'id', 'actor', 'verb', 'post', 'reel', 'text',
+            'id', 'actor', 'verb', 'type', 'post', 'reel', 'text',
             'is_read', 'created_at',
         ]
+
+    def get_type(self, obj):
+        return obj.type or obj.verb

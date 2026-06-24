@@ -35,8 +35,9 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const prefs = readSettingsPrefs();
-    setLocaleState(prefs.locale ?? 'en');
-    applyDocumentLocale(prefs.locale ?? 'en');
+    const initial = prefs.locale ?? 'en';
+    setLocaleState(initial);
+    applyDocumentLocale(initial);
   }, []);
 
   const setLocale = useCallback((next: AppLocale) => {

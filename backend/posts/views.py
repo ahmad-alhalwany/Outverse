@@ -1,17 +1,25 @@
 from collections import Counter
 
+from django.core.cache import cache
 from django.contrib.auth import get_user_model
-from django.db.models import F, Q
+from django.db import IntegrityError, transaction
+from django.db.models import Case, F, IntegerField, Q, When
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAdminUser
 from rest_framework.response import Response
+from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from outverse.auth_utils import require_user, user_from_request
 from users.models import Follow
 from notifications.utils import create_notification
+from bottles.models import MessageBottle
+from ideas.models import Idea
+from narratives.models import Story
+from reels.models import Reel
+from shop.models import ShopItem
 
 from .models import Comment, CommentReaction, Post, PostMedia, Reaction, SavedPost
 from .serializers import (
@@ -37,7 +45,15 @@ class SearchView(APIView):
     def get(self, request):
         query = request.query_params.get('q', '').strip()
         if not query:
-            return Response({'users': [], 'posts': []})
+            return Response({
+                'users': [],
+                'posts': [],
+                'reels': [],
+                'ideas': [],
+                'stories': [],
+                'bottles': [],
+                'shop': [],
+            })
 
         users = User.objects.filter(
             Q(username__icontains=query)
@@ -47,6 +63,21 @@ class SearchView(APIView):
         posts = Post.objects.filter(
             text__icontains=query
         ).select_related('user').order_by('-created_at')[:5]
+        reels = Reel.objects.filter(
+            Q(caption__icontains=query) | Q(tags__icontains=query)
+        ).select_related('user').order_by('-created_at')[:5]
+        ideas = Idea.objects.filter(
+            Q(title__icontains=query) | Q(description__icontains=query)
+        ).select_related('owner').order_by('-created_at')[:5]
+        bottles = MessageBottle.objects.filter(
+            message__icontains=query
+        ).select_related('sender').order_by('-created_at')[:5]
+        stories = Story.objects.filter(
+            Q(title__icontains=query) | Q(premise__icontains=query)
+        ).select_related('owner').order_by('-updated_at')[:5]
+        shop_items = ShopItem.objects.filter(
+            Q(name__icontains=query) | Q(description__icontains=query)
+        ).select_related('creator').order_by('-created_at')[:5]
 
         user_results = []
         for user in users:
@@ -66,8 +97,47 @@ class SearchView(APIView):
             'snippet': _snippet(post.text),
             'author': post.user.username if post.user else '',
         } for post in posts]
+        reel_results = [{
+            'id': reel.id,
+            'caption': _snippet(reel.caption),
+            'author': reel.user.username if reel.user else '',
+            'tags': reel.tags or [],
+        } for reel in reels]
+        idea_results = [{
+            'id': idea.id,
+            'title': idea.title,
+            'description': _snippet(idea.description),
+            'owner': idea.owner.username if idea.owner else '',
+        } for idea in ideas]
+        bottle_results = [{
+            'id': bottle.id,
+            'message': _snippet(bottle.message),
+            'emotion_type': bottle.emotion_type,
+            'sender': bottle.sender.username if bottle.sender else '',
+        } for bottle in bottles]
+        story_results = [{
+            'id': story.id,
+            'title': story.title,
+            'description': _snippet(story.premise),
+            'owner': story.owner.username if story.owner else '',
+        } for story in stories]
+        shop_results = [{
+            'id': item.id,
+            'name': item.name,
+            'description': _snippet(item.description),
+            'creator': item.creator.username if item.creator else '',
+            'price': item.price,
+        } for item in shop_items]
 
-        return Response({'users': user_results, 'posts': post_results})
+        return Response({
+            'users': user_results,
+            'posts': post_results,
+            'reels': reel_results,
+            'ideas': idea_results,
+            'stories': story_results,
+            'bottles': bottle_results,
+            'shop': shop_results,
+        })
 
 
 class PostViewSet(viewsets.ModelViewSet):
@@ -166,23 +236,31 @@ class PostViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def trending(self, request):
+        cache_key = 'posts:trending'
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
         qs = Post.objects.all().order_by(
             '-likes_count', '-views', '-created_at'
         )[:5]
-        serializer = self.get_serializer(qs, many=True)
-        return Response(serializer.data)
+        payload = self.get_serializer(qs, many=True).data
+        cache.set(cache_key, payload, 300)
+        return Response(payload)
 
     @action(detail=False, methods=['get'])
     def trending_tags(self, request):
+        cached = cache.get('posts:trending_tags')
+        if cached is not None:
+            return Response(cached)
         counter: Counter[str] = Counter()
         for post in Post.objects.order_by('-created_at')[:400]:
             for tag in post.tags or []:
                 name = str(tag).strip().lstrip('#')
                 if name:
                     counter[name] += 1
-        return Response(
-            [{'tag': tag, 'count': count} for tag, count in counter.most_common(12)]
-        )
+        payload = [{'tag': tag, 'count': count} for tag, count in counter.most_common(12)]
+        cache.set('posts:trending_tags', payload, 300)
+        return Response(payload)
 
     @action(detail=True, methods=['post'], permission_classes=[AllowAny])
     def increment_views(self, request, pk=None):
@@ -191,6 +269,8 @@ class PostViewSet(viewsets.ModelViewSet):
         post.save(update_fields=['views'])
         post.refresh_from_db()
         return Response({'views': post.views})
+
+    increment_views.throttle_classes = [AnonRateThrottle]
 
     @action(detail=False, methods=['get'])
     def saved(self, request):
@@ -204,10 +284,16 @@ class PostViewSet(viewsets.ModelViewSet):
         )
         if not post_ids:
             return Response([])
-        qs = Post.objects.filter(id__in=post_ids).select_related('user')
-        by_id = {p.id: p for p in qs}
-        ordered = [by_id[i] for i in post_ids if i in by_id]
-        serializer = self.get_serializer(ordered, many=True)
+        ordering = Case(
+            *[When(id=post_id, then=position) for position, post_id in enumerate(post_ids)],
+            output_field=IntegerField(),
+        )
+        qs = (
+            Post.objects.filter(id__in=post_ids)
+            .select_related('user')
+            .order_by(ordering)
+        )
+        serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
@@ -216,11 +302,15 @@ class PostViewSet(viewsets.ModelViewSet):
         user, err = require_user(request)
         if err:
             return err
-        existing = SavedPost.objects.filter(user=user, post=post).first()
-        if existing:
-            existing.delete()
-            return Response({'saved': False})
-        SavedPost.objects.create(user=user, post=post)
+        with transaction.atomic():
+            existing = SavedPost.objects.select_for_update().filter(user=user, post=post).first()
+            if existing:
+                existing.delete()
+                return Response({'saved': False})
+            try:
+                SavedPost.objects.get_or_create(user=user, post=post)
+            except IntegrityError:
+                return Response({'saved': True})
         return Response({'saved': True})
 
     @action(detail=True, methods=['post'])
@@ -374,3 +464,50 @@ class CommentViewSet(viewsets.ModelViewSet):
             'reaction_counts': reaction_counts_for_comment(comment),
             'my_reaction': my_reaction,
         })
+
+
+class StaffPostModerationView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        posts = (
+            Post.objects.select_related('user')
+            .order_by('-created_at')[:100]
+        )
+        payload = PostSerializer(posts, many=True, context={'request': request}).data
+        return Response(payload)
+
+    def delete(self, request):
+        post_id = request.data.get('post_id')
+        if not post_id:
+            return Response({'error': 'post_id is required.'}, status=400)
+        post = Post.objects.filter(id=post_id).first()
+        if not post:
+            return Response({'error': 'Post not found.'}, status=404)
+        post.delete()
+        return Response(status=204)
+
+
+class StaffCommentModerationView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        post_id = request.query_params.get('post_id')
+        qs = Comment.objects.select_related('user', 'post').order_by('-created_at')
+        if post_id:
+            qs = qs.filter(post_id=post_id)
+        serializer = CommentSerializer(qs[:200], many=True, context={'request': request})
+        return Response(serializer.data)
+
+    def delete(self, request):
+        comment_id = request.data.get('comment_id')
+        if not comment_id:
+            return Response({'error': 'comment_id is required.'}, status=400)
+        comment = Comment.objects.filter(id=comment_id).first()
+        if not comment:
+            return Response({'error': 'Comment not found.'}, status=404)
+        post = comment.post
+        comment.delete()
+        post.comments_count = post.comments.count()
+        post.save(update_fields=['comments_count'])
+        return Response(status=204)

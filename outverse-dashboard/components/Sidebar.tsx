@@ -80,8 +80,8 @@ export default function Sidebar() {
   }, []);
 
   return (
-    <aside className="w-64 pt-20 px-4 hidden lg:block">
-      <nav className="mb-8">
+    <aside className="home-sidebar w-[248px] pt-20 px-4 hidden lg:block shrink-0">
+      <nav className="home-sidebar-panel mb-6">
         <ul className="space-y-2">
           {navLinks.map((link) => {
             const active = isNavActive(link.href, pathname, feed);
@@ -113,8 +113,8 @@ export default function Sidebar() {
           })}
         </ul>
       </nav>
-      <div>
-        <h3 className="text-xs font-semibold text-text-secondary mb-2 flex items-center gap-1">
+      <div className="home-sidebar-panel">
+        <h3 className="text-xs font-semibold text-text-secondary mb-3 flex items-center gap-1">
           <FireIcon className="h-4 w-4" /> {t('nav.popularTags')}
         </h3>
         <div className="flex flex-wrap gap-2">

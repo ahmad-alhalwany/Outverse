@@ -96,6 +96,10 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
     return null;
   };
 
+  const handleSavedChange = (id: number, saved: boolean) => {
+    setReels((prev) => prev.map((reel) => (reel.id === id ? { ...reel, is_saved: saved } : reel)));
+  };
+
   const handleView = async (id: number) => {
     try {
       await apiFetch(`reels/${id}/record_view/`, { method: 'POST' });
@@ -145,6 +149,7 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
             onLike={handleLike}
             onView={handleView}
             onDeleted={load}
+            onSavedChange={handleSavedChange}
           />
         </div>
       ))}

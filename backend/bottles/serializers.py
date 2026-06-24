@@ -45,6 +45,8 @@ class BottleThrowSerializer(serializers.ModelSerializer):
     """Used when a user throws a new bottle into the cosmos."""
 
     expires_at = serializers.DateTimeField(source='expiry_time', read_only=True)
+    caught_by = serializers.IntegerField(source='caught_by_id', read_only=True, allow_null=True)
+    caught_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
 
 
@@ -53,14 +55,11 @@ class BottleThrowSerializer(serializers.ModelSerializer):
         model = MessageBottle
 
         fields = [
-
             'id', 'message', 'emotion_type',
-
             'location_lat', 'location_lng', 'created_at', 'expires_at',
-
+            'is_opened', 'caught_by', 'caught_at',
         ]
-
-        read_only_fields = ['id', 'created_at', 'expires_at']
+        read_only_fields = ['id', 'created_at', 'expires_at', 'is_opened', 'caught_by', 'caught_at']
 
 
 
