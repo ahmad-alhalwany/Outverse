@@ -1,11 +1,14 @@
 # Outverse production deployment
 
+> **Updated guide:** See [DEPLOY.md](./DEPLOY.md) for the full VPS workflow with `docker-compose.prod.yml`, nginx, Stripe, and VAPID.
+
 ## Backend (Django + Daphne)
 
 1. Set environment variables (see `backend/.env.example`):
    - `SECRET_KEY`, `DEBUG=false`, `ALLOWED_HOSTS`
    - `REDIS_URL` for WebSocket channel layer (required with multiple workers)
    - `TURN_URL`, `TURN_USERNAME`, `TURN_PASSWORD` for WebRTC behind NAT
+   - `DATABASE_REPLICA_URL` (optional) — Postgres read replica; when set, Django routes read queries to `replica` and writes to `default`. Health check exposes `database_primary` / `database_replica`.
 2. Run migrations and collect static files.
 3. Serve ASGI behind HTTPS reverse proxy (nginx/Caddy):
 
@@ -20,7 +23,21 @@ location / {
 }
 ```
 
-4. Media: serve `/media/` from CDN or object storage; set `MEDIA_URL` accordingly.
+4. Media CDN: serve uploads from object storage behind a CDN hostname.
+   - Set `AWS_STORAGE_BUCKET_NAME` plus the matching `AWS_*` credentials (see `backend/.env.example`).
+   - Point `AWS_S3_CUSTOM_DOMAIN` at your CDN origin (e.g. `media.yourdomain.com`).
+   - Set `DJANGO_MEDIA_URL=https://media.yourdomain.com/` so API responses return CDN URLs.
+   - Run `python manage.py migrate_media_to_storage` once after switching storage backends.
+
+## Scheduled jobs
+
+Run these Django management commands from the backend environment:
+
+```cron
+*/1 * * * * python manage.py publish_scheduled_posts
+*/1 * * * * python manage.py publish_premiere_videos
+0 * * * * python manage.py send_email_digests
+```
 
 ## Frontend (Next.js)
 

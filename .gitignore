@@ -47,3 +47,12 @@ backend/staticfiles/
 
 # Vercel
 .vercel
+
+# Local operational scratch
+_throttle_backup/
+*.stackdump
+
+# Claude Code local runtime state (launch.json/settings.json stay tracked)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+.claude/worktrees/

@@ -47,6 +47,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
       - name: Lint
         run: |
@@ -72,14 +73,15 @@ jobs:
           DJANGO_SECRET_KEY: ci-secret-key
           DJANGO_DEBUG: 'False'
           DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
-          POSTGRES_DB: outverse_test
-          POSTGRES_USER: outverse
-          POSTGRES_PASSWORD: outverse
+          USE_POSTGRES_FOR_TESTS: '1'
+          POSTGRES_TEST_DB: outverse_test
+          POSTGRES_TEST_USER: outverse
+          POSTGRES_TEST_PASSWORD: outverse
           POSTGRES_HOST: localhost
           POSTGRES_PORT: '5432'
           REDIS_URL: redis://localhost:6379/0
         run: |
-          python manage.py test chat users posts reels --parallel
+          pytest tests/ -q --tb=short
 
   frontend:
     runs-on: ubuntu-latest
@@ -109,3 +111,87 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
         run: npm run build
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    needs: [frontend]
+    defaults:
+      run:
+        working-directory: ./outverse-dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./outverse-dashboard/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
+      - name: Run smoke E2E
+        env:
+          CI: 'true'
+        run: npx playwright test --project=smoke
+
+  e2e-auth:
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    defaults:
+      run:
+        working-directory: ./outverse-dashboard
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: outverse
+          POSTGRES_PASSWORD: outverse
+          POSTGRES_DB: outverse_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Start backend
+        working-directory: ./backend
+        env:
+          DJANGO_SECRET_KEY: ci-secret-key
+          DJANGO_DEBUG: 'True'
+          DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+          CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+          POSTGRES_DB: outverse_test
+          POSTGRES_USER: outverse
+          POSTGRES_PASSWORD: outverse
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: '5432'
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          pip install -r requirements.txt
+          python manage.py migrate --noinput
+          python manage.py runserver 127.0.0.1:8000 &
+          sleep 5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ./outverse-dashboard/package-lock.json
+      - name: Install dashboard + Playwright
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+      - name: Run authenticated E2E
+        env:
+          CI: 'true'
+          E2E_API_URL: http://127.0.0.1:8000
+        run: npx playwright test --project=chromium
