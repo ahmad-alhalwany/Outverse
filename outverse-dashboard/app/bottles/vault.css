@@ -295,6 +295,30 @@ html:not(.light) .vault-summary-bar {
   margin-left: 0.5rem;
 }
 
+.vault-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.vault-error-banner button {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 0.4rem;
+  background: #991b1b;
+  color: #fff;
+}
+
 .vault-map-panel .vault-map-actions button:first-child {
   background: var(--vault-accent) !important;
 }

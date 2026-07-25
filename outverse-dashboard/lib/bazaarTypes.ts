@@ -1,3 +1,18 @@
+export type BazaarIdeaUser = {
+  id?: number;
+  username: string;
+  first_name?: string;
+  last_name?: string;
+  avatar?: string | null;
+};
+
+export type IdeaMilestone = {
+  id: string;
+  title: string;
+  done: boolean;
+  due_date?: string | null;
+};
+
 export type BazaarIdea = {
   id: number;
   title: string;
@@ -7,19 +22,22 @@ export type BazaarIdea = {
   status: string;
   roles_needed: string[];
   tags?: string[];
+  target_date?: string | null;
+  milestones?: IdeaMilestone[];
   funding_goal: number | null;
   funding_raised: number;
   supporters: number;
   collaboration_request_count?: number;
   discussion_count?: number;
-  owner: {
-    id?: number;
-    username: string;
-    first_name?: string;
-    last_name?: string;
-    avatar?: string | null;
-  };
+  pledges?: { id: number; amount: number; created_at: string; user: BazaarIdeaUser | null; is_anonymous?: boolean }[];
+  owner: BazaarIdeaUser;
+  collaborators?: BazaarIdeaUser[];
   collaborators_count: number;
+  is_voted?: boolean;
+  is_saved?: boolean;
+  is_owner?: boolean;
+  collab_project_id?: number | null;
+  silent_unlocked?: boolean;
   created_at: string;
 };
 
@@ -30,7 +48,9 @@ export type BazaarCollaborationRequest = {
   message: string;
   status: string;
   created_at: string;
-  user: BazaarIdea['owner'];
+  user: BazaarIdeaUser;
+  collab_project_id?: number;
+  idea_status?: string;
 };
 
 export type BazaarIdeaComment = {
@@ -66,4 +86,15 @@ export function bazaarOwnerName(idea: BazaarIdea) {
     return `${o.first_name || ''} ${o.last_name || ''}`.trim();
   }
   return o?.username || 'Anonymous';
+}
+
+export function formatIdeaTargetDate(value?: string | null, locale: 'en' | 'ar' = 'en') {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(locale === 'ar' ? 'ar' : undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
 }

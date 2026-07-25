@@ -50,6 +50,13 @@ export const fullMediaUrl = mediaUrl;
 /** fetch with auth token when present */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers as HeadersInit);
+  // A raw string body is always JSON.stringify(...) output in this codebase;
+  // without this the browser defaults to text/plain and DRF rejects it with
+  // 415. FormData/Blob bodies are left alone so multipart uploads keep their
+  // browser-generated boundary header.
+  if (typeof init.body === 'string' && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
   const url = path.startsWith('http') ? path : apiUrl(path);
   return fetch(url, { ...init, headers, credentials: 'include' });
@@ -61,8 +68,13 @@ export async function apiFetchJson(
   init: RequestInit & { json?: unknown } = {},
 ): Promise<Response> {
   const { json, ...rest } = init;
+  const method = (rest.method ?? 'GET').toUpperCase();
   const headers = new Headers(rest.headers as HeadersInit);
-  headers.set('Content-Type', 'application/json');
+  // Content-Type on GET/HEAD triggers an unnecessary CORS preflight and can
+  // cause browsers to reject the response when credentials are included.
+  if (json !== undefined || !['GET', 'HEAD'].includes(method)) {
+    headers.set('Content-Type', 'application/json');
+  }
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
   const url = path.startsWith('http') ? path : apiUrl(path);
   return fetch(url, {

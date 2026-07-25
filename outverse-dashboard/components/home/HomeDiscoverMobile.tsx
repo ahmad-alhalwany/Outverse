@@ -14,6 +14,7 @@ type Creator = {
 
 export default function HomeDiscoverMobile() {
   const [creators, setCreators] = useState<Creator[]>([]);
+  const [followError, setFollowError] = useState('');
 
   useEffect(() => {
     const me = getUser()?.id;
@@ -25,6 +26,7 @@ export default function HomeDiscoverMobile() {
   }, []);
 
   const toggleFollow = async (creator: Creator) => {
+    setFollowError('');
     try {
       const res = await apiFetchJson('users/follow/', {
         method: 'POST',
@@ -37,9 +39,13 @@ export default function HomeDiscoverMobile() {
             c.id === creator.id ? { ...c, is_following: data.is_following } : c,
           ),
         );
+      } else {
+        setFollowError('Could not update follow status.');
+        window.setTimeout(() => setFollowError(''), 3000);
       }
     } catch {
-      /* ignore */
+      setFollowError('Could not update follow status.');
+      window.setTimeout(() => setFollowError(''), 3000);
     }
   };
 
@@ -85,6 +91,11 @@ export default function HomeDiscoverMobile() {
           </div>
         ))}
       </div>
+      {followError && (
+        <p className="mt-2 text-[10px]" style={{ color: '#E24B4A' }}>
+          {followError}
+        </p>
+      )}
     </section>
   );
 }

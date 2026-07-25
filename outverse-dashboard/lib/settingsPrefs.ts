@@ -1,6 +1,6 @@
 /** User preferences stored in localStorage (client-side). */
 
-const PREFIX = 'outverse-pref-';
+const PREFIX = 'cosmory-pref-';
 
 export type AppLocale = 'en' | 'ar';
 
@@ -17,6 +17,13 @@ export type SettingsPrefs = {
   profileVisibility: 'public' | 'followers' | 'private';
   bottlePrivacy: 'map_only' | 'catch_only' | 'private';
   onlineStatusVisible: boolean;
+  readReceiptsEnabled: boolean;
+  weirdnessLevel: number;
+  messageFrequency: 'hourly' | 'daily' | 'weekly';
+  defaultAllowRemix: boolean;
+  defaultAllowWeave: boolean;
+  defaultAllowDownload: boolean;
+  defaultReplyControl: 'everyone' | 'followers' | 'nobody';
 };
 
 const DEFAULTS: SettingsPrefs = {
@@ -38,7 +45,17 @@ const DEFAULTS: SettingsPrefs = {
   profileVisibility: 'public',
   bottlePrivacy: 'map_only',
   onlineStatusVisible: true,
+  readReceiptsEnabled: true,
+  weirdnessLevel: 30,
+  messageFrequency: 'daily',
+  defaultAllowRemix: true,
+  defaultAllowWeave: true,
+  defaultAllowDownload: false,
+  defaultReplyControl: 'everyone',
 };
+
+/** Safe initial state for SSR/first client paint — always the same on both. */
+export const DEFAULT_SETTINGS_PREFS: SettingsPrefs = { ...DEFAULTS };
 
 export function readSettingsPrefs(): SettingsPrefs {
   if (typeof window === 'undefined') return { ...DEFAULTS };

@@ -1,3 +1,5 @@
+import type { ReactionType } from './reactions';
+
 export type ReelMood = 'cosmic' | 'pulse' | 'void' | 'spark' | 'dream';
 
 export type ReelFilter =
@@ -46,12 +48,76 @@ export interface ReelItem {
   views: number;
   likes_count: number;
   comments_count: number;
+  shares_count: number;
   is_liked: boolean;
   is_saved?: boolean;
+  reaction_counts?: Record<string, number>;
+  my_reaction?: ReactionType | null;
   is_featured?: boolean;
   is_active?: boolean;
   created_at: string;
+  remix_of?: number | null;
+  stitch_of?: number | null;
+  allow_remix?: boolean;
+  allow_weave?: boolean;
+  allow_download?: boolean;
+  is_dimmed?: boolean;
+  template?: number | null;
+  template_detail?: {
+    id: number;
+    slug: string;
+    title: string;
+    overlay_stickers?: Array<{ id?: string; emoji: string; x: number; y: number; scale?: number }>;
+    overlay_text?: string;
+    backdrop_preset?: string;
+  } | null;
+  captions?: Array<{ start: number; end: number; text: string }>;
+  captions_status?: 'none' | 'pending' | 'ready' | 'failed';
+  captions_language?: string;
+  effect_meta?: {
+    backdrop?: string;
+    chroma_key?: boolean;
+    overlays?: Array<{ id?: string; emoji: string; x: number; y: number; scale?: number }>;
+    overlay_text?: string;
+  };
+  inspiration_question?: number | null;
+  source_idea?: number | null;
+  inspiration_attribution?: { type: 'question' | 'idea'; id: number; label: string } | null;
 }
+
+export interface ReelTemplate {
+  id: number;
+  slug: string;
+  title: string;
+  description: string;
+  mood: ReelMood;
+  filter_style: ReelFilter;
+  overlay_stickers: Array<{ id?: string; emoji: string; x: number; y: number; scale?: number }>;
+  overlay_text: string;
+  default_sound_label: string;
+  music_track: number | null;
+  backdrop_preset: string;
+  order: number;
+}
+
+export const REEL_BACKDROPS: Record<string, { label: string; css: string }> = {
+  nebula: {
+    label: 'Nebula',
+    css: 'radial-gradient(circle at 30% 20%, #a78bfa 0%, #4c1d95 45%, #0f172a 100%)',
+  },
+  orbit: {
+    label: 'Orbit',
+    css: 'linear-gradient(160deg, #22d3ee 0%, #7c3aed 50%, #1e1b4b 100%)',
+  },
+  void: {
+    label: 'Void',
+    css: 'radial-gradient(circle at 50% 80%, #312e81 0%, #020617 70%)',
+  },
+  aurora: {
+    label: 'Aurora',
+    css: 'linear-gradient(120deg, #34d399 0%, #818cf8 40%, #f472b6 100%)',
+  },
+};
 
 export interface ReelDiscoverPayload {
   trending: ReelItem[];
@@ -70,6 +136,14 @@ export interface ReelCommentItem {
   text: string;
   gif_url?: string;
   sticker_url?: string;
+  edited_at?: string;
+  is_pinned?: boolean;
+  pin_order?: number | null;
+  sparked_by_author?: boolean;
+  is_post_author?: boolean;
+  vote_score?: number;
+  my_vote?: 'boost' | 'dim' | null;
+  quoted_comment?: { id: number; text: string; user: ReelUser } | null;
   created_at: string;
   replies?: ReelCommentItem[];
   reaction_counts?: Record<string, number>;

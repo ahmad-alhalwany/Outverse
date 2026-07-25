@@ -5,7 +5,12 @@ import Link from 'next/link';
 import WorldShell from '@/components/world/WorldShell';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
+import { apiFetch, apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
+import { getToken } from '@/lib/auth';
+import { fetchDailyRitual, completeDailyRitual } from '@/lib/ritualApi';
+import { relayQuestion } from '@/lib/differentiatorApi';
+import InspirationRelayList from '@/components/lab/InspirationRelayList';
+import type { RelayUser } from '@/lib/differentiatorApi';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   ClockIcon,
@@ -27,36 +32,36 @@ const BASE = apiUrl('challenges');
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F8CFC2',
-    card2: '#F7E6DE',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#8F4E37',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
-    shadow: '0 18px 40px rgba(160,86,59,0.10)',
-    shadowSm: '0 8px 24px rgba(160,86,59,0.08)',
-    btnShadow: '0 10px 24px rgba(160,86,59,0.22)',
-    overlay: 'rgba(61,43,34,0.45)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
+    shadow: '0 18px 40px rgba(124,58,237,0.12)',
+    shadowSm: '0 8px 24px rgba(124,58,237,0.10)',
+    btnShadow: '0 10px 24px rgba(124,58,237,0.24)',
+    overlay: 'rgba(33,27,61,0.45)',
     successBg: '#e8f3ee',
     successText: '#2f8f6b',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#2a2140',
-    card2: '#231b36',
-    white: '#2a2a45',
-    brown: '#d39a7d',
-    brownDk: '#b97d61',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(211,154,125,0.18)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
     shadow: '0 18px 40px rgba(0,0,0,0.28)',
     shadowSm: '0 8px 24px rgba(0,0,0,0.22)',
     btnShadow: '0 10px 24px rgba(0,0,0,0.28)',
-    overlay: 'rgba(10,10,34,0.65)',
+    overlay: 'rgba(10,8,24,0.65)',
     successBg: 'rgba(74,222,128,0.15)',
     successText: '#4ade80',
   },
@@ -200,8 +205,33 @@ function WeirdnessLabContent() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
+  const [linkError, setLinkError] = useState('');
+  const [ritualStreak, setRitualStreak] = useState<number | null>(null);
+  const [ritualCompleted, setRitualCompleted] = useState(false);
+  const [ritualQuestionId, setRitualQuestionId] = useState<number | null>(null);
+  const [relayUsers, setRelayUsers] = useState<RelayUser[]>([]);
+  const [completingRitual, setCompletingRitual] = useState(false);
 
   const countdown = useCountdown(daily?.end_date);
+
+  useEffect(() => {
+    if (!getToken()) {
+      setRitualStreak(null);
+      setRitualCompleted(false);
+      return;
+    }
+    void (async () => {
+      const data = await fetchDailyRitual({ lang: 'en' });
+      if (data) {
+        setRitualStreak(data.streak);
+        setRitualCompleted(data.ritual.completed);
+        setRitualQuestionId(data.question?.id ?? null);
+      } else {
+        setRitualStreak(null);
+        setRitualCompleted(false);
+      }
+    })();
+  }, []);
 
   const loadArchive = useCallback(
     async (page: number, append: boolean) => {
@@ -299,12 +329,33 @@ function WeirdnessLabContent() {
         if (res.ok) {
           const data = await res.json();
           if (data?.id) setViewChallenge(data);
+          else setLinkError('Could not find that challenge.');
+        } else {
+          setLinkError('Could not load that challenge.');
         }
       } catch {
-        return;
+        setLinkError('Could not load that challenge. Check the connection.');
       }
     })();
   }, [searchParams]);
+
+  async function completeRitual() {
+    if (!getToken() || completingRitual) return;
+    setCompletingRitual(true);
+    try {
+      const data = await completeDailyRitual({ lang: 'en' });
+      if (data) {
+        setRitualCompleted(data.ritual.completed);
+        setRitualStreak(data.streak);
+        const qid = data.question?.id ?? ritualQuestionId;
+        if (qid) {
+          setRelayUsers(await relayQuestion(qid));
+        }
+      }
+    } finally {
+      setCompletingRitual(false);
+    }
+  }
 
   async function submit() {
     if (!daily || !response.trim()) {
@@ -350,13 +401,60 @@ function WeirdnessLabContent() {
       <div className="lab-shell">
         <div className="lab-topbar">
           <div>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: C.brown }}>
+              Worlds · Lab
+            </p>
             <h1 className="lab-title">Daily Challenge</h1>
             <p className="lab-subtitle">Let your creativity flow</p>
           </div>
-          <Link href="/lab/history" className="lab-history-link">
-            My Lab History
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            {ritualStreak !== null && (
+              <div
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
+                style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text }}
+                title="Daily ritual streak"
+              >
+                <FireIcon className="h-4 w-4 shrink-0" style={{ color: C.brown }} />
+                <span>
+                  {ritualStreak > 0 ? `${ritualStreak} day streak` : 'Start a streak today'}
+                </span>
+                {ritualCompleted && (
+                  <span className="text-xs font-medium" style={{ color: C.successText }}>
+                    · Done today
+                  </span>
+                )}
+              </div>
+            )}
+            {ritualQuestionId && !ritualCompleted && getToken() ? (
+              <button
+                type="button"
+                onClick={() => void completeRitual()}
+                disabled={completingRitual}
+                className="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white"
+                style={{ background: C.brownDk }}
+              >
+                {completingRitual ? 'Completing…' : 'Complete daily ritual'}
+              </button>
+            ) : null}
+            <Link href="/lab/history" className="lab-history-link">
+              My Lab History
+            </Link>
+          </div>
         </div>
+
+        <InspirationRelayList users={relayUsers} />
+
+        {linkError && (
+          <div
+            className="rounded-2xl p-3 mb-4 text-sm flex items-center justify-between gap-3"
+            style={{ background: C.card2, color: C.text2, border: `1px solid ${C.line}` }}
+          >
+            <span>{linkError}</span>
+            <button type="button" onClick={() => setLinkError('')} className="font-semibold" style={{ color: C.brownDk }}>
+              Dismiss
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="rounded-[28px] p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
@@ -590,15 +688,18 @@ function ChallengeViewModal({
   const [error, setError] = useState('');
   const [submissions, setSubmissions] = useState<ChallengeSubmission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
+  const [submissionsError, setSubmissionsError] = useState(false);
 
   const loadSubmissions = useCallback(async () => {
     setLoadingSubmissions(true);
+    setSubmissionsError(false);
     try {
-      const res = await fetch(`${BASE}/${ch.id}/submissions/`);
+      const res = await apiFetch(`challenges/${ch.id}/submissions/`);
       if (!res.ok) throw new Error('failed');
       setSubmissions(await res.json());
     } catch {
       setSubmissions([]);
+      setSubmissionsError(true);
     } finally {
       setLoadingSubmissions(false);
     }
@@ -745,6 +846,18 @@ function ChallengeViewModal({
               <p className="text-sm" style={{ color: C.text2 }}>
                 Loading submissions…
               </p>
+            ) : submissionsError ? (
+              <div className="rounded-2xl p-4 text-sm flex items-center justify-between gap-3" style={{ background: C.card2, color: C.text2 }}>
+                <span>Could not load submissions.</span>
+                <button
+                  type="button"
+                  onClick={() => void loadSubmissions()}
+                  className="font-semibold shrink-0"
+                  style={{ color: C.brownDk }}
+                >
+                  Retry
+                </button>
+              </div>
             ) : submissions.length === 0 ? (
               <div className="rounded-2xl p-4 text-sm" style={{ background: C.card2, color: C.text2 }}>
                 No community submissions yet.
@@ -844,7 +957,7 @@ function ArchiveCard({
         </h4>
         <div className="mt-2 flex items-center justify-between gap-3 text-sm" style={{ color: C.text2 }}>
           <span>{typeLabel(ch.type)}</span>
-          <span style={{ color: '#A0563B', fontWeight: 700 }}>{isDaily ? 'Today' : archiveScore(ch.participants)}</span>
+          <span style={{ color: '#7C3AED', fontWeight: 700 }}>{isDaily ? 'Today' : archiveScore(ch.participants)}</span>
         </div>
       </div>
     </motion.button>

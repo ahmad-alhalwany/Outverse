@@ -11,9 +11,18 @@ import {
   SparklesIcon,
   MapPinIcon,
   PencilSquareIcon,
+  BriefcaseIcon,
+  PlusIcon,
+  TrashIcon,
   HeartIcon,
   ChatBubbleLeftRightIcon,
+  ChartBarIcon,
+  ArrowUpOnSquareIcon,
 } from '@heroicons/react/24/outline';
+import { CheckBadgeIcon } from '@heroicons/react/24/solid';
+import { postShareUrl } from '@/lib/shareUtils';
+import { recordContentShare } from '@/lib/shareApi';
+import { useLocale } from '@/components/LocaleProvider';
 import { useTheme } from '@/components/ThemeProvider';
 import { apiUrl, mediaUrl } from '@/lib/api';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
@@ -24,44 +33,49 @@ import {
   happyDaysPercent,
 } from '@/lib/profileEmotions';
 import { mapPost } from '@/utils/postMapper';
-import PostCard from '@/components/PostCard';
+import SubscribeTiersButton from '@/components/profile/SubscribeTiersButton';
 import ProfileReelsGrid from '@/components/profile/ProfileReelsGrid';
+import ProfileIdeasGrid from '@/components/profile/ProfileIdeasGrid';
+import ProfileSocialMenu from '@/components/profile/ProfileSocialMenu';
+import TipButton from '@/components/TipButton';
+import ProfileStoryConstellations from '@/components/profile/ProfileStoryConstellations';
+import type { SocialStatus } from '@/lib/socialApi';
 import ReelsIcon from '@/components/icons/ReelsIcon';
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#854330',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
-    cover: 'linear-gradient(135deg, #f8c4a8 0%, #e8b4c8 35%, #b8d4f0 100%)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
+    cover: 'linear-gradient(135deg, #c4b5fd 0%, #a78bfa 35%, #7dd3fc 100%)',
     tabBg: '#EDE4DC',
-    shadowSm: '0 2px 12px rgba(160,86,59,0.08)',
+    shadowSm: '0 2px 12px rgba(124,58,237,0.10)',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
-    white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
-    cover: 'linear-gradient(135deg, #2d1b4a 0%, #23234a 40%, #1a1a2e 100%)',
-    tabBg: '#1e1e38',
-    shadowSm: '0 2px 12px rgba(106,0,255,0.12)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
+    cover: 'linear-gradient(135deg, #251B4D 0%, #1E1740 40%, #14102A 100%)',
+    tabBg: '#1e1738',
+    shadowSm: '0 2px 12px rgba(167,139,250,0.14)',
   },
 };
 
 const WEEK_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-type TabKey = 'posts' | 'reels' | 'challenges' | 'stories' | 'bottles';
+type TabKey = 'posts' | 'reels' | 'ideas' | 'challenges' | 'stories' | 'bottles';
 
 interface Profile {
   id: number;
@@ -77,10 +91,20 @@ interface Profile {
   followers_count: number;
   following_count: number;
   is_following: boolean;
+  social?: SocialStatus;
   points?: number;
-  achievements?: string[];
+  karma?: number;
+  achievements?: (string | { id?: number | string; icon?: string; title?: string })[];
   status?: string;
+  badge_verified?: boolean;
+  spender_tier?: 'none' | 'bronze' | 'silver' | 'gold';
 }
+
+const SPENDER_TIER_META: Record<'bronze' | 'silver' | 'gold', { emoji: string; label: string; color: string }> = {
+  bronze: { emoji: '🥉', label: 'Bronze Patron', color: '#B08D57' },
+  silver: { emoji: '🥈', label: 'Silver Patron', color: '#9CA3AF' },
+  gold: { emoji: '🥇', label: 'Gold Patron', color: '#D4AF37' },
+};
 
 type ChallengeEntry = {
   id: number;
@@ -103,6 +127,34 @@ type BottleEntry = {
   emotion_type: string;
   message: string;
   expires_at?: string;
+};
+
+type Experience = {
+  id: number;
+  title: string;
+  organization: string;
+  start_date: string;
+  end_date: string | null;
+  is_current: boolean;
+  description?: string;
+};
+
+type ExperienceForm = {
+  title: string;
+  organization: string;
+  start_date: string;
+  end_date: string;
+  is_current: boolean;
+  description: string;
+};
+
+const EMPTY_EXPERIENCE_FORM: ExperienceForm = {
+  title: '',
+  organization: '',
+  start_date: '',
+  end_date: '',
+  is_current: false,
+  description: '',
 };
 
 interface TimelineDay {
@@ -143,6 +195,7 @@ function reactionTotal(counts?: Record<string, number>) {
 
 export default function ProfileView({ userId }: ProfileViewProps) {
   const { theme } = useTheme();
+  const { t } = useLocale();
   const C = PALETTES[theme];
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<ReturnType<typeof mapPost>[]>([]);
@@ -150,11 +203,18 @@ export default function ProfileView({ userId }: ProfileViewProps) {
   const [stories, setStories] = useState<ForgeStory[]>([]);
   const [challenges, setChallenges] = useState<ChallengeEntry[]>([]);
   const [bottles, setBottles] = useState<BottleEntry[]>([]);
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [experienceForm, setExperienceForm] = useState<ExperienceForm>(EMPTY_EXPERIENCE_FORM);
+  const [editingExperienceId, setEditingExperienceId] = useState<number | null>(null);
+  const [experienceBusy, setExperienceBusy] = useState(false);
+  const [experienceError, setExperienceError] = useState('');
   const [tab, setTab] = useState<TabKey>('posts');
   const [suggestions, setSuggestions] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
+  const [followError, setFollowError] = useState('');
+  const [copiedPostId, setCopiedPostId] = useState<number | null>(null);
 
   const authUser = useAuthUser();
   const isOwnProfile = authUser ? String(authUser.id) === String(userId) : false;
@@ -163,7 +223,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
     if (!userId) return;
     setLoading(true);
     try {
-      const [profileRes, postsRes, moodRes, storiesRes, challRes, bottlesRes, suggestionsRes] =
+      const [profileRes, postsRes, moodRes, storiesRes, challRes, bottlesRes, suggestionsRes, experienceRes] =
         await Promise.all([
           apiFetch(`users/${userId}/`),
           apiFetch(`posts/?author=${userId}`),
@@ -174,6 +234,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             ? apiFetch('bottles/my_bottles/?active=1')
             : Promise.resolve(new Response(JSON.stringify([]), { status: 200 })),
           apiFetch(`users/suggestions/?exclude=${userId}`),
+          apiFetch(`users/${userId}/experience/`),
         ]);
       if (profileRes.ok) setProfile(await profileRes.json());
       if (postsRes.ok) {
@@ -188,6 +249,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
       if (challRes.ok) setChallenges(await challRes.json());
       if (bottlesRes.ok) setBottles(await bottlesRes.json());
       if (suggestionsRes.ok) setSuggestions(await suggestionsRes.json());
+      if (experienceRes.ok) {
+        const experienceData = await experienceRes.json();
+        setExperiences(Array.isArray(experienceData) ? experienceData : experienceData?.results || []);
+      }
     } catch {
       /* offline */
     } finally {
@@ -201,6 +266,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
 
   const toggleFollow = async () => {
     if (!profile) return;
+    setFollowError('');
     try {
       const res = await apiFetchJson('users/follow/', {
         method: 'POST',
@@ -213,20 +279,124 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           is_following: data.is_following,
           followers_count: data.followers_count,
         });
+      } else {
+        setFollowError('Could not update follow status.');
       }
     } catch {
-      /* ignore */
+      setFollowError('Could not update follow status.');
+    }
+  };
+
+  const resetExperienceForm = () => {
+    setExperienceForm(EMPTY_EXPERIENCE_FORM);
+    setEditingExperienceId(null);
+    setExperienceError('');
+  };
+
+  const startEditExperience = (experience: Experience) => {
+    setExperienceForm({
+      title: experience.title || '',
+      organization: experience.organization || '',
+      start_date: experience.start_date || '',
+      end_date: experience.end_date || '',
+      is_current: !!experience.is_current,
+      description: experience.description || '',
+    });
+    setEditingExperienceId(experience.id);
+    setExperienceError('');
+  };
+
+  const saveExperience = async () => {
+    if (!experienceForm.title.trim() || !experienceForm.organization.trim() || !experienceForm.start_date || experienceBusy) return;
+    setExperienceBusy(true);
+    setExperienceError('');
+    const payload = {
+      title: experienceForm.title.trim(),
+      organization: experienceForm.organization.trim(),
+      start_date: experienceForm.start_date,
+      end_date: experienceForm.is_current ? null : experienceForm.end_date || null,
+      is_current: experienceForm.is_current,
+      description: experienceForm.description.trim(),
+    };
+    try {
+      const res = await apiFetchJson(
+        editingExperienceId ? `users/me/experience/${editingExperienceId}/` : 'users/me/experience/',
+        {
+          method: editingExperienceId ? 'PATCH' : 'POST',
+          json: payload,
+        },
+      );
+      if (!res.ok) throw new Error('failed');
+      const saved = (await res.json()) as Experience;
+      setExperiences((prev) =>
+        editingExperienceId
+          ? prev.map((item) => (item.id === saved.id ? saved : item))
+          : [saved, ...prev],
+      );
+      resetExperienceForm();
+    } catch {
+      setExperienceError('Could not save experience.');
+    } finally {
+      setExperienceBusy(false);
+    }
+  };
+
+  const deleteExperience = async (experienceId: number) => {
+    if (experienceBusy) return;
+    setExperienceBusy(true);
+    setExperienceError('');
+    try {
+      const res = await apiFetch(`users/me/experience/${experienceId}/`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) throw new Error('failed');
+      setExperiences((prev) => prev.filter((item) => item.id !== experienceId));
+      if (editingExperienceId === experienceId) resetExperienceForm();
+    } catch {
+      setExperienceError('Could not delete experience.');
+    } finally {
+      setExperienceBusy(false);
     }
   };
 
   const mappedPosts = useMemo(() => posts, [posts]);
+
+  const handleShareCard = async (postId: number) => {
+    if (typeof window === 'undefined') return;
+    const url = postShareUrl(postId, 'copy');
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedPostId(postId);
+      void recordContentShare('post', postId, 'copy');
+      setTimeout(() => setCopiedPostId((cur) => (cur === postId ? null : cur)), 2000);
+    } catch {
+      // Clipboard access denied/unavailable — no destructive fallback needed here.
+    }
+  };
   const weeklyMood = useMemo(() => timeline.slice(-7), [timeline]);
   const happyPct = useMemo(() => happyDaysPercent(timeline), [timeline]);
 
   if (loading && !profile) {
     return (
-      <div className="text-center py-20" style={{ color: C.text2 }}>
-        Loading profile…
+      <div className="animate-pulse">
+        <div className="h-36 sm:h-44 rounded-2xl skeleton-pulse" />
+        <div className="px-4 sm:px-6 -mt-12 relative">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+            <div className="w-24 h-24 rounded-full shrink-0 skeleton-pulse" />
+            <div className="flex-1 space-y-2 pb-1">
+              <div className="h-5 w-40 rounded skeleton-pulse" />
+              <div className="h-3 w-24 rounded skeleton-pulse" />
+            </div>
+            <div className="h-9 w-24 rounded-full shrink-0 skeleton-pulse" />
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="h-3 w-full max-w-md rounded skeleton-pulse" />
+            <div className="h-3 w-3/5 max-w-sm rounded skeleton-pulse" />
+          </div>
+          <div className="flex gap-5 mt-4">
+            <div className="h-4 w-16 rounded skeleton-pulse" />
+            <div className="h-4 w-16 rounded skeleton-pulse" />
+            <div className="h-4 w-16 rounded skeleton-pulse" />
+          </div>
+        </div>
       </div>
     );
   }
@@ -245,30 +415,70 @@ export default function ProfileView({ userId }: ProfileViewProps) {
 
   return (
     <div
-      className="rounded-2xl overflow-hidden pb-8"
-      style={{ background: C.cream, color: C.text, boxShadow: C.shadowSm }}
+      className="overflow-hidden rounded-[30px] border pb-8"
+      style={{
+        background: C.cream,
+        color: C.text,
+        boxShadow: theme === 'light' ? '0 24px 60px rgba(33,27,61,0.10)' : '0 28px 70px rgba(5,4,18,0.42)',
+        borderColor: C.line,
+      }}
     >
       {/* Cover + edit */}
       <div
-        className="relative h-36 sm:h-44 bg-cover bg-center"
+        className="relative h-40 sm:h-52 bg-cover bg-center"
         style={{ background: coverSrc ? `url(${coverSrc}) center/cover` : C.cover }}
       >
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              theme === 'light'
+                ? 'linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(243,240,252,0.18) 100%)'
+                : 'linear-gradient(180deg, rgba(15,12,31,0.04) 0%, rgba(20,16,42,0.44) 100%)',
+          }}
+        />
         {isOwnProfile && (
-          <button
-            type="button"
-            onClick={() => setEditOpen(true)}
-            className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm"
-            style={{ background: C.white, color: C.text, border: `1px solid ${C.line}` }}
-            aria-label="Edit profile"
-          >
-            <PencilSquareIcon className="h-4 w-4" />
-            Edit profile
-          </button>
+          <div className="absolute right-3 top-3 flex flex-wrap items-center gap-2">
+            <Link
+              href="/analytics"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm"
+              style={{ background: C.white, color: C.text, border: `1px solid ${C.line}` }}
+            >
+              <ChartBarIcon className="h-4 w-4" />
+              {t('profile.viewAnalytics')}
+            </Link>
+            <Link
+              href="/creator-hub"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm"
+              style={{ background: C.white, color: C.text, border: `1px solid ${C.line}` }}
+            >
+              <SparklesIcon className="h-4 w-4" />
+              Creator Hub
+            </Link>
+            <button
+              type="button"
+              onClick={() => setEditOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-sm"
+              style={{ background: C.white, color: C.text, border: `1px solid ${C.line}` }}
+              aria-label={t('profile.editProfile')}
+            >
+              <PencilSquareIcon className="h-4 w-4" />
+              {t('profile.editProfile')}
+            </button>
+          </div>
         )}
       </div>
 
       {/* Identity */}
-      <div className="px-4 sm:px-6 -mt-12 relative">
+      <div className="relative -mt-14 px-4 sm:px-6">
+        <div
+          className="rounded-[28px] border p-4 sm:p-5 backdrop-blur-xl"
+          style={{
+            background: theme === 'light' ? 'rgba(255,255,255,0.92)' : 'rgba(30,23,64,0.86)',
+            borderColor: C.line,
+            boxShadow: theme === 'light' ? '0 18px 44px rgba(33,27,61,0.10)' : '0 22px 54px rgba(5,4,18,0.36)',
+          }}
+        >
         <div className="flex flex-col sm:flex-row sm:items-end gap-4">
           {avatarSrc ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -295,33 +505,79 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <div className="flex-1 min-w-0 pb-1">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
-                <h1 className="text-xl sm:text-2xl font-bold">{name}</h1>
+                <h1 className="flex items-center gap-1.5 text-xl sm:text-2xl font-bold">
+                  {name}
+                  {profile.badge_verified && (
+                    <CheckBadgeIcon className="h-5 w-5 shrink-0 text-vault" aria-label="Verified" />
+                  )}
+                </h1>
                 <p className="text-sm" style={{ color: C.text2 }}>
                   @{profile.username}
                 </p>
+                {profile.spender_tier && profile.spender_tier !== 'none' && (
+                  <span
+                    className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+                    style={{
+                      background: `${SPENDER_TIER_META[profile.spender_tier].color}22`,
+                      color: SPENDER_TIER_META[profile.spender_tier].color,
+                    }}
+                  >
+                    {SPENDER_TIER_META[profile.spender_tier].emoji}
+                    {SPENDER_TIER_META[profile.spender_tier].label}
+                  </span>
+                )}
               </div>
-              {!isOwnProfile && (
-                <button
-                  type="button"
-                  onClick={toggleFollow}
-                  className="rounded-full px-5 py-2 text-sm font-semibold text-white shrink-0"
-                  style={{
-                    background: profile.is_following
-                      ? C.card2
-                      : `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`,
-                    color: profile.is_following ? C.text : '#fff',
-                    border: profile.is_following ? `1px solid ${C.line}` : 'none',
-                  }}
-                >
-                  {profile.is_following ? 'Following' : 'Follow'}
-                </button>
+              {!isOwnProfile && !profile.social?.is_blocked && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={toggleFollow}
+                    className="rounded-full px-5 py-2 text-sm font-semibold text-white"
+                    style={{
+                      background: profile.is_following
+                        ? C.card2
+                        : `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`,
+                      color: profile.is_following ? C.text : '#fff',
+                      border: profile.is_following ? `1px solid ${C.line}` : 'none',
+                    }}
+                  >
+                    {profile.is_following ? 'Following' : 'Follow'}
+                  </button>
+                  {!profile.social?.blocked_by_them && (
+                    <>
+                      <TipButton
+                        recipientId={profile.id}
+                        className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold"
+                        buttonStyle={{ background: C.card2, color: C.text, border: `1px solid ${C.line}` }}
+                      />
+                      <SubscribeTiersButton
+                        creatorId={profile.id}
+                        className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold"
+                        buttonStyle={{ background: C.card2, color: C.text, border: `1px solid ${C.line}` }}
+                      />
+                    </>
+                  )}
+                  <ProfileSocialMenu
+                    userId={profile.id}
+                    username={profile.username}
+                    social={profile.social}
+                    palette={{ card: C.card2, text: C.text, text2: C.text2, line: C.line }}
+                    onUpdate={(social) => setProfile((p) => (p ? { ...p, social } : p))}
+                    onBlocked={() => setProfile(null)}
+                  />
+                </div>
               )}
             </div>
+            {followError && (
+              <p className="mt-1 text-xs" style={{ color: '#E24B4A' }}>
+                {followError}
+              </p>
+            )}
           </div>
         </div>
 
         {profile.bio && (
-          <p className="mt-3 text-sm leading-relaxed" style={{ color: C.text }}>
+          <p className="mt-4 max-w-3xl text-sm leading-relaxed" style={{ color: C.text }}>
             {profile.bio}
           </p>
         )}
@@ -333,8 +589,8 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           </p>
         ) : null}
 
-        <div className="flex flex-wrap gap-5 mt-4 text-sm">
-          <span>
+        <div className="mt-5 flex flex-wrap gap-2.5 text-sm">
+          <span className="rounded-full px-3 py-2" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
             <span className="font-bold" style={{ color: C.text }}>
               {formatCount(profile.posts_count)}
             </span>{' '}
@@ -343,7 +599,8 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <button
             type="button"
             onClick={() => setTab('reels')}
-            className="hover:opacity-80 text-left"
+            className="rounded-full px-3 py-2 text-left transition-opacity hover:opacity-80"
+            style={{ background: C.card2, border: `1px solid ${C.line}` }}
           >
             <span className="font-bold" style={{ color: C.text }}>
               {formatCount(profile.reels_count ?? 0)}
@@ -353,7 +610,8 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <button
             type="button"
             onClick={() => setFollowModal('followers')}
-            className="hover:opacity-80 text-left"
+            className="rounded-full px-3 py-2 text-left transition-opacity hover:opacity-80"
+            style={{ background: C.card2, border: `1px solid ${C.line}` }}
           >
             <span className="font-bold" style={{ color: C.text }}>
               {formatCount(profile.followers_count)}
@@ -363,13 +621,15 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <button
             type="button"
             onClick={() => setFollowModal('following')}
-            className="hover:opacity-80 text-left"
+            className="rounded-full px-3 py-2 text-left transition-opacity hover:opacity-80"
+            style={{ background: C.card2, border: `1px solid ${C.line}` }}
           >
             <span className="font-bold" style={{ color: C.text }}>
               {formatCount(profile.following_count)}
             </span>{' '}
             <span style={{ color: C.text2 }}>following</span>
           </button>
+        </div>
         </div>
       </div>
 
@@ -426,6 +686,148 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         </div>
       </div>
 
+      {(isOwnProfile || experiences.length > 0) && (
+        <section
+          className="mx-4 sm:mx-6 mt-6 rounded-2xl p-4"
+          style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
+        >
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-bold">
+                <BriefcaseIcon className="h-5 w-5" style={{ color: C.brown }} />
+                Experience
+              </h2>
+              <p className="mt-1 text-xs" style={{ color: C.text2 }}>
+                {isOwnProfile ? 'Add the roles and projects you want visible on your profile.' : `${name}'s roles and projects.`}
+              </p>
+            </div>
+            {isOwnProfile && editingExperienceId ? (
+              <button type="button" onClick={resetExperienceForm} className="text-xs font-semibold" style={{ color: C.brown }}>
+                Cancel edit
+              </button>
+            ) : null}
+          </div>
+
+          {isOwnProfile ? (
+            <>
+              <div className="grid gap-2 md:grid-cols-2">
+                <input
+                  value={experienceForm.title}
+                  onChange={(e) => setExperienceForm((form) => ({ ...form, title: e.target.value }))}
+                  placeholder="Title"
+                  className="rounded-xl border px-3 py-2 text-sm"
+                  style={{ background: C.card2, borderColor: C.line, color: C.text }}
+                />
+                <input
+                  value={experienceForm.organization}
+                  onChange={(e) => setExperienceForm((form) => ({ ...form, organization: e.target.value }))}
+                  placeholder="Organization"
+                  className="rounded-xl border px-3 py-2 text-sm"
+                  style={{ background: C.card2, borderColor: C.line, color: C.text }}
+                />
+                <label className="text-xs font-semibold" style={{ color: C.text2 }}>
+                  Start date
+                  <input
+                    type="date"
+                    value={experienceForm.start_date}
+                    onChange={(e) => setExperienceForm((form) => ({ ...form, start_date: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
+                    style={{ background: C.card2, borderColor: C.line, color: C.text }}
+                  />
+                </label>
+                <label className="text-xs font-semibold" style={{ color: C.text2 }}>
+                  End date
+                  <input
+                    type="date"
+                    value={experienceForm.end_date}
+                    disabled={experienceForm.is_current}
+                    onChange={(e) => setExperienceForm((form) => ({ ...form, end_date: e.target.value }))}
+                    className="mt-1 w-full rounded-xl border px-3 py-2 text-sm disabled:opacity-50"
+                    style={{ background: C.card2, borderColor: C.line, color: C.text }}
+                  />
+                </label>
+              </div>
+              <textarea
+                value={experienceForm.description}
+                onChange={(e) => setExperienceForm((form) => ({ ...form, description: e.target.value }))}
+                placeholder="Description"
+                rows={2}
+                className="mt-2 w-full rounded-xl border px-3 py-2 text-sm"
+                style={{ background: C.card2, borderColor: C.line, color: C.text }}
+              />
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <label className="flex items-center gap-2 text-sm" style={{ color: C.text2 }}>
+                  <input
+                    type="checkbox"
+                    checked={experienceForm.is_current}
+                    onChange={(e) => setExperienceForm((form) => ({ ...form, is_current: e.target.checked, end_date: e.target.checked ? '' : form.end_date }))}
+                  />
+                  I currently do this
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void saveExperience()}
+                  disabled={experienceBusy || !experienceForm.title.trim() || !experienceForm.organization.trim() || !experienceForm.start_date}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  {editingExperienceId ? 'Save changes' : 'Add experience'}
+                </button>
+              </div>
+              {experienceError ? <p className="mt-2 text-xs text-red-500">{experienceError}</p> : null}
+            </>
+          ) : null}
+
+          <div className="mt-5 space-y-3">
+            {experiences.length === 0 ? (
+              <p className="text-sm" style={{ color: C.text2 }}>No experience added yet.</p>
+            ) : (
+              experiences.map((experience) => (
+                <div key={experience.id} className="rounded-xl border p-3" style={{ background: C.card2, borderColor: C.line }}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">{experience.title}</p>
+                      <p className="text-sm" style={{ color: C.text2 }}>{experience.organization}</p>
+                      <p className="mt-1 text-xs" style={{ color: C.text2 }}>
+                        {experience.start_date}
+                        {' - '}
+                        {experience.is_current ? 'Present' : experience.end_date || 'Present'}
+                      </p>
+                    </div>
+                    {isOwnProfile ? (
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => startEditExperience(experience)}
+                        className="rounded-lg p-1.5"
+                        style={{ background: C.white, color: C.brown }}
+                        aria-label="Edit experience"
+                      >
+                        <PencilSquareIcon className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteExperience(experience.id)}
+                        className="rounded-lg p-1.5 text-red-500"
+                        style={{ background: C.white }}
+                        aria-label="Delete experience"
+                      >
+                        <TrashIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                    ) : null}
+                  </div>
+                  {experience.description ? (
+                    <p className="mt-2 whitespace-pre-wrap text-sm" style={{ color: C.text }}>{experience.description}</p>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
+
       <div className="mx-4 sm:mx-6 mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
         <div
           className="rounded-2xl p-4"
@@ -439,19 +841,28 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             <span className="text-sm" style={{ color: C.text2 }}>Points balance</span>
             <span className="text-lg font-bold" style={{ color: C.brown }}>{formatCount(profile.points ?? 0)}</span>
           </div>
+          <div className="flex items-center justify-between rounded-xl px-4 py-3 mb-3" style={{ background: C.card2 }}>
+            <span className="text-sm" style={{ color: C.text2 }}>Signal Strength</span>
+            <span className="text-lg font-bold" style={{ color: C.brown }}>{formatCount(profile.karma ?? 0)}</span>
+          </div>
           <div className="flex flex-wrap gap-2">
             {(profile.achievements ?? []).length === 0 ? (
               <p className="text-sm" style={{ color: C.text2 }}>No achievements unlocked yet.</p>
             ) : (
-              (profile.achievements ?? []).map((achievement) => (
-                <span
-                  key={achievement}
-                  className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold"
-                  style={{ background: C.card2, color: C.brown, border: `1px solid ${C.line}` }}
-                >
-                  ✦ {achievement}
-                </span>
-              ))
+              (profile.achievements ?? []).map((achievement) => {
+                const label = typeof achievement === 'string' ? achievement : achievement.title || '';
+                const icon = typeof achievement === 'string' ? null : achievement.icon;
+                const key = typeof achievement === 'string' ? achievement : achievement.id ?? label;
+                return (
+                  <span
+                    key={key}
+                    className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold"
+                    style={{ background: C.card2, color: C.brown, border: `1px solid ${C.line}` }}
+                  >
+                    {icon || '✦'} {label}
+                  </span>
+                );
+              })
             )}
           </div>
         </div>
@@ -485,6 +896,8 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         </aside>
       </div>
 
+      <ProfileStoryConstellations userId={userId} isOwner={isOwnProfile} />
+
       {/* Tabs */}
       <div
         className="mx-4 sm:mx-6 mt-6 flex rounded-xl p-1 gap-0.5 overflow-x-auto"
@@ -494,6 +907,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           [
             { key: 'posts', label: 'Posts' },
             { key: 'reels', label: 'Signals', icon: true as const },
+            { key: 'ideas', label: 'Ideas' },
             { key: 'challenges', label: 'Challenges' },
             { key: 'stories', label: 'Stories' },
             { key: 'bottles', label: 'Bottles' },
@@ -557,6 +971,14 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                               : `linear-gradient(135deg, ${C.card}, ${C.card2})`,
                           }}
                         >
+                          {post.is_profile_pinned && (
+                            <span
+                              className="absolute left-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white"
+                              style={{ background: 'rgba(0,0,0,0.55)' }}
+                            >
+                              Pin
+                            </span>
+                          )}
                           <div
                             className="absolute bottom-0 left-0 right-0 px-2 py-1.5 flex gap-3 text-[10px] text-white"
                             style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.65))' }}
@@ -577,16 +999,76 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                     );
                   })}
                 </div>
-                <div className="hidden sm:block space-y-6">
-                  {mappedPosts.map((post, idx) => (
-                    <motion.div
-                      key={post.id || idx}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                    >
-                      <PostCard {...post} onDeleted={load} onUpdated={load} />
-                    </motion.div>
-                  ))}
+                <div className="hidden sm:grid grid-cols-3 gap-4">
+                  {mappedPosts.map((post, idx) => {
+                    const thumb = postThumbnail(post);
+                    const likes = reactionTotal(post.reaction_counts);
+                    return (
+                      <motion.div
+                        key={post.id || idx}
+                        initial={{ opacity: 0, y: 16 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="group relative rounded-xl overflow-hidden"
+                        style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
+                      >
+                        <Link href={`/post/${post.id}`} className="block">
+                          <div
+                            className="aspect-square bg-cover bg-center relative"
+                            style={{
+                              background: thumb
+                                ? `url(${thumb}) center/cover`
+                                : `linear-gradient(135deg, ${C.card}, ${C.card2})`,
+                            }}
+                          >
+                            {post.is_profile_pinned && (
+                              <span
+                                className="absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+                                style={{ background: 'rgba(0,0,0,0.55)' }}
+                              >
+                                {t('signal.pinned')}
+                              </span>
+                            )}
+                            <div
+                              className="absolute bottom-0 left-0 right-0 px-3 py-2 flex gap-4 text-xs text-white"
+                              style={{ background: 'linear-gradient(transparent, rgba(0,0,0,0.65))' }}
+                            >
+                              <span className="flex items-center gap-1">
+                                <HeartIcon className="h-3.5 w-3.5" /> {formatCount(likes)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <ChatBubbleLeftRightIcon className="h-3.5 w-3.5" />{' '}
+                                {post.stats?.comments ?? 0}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="p-2.5 text-sm font-semibold truncate" style={{ color: C.text }}>
+                            {postTitle(post.text)}
+                          </p>
+                        </Link>
+                        <button
+                          type="button"
+                          aria-label={t('feed.share')}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (post.id) void handleShareCard(post.id);
+                          }}
+                          className="absolute top-2 right-2 rounded-full p-1.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+                          style={{ background: 'rgba(0,0,0,0.55)' }}
+                        >
+                          <ArrowUpOnSquareIcon className="h-4 w-4 text-white" />
+                        </button>
+                        {copiedPostId === post.id && (
+                          <span
+                            className="absolute top-2 right-11 rounded-full px-2 py-1 text-[10px] font-semibold text-white"
+                            style={{ background: 'rgba(0,0,0,0.65)' }}
+                          >
+                            {t('feed.copied')}
+                          </span>
+                        )}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -594,6 +1076,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         )}
 
         {tab === 'reels' && <ProfileReelsGrid userId={userId} palette={C} />}
+
+        {tab === 'ideas' && (
+          <ProfileIdeasGrid userId={userId} palette={{ ...C, brownDk: C.brownDk }} />
+        )}
 
         {isOwnProfile && tab === 'reels' && (
           <div className="mt-6">

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PlayIcon, TrashIcon } from '@heroicons/react/24/solid';
 import { apiFetch } from '@/lib/api';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
@@ -11,6 +11,7 @@ import type { ReelItem } from '@/lib/reelTypes';
 import { formatCount } from '@/lib/profileEmotions';
 import { mediaUrl } from '@/lib/api';
 import { useLocale } from '@/components/LocaleProvider';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 interface ProfileReelsGridProps {
   userId: string;
@@ -29,33 +30,44 @@ interface ProfileReelsGridProps {
 
 export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: ProfileReelsGridProps) {
   const { t } = useLocale();
+  const confirm = useConfirm();
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const authUser = useAuthUser();
   const isOwn = authUser ? String(authUser.id) === String(userId) : false;
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
+    setError('');
     apiFetch(mode === 'saved' ? 'reels/saved/' : `reels/?user=${userId}`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setReels(Array.isArray(data) ? data : []))
-      .catch(() => setReels([]))
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed'))))
+      .then((data) => setReels(Array.isArray(data) ? data : data.results || []))
+      .catch(() => {
+        setReels([]);
+        setError(t('reels.actionFailed'));
+      })
       .finally(() => setLoading(false));
-  };
+  }, [userId, mode, t]);
 
   useEffect(() => {
     load();
-  }, [userId, mode]);
+  }, [load]);
 
   const removeReel = async (e: React.MouseEvent, id: number) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!window.confirm(t('reels.confirmDeleteReel'))) return;
+    if (!(await confirm(t('reels.confirmDeleteReel'), { danger: true, confirmLabel: 'Delete' }))) return;
+    setError('');
     try {
       const res = await apiFetch(`reels/${id}/`, { method: 'DELETE' });
-      if (res.ok) setReels((prev) => prev.filter((r) => r.id !== id));
+      if (res.ok) {
+        setReels((prev) => prev.filter((r) => r.id !== id));
+      } else {
+        setError(t('reels.actionFailed'));
+      }
     } catch {
-      /* ignore */
+      setError(t('reels.actionFailed'));
     }
   };
 
@@ -74,10 +86,10 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
     return (
       <div className="text-center py-12">
         <ReelsIcon size={40} className="mx-auto mb-3 opacity-70" />
-        <p className="text-sm" style={{ color: C.text2 }}>
-          {mode === 'saved' ? 'No saved signals yet.' : 'No signals launched yet.'}
+        <p className="text-sm" style={{ color: error ? '#dc2626' : C.text2 }}>
+          {error || (mode === 'saved' ? 'No saved signals yet.' : 'No signals launched yet.')}
         </p>
-        {isOwn && (
+        {isOwn && !error && (
           <Link
             href="/reels/create"
             className="inline-block mt-3 text-sm font-semibold"
@@ -92,6 +104,11 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
 
   return (
     <div className="profile-reels-grid">
+      {error && (
+        <p className="text-sm mb-3" style={{ color: '#dc2626', gridColumn: '1 / -1' }}>
+          {error}
+        </p>
+      )}
       {reels.map((reel) => {
         const thumb = mediaUrl(reel.video) || reel.video;
         return (

@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { deleteReel, fetchReelsAdmin, patchReel } from '@/lib/adminApi';
 import type { AdminReel } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 export default function AdminReelsPage() {
+  const confirm = useConfirm();
   const [reels, setReels] = useState<AdminReel[]>([]);
   const [msg, setMsg] = useState('');
 
@@ -28,7 +30,7 @@ export default function AdminReelsPage() {
   };
 
   const remove = async (id: number) => {
-    if (!window.confirm('Delete this signal permanently?')) return;
+    if (!(await confirm('Delete this signal permanently?', { danger: true, confirmLabel: 'Delete' }))) return;
     const res = await deleteReel(id);
     if (res.ok) {
       setMsg('Signal deleted.');

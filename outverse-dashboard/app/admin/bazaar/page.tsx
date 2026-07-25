@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { deleteIdea, fetchIdeasAdmin, saveIdea } from '@/lib/adminApi';
 import type { AdminIdea } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 const EMPTY = {
   title: '',
@@ -14,6 +15,7 @@ const EMPTY = {
 };
 
 export default function AdminBazaarPage() {
+  const confirm = useConfirm();
   const [ideas, setIdeas] = useState<AdminIdea[]>([]);
   const [form, setForm] = useState(EMPTY);
   const [editId, setEditId] = useState<number | null>(null);
@@ -87,7 +89,7 @@ export default function AdminBazaarPage() {
                         className="admin-btn admin-btn--danger"
                         style={{ marginLeft: 6 }}
                         onClick={async () => {
-                          if (!window.confirm('Delete idea?')) return;
+                          if (!(await confirm('Delete idea?', { danger: true, confirmLabel: 'Delete' }))) return;
                           await deleteIdea(idea.id);
                           load();
                         }}

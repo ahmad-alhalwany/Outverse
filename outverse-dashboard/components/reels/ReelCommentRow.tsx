@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { FlagIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import { FlagIcon, MapPinIcon, PencilSquareIcon, TrashIcon, ChevronUpIcon, ChevronDownIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { MapPinIcon as MapPinSolid } from '@heroicons/react/24/solid';
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
-import { getUser } from '@/lib/auth';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import {
   countsToEmojiMap,
   EMOJI_BY_REACTION_TYPE,
@@ -14,12 +15,14 @@ import type { ReelCommentItem } from '@/lib/reelTypes';
 import PostReactions from '../PostReactions';
 import { reelAuthorName } from '@/lib/reelTypes';
 import RelativeTime from '@/components/RelativeTime';
+import MentionText from '@/components/MentionText';
 import { useLocale } from '../LocaleProvider';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 function CommentBody({ c }: { c: ReelCommentItem }) {
   return (
     <>
-      {c.text && <p className="reel-comments-sheet__text">{c.text}</p>}
+      {c.text && <MentionText text={c.text} className="reel-comments-sheet__text" />}
       {c.gif_url && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -42,6 +45,7 @@ function CommentBody({ c }: { c: ReelCommentItem }) {
 
 export interface ReelCommentRowProps {
   reelId: number;
+  reelOwnerId?: number;
   comment: ReelCommentItem;
   isReply?: boolean;
   onReply?: (c: ReelCommentItem) => void;
@@ -50,17 +54,26 @@ export interface ReelCommentRowProps {
 
 export default function ReelCommentRow({
   reelId,
+  reelOwnerId,
   comment,
   isReply = false,
   onReply,
   onChanged,
 }: ReelCommentRowProps) {
   const { t } = useLocale();
-  const me = getUser();
+  const me = useAuthUser();
+  const confirm = useConfirm();
   const isOwner = me?.id === comment.user.id;
+  const canPin = !isReply && !!me && me.id === reelOwnerId;
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.text);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+
+  const flashError = (msg: string) => {
+    setActionError(msg);
+    setTimeout(() => setActionError((cur) => (cur === msg ? '' : cur)), 3000);
+  };
 
   const saveEdit = async () => {
     if (!editText.trim() && !comment.gif_url && !comment.sticker_url) return;
@@ -73,9 +86,11 @@ export default function ReelCommentRow({
       if (res.ok) {
         setEditing(false);
         onChanged();
+      } else {
+        flashError(t('reels.actionFailed'));
       }
     } catch {
-      /* ignore */
+      flashError(t('reels.actionFailed'));
     } finally {
       setBusy(false);
     }
@@ -83,11 +98,11 @@ export default function ReelCommentRow({
 
   const report = async () => {
     if (!me) return;
-    if (!window.confirm(t('reels.confirmReport'))) return;
+    if (!(await confirm(t('reels.confirmReport'), { confirmLabel: 'Report' }))) return;
     setBusy(true);
     try {
       const snippet = (comment.text || '').slice(0, 200);
-      await apiFetchJson('moderation/flagged/', {
+      const res = await apiFetchJson('moderation/flagged/', {
         method: 'POST',
         json: {
           type: 'reel_comment',
@@ -95,8 +110,9 @@ export default function ReelCommentRow({
           reporter: me.username,
         },
       });
+      if (!res.ok) flashError(t('reels.actionFailed'));
     } catch {
-      /* ignore */
+      flashError(t('reels.actionFailed'));
     } finally {
       setBusy(false);
     }
@@ -112,21 +128,67 @@ export default function ReelCommentRow({
         json: { reaction: type },
       });
       if (res.ok) onChanged();
+      else flashError(t('reels.actionFailed'));
     } catch {
-      /* ignore */
+      flashError(t('reels.actionFailed'));
     } finally {
       setBusy(false);
     }
   };
 
   const remove = async () => {
-    if (!window.confirm(t('reels.confirmDelete'))) return;
+    if (!(await confirm(t('reels.confirmDelete'), { danger: true, confirmLabel: 'Delete' }))) return;
     setBusy(true);
     try {
       const res = await apiFetch(`reel-comments/${comment.id}/`, { method: 'DELETE' });
       if (res.ok) onChanged();
+      else flashError(t('reels.actionFailed'));
     } catch {
-      /* ignore */
+      flashError(t('reels.actionFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const togglePin = async () => {
+    setBusy(true);
+    try {
+      const res = await apiFetchJson(`reel-comments/${comment.id}/pin/`, { method: 'POST' });
+      if (res.ok) onChanged();
+      else flashError(t('reels.actionFailed'));
+    } catch {
+      flashError(t('reels.actionFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleSpark = async () => {
+    setBusy(true);
+    try {
+      const res = await apiFetchJson(`reel-comments/${comment.id}/spark/`, { method: 'POST' });
+      if (res.ok) onChanged();
+      else flashError(t('reels.actionFailed'));
+    } catch {
+      flashError(t('reels.actionFailed'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const vote = async (direction: 'boost' | 'dim') => {
+    if (!me) return;
+    setBusy(true);
+    try {
+      const next = comment.my_vote === direction ? null : direction;
+      const res = await apiFetchJson(`reel-comments/${comment.id}/vote/`, {
+        method: 'POST',
+        json: { vote: next },
+      });
+      if (res.ok) onChanged();
+      else flashError(t('reels.actionFailed'));
+    } catch {
+      flashError(t('reels.actionFailed'));
     } finally {
       setBusy(false);
     }
@@ -134,10 +196,36 @@ export default function ReelCommentRow({
 
   return (
     <div
-      className={`reel-comments-sheet__item${isReply ? ' reel-comments-sheet__item--reply' : ''}`}
+      className={`reel-comments-sheet__item flex items-start gap-2${isReply ? ' reel-comments-sheet__item--reply' : ''}${comment.sparked_by_author ? ' reel-comments-sheet__item--sparked' : ''}`}
     >
+      {me && (
+        <div className="cosmic-comment__votes">
+          <button type="button" className={`cosmic-comment__vote${comment.my_vote === 'boost' ? ' cosmic-comment__vote--active' : ''}`} onClick={() => vote('boost')} disabled={busy}>
+            <ChevronUpIcon className="h-4 w-4" />
+          </button>
+          <span className={`cosmic-comment__score${(comment.vote_score ?? 0) > 0 ? ' cosmic-comment__score--up' : (comment.vote_score ?? 0) < 0 ? ' cosmic-comment__score--down' : ''}`}>
+            {comment.vote_score ?? 0}
+          </span>
+          <button type="button" className={`cosmic-comment__vote${comment.my_vote === 'dim' ? ' cosmic-comment__vote--active-dim' : ''}`} onClick={() => vote('dim')} disabled={busy}>
+            <ChevronDownIcon className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
       <div className="reel-comments-sheet__item-head">
-        <strong>@{reelAuthorName(comment.user)}</strong>
+        <span className="reel-comments-sheet__item-head-left">
+          <strong>@{reelAuthorName(comment.user)}</strong>
+          {comment.is_pinned && (
+            <span className="reel-comments-sheet__pinned-badge">
+              <MapPinSolid className="h-3 w-3" /> {comment.pin_order ? `#${comment.pin_order}` : t('reels.pinned')}
+            </span>
+          )}
+          {comment.sparked_by_author && (
+            <span className="reel-comments-sheet__pinned-badge text-cyan-400">
+              <SparklesIcon className="h-3 w-3" /> {t('comments.sparked')}
+            </span>
+          )}
+        </span>
         <span className="reel-comments-sheet__time">
           <RelativeTime date={comment.created_at} className="reel-comment__time block" />
         </span>
@@ -187,10 +275,40 @@ export default function ReelCommentRow({
         )}
       </div>
 
+      {actionError && (
+        <p className="reel-comments-sheet__time" style={{ color: '#f87171' }}>{actionError}</p>
+      )}
+
       <div className="reel-comments-sheet__actions">
-        {!isReply && onReply && !editing && (
+        {onReply && !editing && (
           <button type="button" className="reel-comments-sheet__reply-btn" onClick={() => onReply(comment)}>
             {t('reels.reply')}
+          </button>
+        )}
+        {canPin && !editing && (
+          <button
+            type="button"
+            className="reel-comments-sheet__action-icon"
+            onClick={togglePin}
+            title={comment.is_pinned ? t('reels.unpinComment') : t('reels.pinComment')}
+            disabled={busy}
+          >
+            {comment.is_pinned ? (
+              <MapPinSolid className="h-4 w-4" />
+            ) : (
+              <MapPinIcon className="h-4 w-4" />
+            )}
+          </button>
+        )}
+        {canPin && !editing && (
+          <button
+            type="button"
+            className="reel-comments-sheet__action-icon"
+            onClick={toggleSpark}
+            title={comment.sparked_by_author ? t('comments.unspark') : t('comments.spark')}
+            disabled={busy}
+          >
+            <SparklesIcon className={`h-4 w-4${comment.sparked_by_author ? ' text-cyan-400' : ''}`} />
           </button>
         )}
         {isOwner && !editing && (
@@ -234,13 +352,16 @@ export default function ReelCommentRow({
             <ReelCommentRow
               key={r.id}
               reelId={reelId}
+              reelOwnerId={reelOwnerId}
               comment={r}
               isReply
+              onReply={onReply}
               onChanged={onChanged}
             />
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }

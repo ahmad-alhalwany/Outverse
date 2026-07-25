@@ -57,7 +57,7 @@ export default function AdminChatPage() {
           <a
             href="http://127.0.0.1:8000/admin/"
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="text-vault hover:underline"
           >
             Django admin

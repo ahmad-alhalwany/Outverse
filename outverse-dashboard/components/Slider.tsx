@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -25,11 +26,14 @@ export default function Slider({ images, className = '' }: SliderProps) {
           className="rounded-2xl shadow-2xl border-4 border-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 p-1 bg-black/60"
           style={{ boxShadow: '0 0 32px 8px #7f5fff55, 0 0 0 4px #fff3' }}
         >
-          <img
+          <Image
             src={images[imgIdx]}
             alt={`slider-img-${imgIdx}`}
+            width={560}
+            height={320}
             className="rounded-xl w-full object-cover max-h-80 transition-all duration-500"
             style={{ filter: 'drop-shadow(0 0 16px #a5b4fc)' }}
+            unoptimized
           />
         </motion.div>
       </AnimatePresence>

@@ -2,19 +2,58 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import CosmicVideoPlayer from './CosmicVideoPlayer';
-import { apiFetch } from '@/lib/api';
-import { STORIES_API, mapStoryFromApi, groupStoriesByUser, type StoryItem, type StoryRing } from '@/lib/storyUtils';
+import { apiFetchJson } from '@/lib/api';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
+import { useLocale } from '@/components/LocaleProvider';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
+import {
+  fetchStoryRings,
+  trackStoryView,
+  reactToStory,
+  replyToStory,
+  deleteStory,
+  fetchStoryViewers,
+  muteStoryUser,
+  saveStoryToConstellation,
+  submitPollVote,
+  submitQuestionResponse,
+  fetchQuestionResponses,
+  type StoryItem,
+  type StoryRing,
+  type StoryQuestionResponseItem,
+  type PollResults,
+} from '@/lib/storyUtils';
 import { StorySegmentProgress } from './stories/StorySegmentProgress';
 import StoryRingAvatar from './stories/StoryRingAvatar';
-import { XMarkIcon, ChevronLeftIcon, ChevronRightIcon, EyeIcon, PauseIcon } from '@heroicons/react/24/solid';
+import StoryOverlaysLayer from './stories/StoryOverlaysLayer';
+import { AddStoryModal } from './stories/StoryComposer';
+import { filterCss, backgroundCss, moodAuraCss, formatCountdown } from '@/lib/storyStudio';
+import PostReactions from './PostReactions';
+import { formatRelativeTime } from '@/utils/dateFormatter';
+import { EMOJI_BY_REACTION_TYPE, REACTION_TYPE_BY_EMOJI, countsToEmojiMap, type ReactionType } from '@/lib/reactions';
+import {
+  XMarkIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  EyeIcon,
+  PauseIcon,
+  TrashIcon,
+  PaperAirplaneIcon,
+  EllipsisHorizontalIcon,
+  ArrowDownTrayIcon,
+  FlagIcon,
+  SpeakerXMarkIcon,
+  SparklesIcon,
+  LockClosedIcon,
+  MapPinIcon,
+} from '@heroicons/react/24/solid';
 
 const SIDEBAR_WIDTH = 80;
 const VISIBLE_STORIES = 4;
 const STAR_COUNT = 36;
 const SWITCH_SOUND_URL = 'https://cdn.pixabay.com/audio/2022/07/26/audio_124bfae5b2.mp3'; // Example short UI sound
-
-const API_URL = STORIES_API;
 
 function StarfieldBG() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -210,7 +249,48 @@ function OrbitingPlanetTimer({ progress, size = 64 }: { progress: number, size?:
   );
 }
 
-export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }: { story: any, onClose: () => void, onPrev: () => void, onNext: () => void, hasPrev: boolean, hasNext: boolean }) {
+export function StoryModal({
+  story,
+  onClose,
+  onPrev,
+  onNext,
+  hasPrev,
+  hasNext,
+  onDeleted,
+  onMuted,
+  onUnlocked,
+}: {
+  story: any
+  onClose: () => void
+  onPrev: () => void
+  onNext: () => void
+  hasPrev: boolean
+  hasNext: boolean
+  onDeleted?: (storyId: number) => void
+  onMuted?: () => void
+  onUnlocked?: () => void
+}) {
+  const { t } = useLocale();
+  const me = useAuthUser();
+  const confirm = useConfirm();
+  const isOwner = !!me && me.id === (story.userId ?? story.user_id ?? story.user?.id);
+  const [myReaction, setMyReaction] = useState<string | null>(story.myReaction ?? null);
+  const [reactionCounts, setReactionCounts] = useState<Record<string, number>>(story.reactionCounts ?? {});
+  const [replyText, setReplyText] = useState('');
+  const [replySent, setReplySent] = useState(false);
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
+  const [savedToast, setSavedToast] = useState('');
+  const [lockCountdown, setLockCountdown] = useState<number>(story.unlocksIn ?? 0);
+  const [echoes, setEchoes] = useState<{ id: string; emoji: string }[]>([]);
+  const echoBaselineRef = useRef<Record<string, number>>(story.reactionCounts ?? {});
+  const [pollResults, setPollResults] = useState<PollResults>(story.pollResults ?? {});
+  const [questionResponseCounts, setQuestionResponseCounts] = useState<Record<string, number>>(story.questionResponseCounts ?? {});
+  const [openResponsesOverlayId, setOpenResponsesOverlayId] = useState<string | null>(null);
+  const [questionResponses, setQuestionResponses] = useState<StoryQuestionResponseItem[]>([]);
+  const [viewers, setViewers] = useState<{ viewer: { id: number; username: string; avatar: string | null } }[]>([]);
+  const [spotlightSubmitting, setSpotlightSubmitting] = useState(false);
   const [animating, setAnimating] = useState(false);
   const [direction, setDirection] = useState<'left' | 'right' | null>(null);
   const [progress, setProgress] = useState(0); // 0 to 1
@@ -237,6 +317,7 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
   const isImage = currentMedia?.type === 'image';
   const isTextOnly = allMedia.length === 0;
   const hasMultipleMedia = allMedia.length > 1;
+  const hasDesign = (story.overlays?.length ?? 0) > 0 || (story.drawing?.length ?? 0) > 0;
 
   let duration = 15000; // 15 seconds for text
   if (isImage) duration = 15000; // 15 seconds for images
@@ -257,6 +338,13 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
       setPauseStartTime(null);
       setElapsedBeforePause(0);
       startTimeRef.current = 0;
+      durationRef.current = 0;
+      setMyReaction(story.myReaction ?? null);
+      setReactionCounts(story.reactionCounts ?? {});
+      setReplyText('');
+      setReplySent(false);
+      setViewersOpen(false);
+      setViewers([]);
       if (audioRef.current) {
         audioRef.current.currentTime = 0;
         audioRef.current.play();
@@ -280,16 +368,38 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
     }
   }, [allMedia.length, hasNext, mediaIdx, onClose, onNext]);
 
+  // Resets playback refs whenever the media kind or index changes — this must
+  // run before the progress-timer effect below (both fire on mount too, and
+  // React runs effects in declaration order), otherwise it clobbers
+  // startTimeRef back to 0 right after the timer effect seeds it, making the
+  // next tick compute `Date.now() - 0` and instantly advance the story.
+  useEffect(() => {
+    if (isVideo) {
+      setTimerActive(false);
+      setProgress(0);
+    } else {
+      setTimerActive(true);
+      setProgress(0);
+    }
+    setIsPaused(false);
+    setPauseStartTime(null);
+    setElapsedBeforePause(0);
+    startTimeRef.current = 0;
+    if (!isVideo) durationRef.current = 0;
+  }, [isVideo, mediaIdx]);
+
   useEffect(() => {
     if (isVideo) return;
     if (!timerActive || isPaused) return;
-    if (startTimeRef.current === 0) {
-      startTimeRef.current = Date.now();
-    }
+    // Captured once per effect run so a later effect resetting startTimeRef
+    // (e.g. the isVideo/mediaIdx reset above, which also fires on mount) can't
+    // make a delayed tick compute `Date.now() - 0` and instantly advance.
+    const localStart = startTimeRef.current || Date.now();
+    startTimeRef.current = localStart;
     const localDuration = durationRef.current || duration;
 
     function tick() {
-      const elapsed = Date.now() - startTimeRef.current;
+      const elapsed = Date.now() - localStart;
       const progressValue = Math.min(elapsed / localDuration, 1);
       requestAnimationFrame(() => {
         setProgress(progressValue);
@@ -343,20 +453,6 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
       videoElement.removeEventListener('play', handlePlay);
     };
   }, [advanceStory, isPaused, isVideo]);
-
-  useEffect(() => {
-    if (isVideo) {
-      setTimerActive(false);
-      setProgress(0);
-    } else {
-      setTimerActive(true);
-      setProgress(0);
-    }
-    setIsPaused(false);
-    setPauseStartTime(null);
-    setElapsedBeforePause(0);
-    startTimeRef.current = 0;
-  }, [isVideo, mediaIdx]);
 
   // إضافة تحسين للتايمر الكوني
   const normalizedProgress = Math.max(0, Math.min(1, progress)); // ضمان أن القيمة من 0 إلى 1
@@ -436,11 +532,225 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
     }
   };
 
+  const handleReact = async (emoji: string) => {
+    const type = REACTION_TYPE_BY_EMOJI[emoji];
+    if (!type) return;
+    const next = myReaction === type ? null : type;
+    setMyReaction(next);
+    const data = await reactToStory(story.id, next);
+    if (data) {
+      setMyReaction(data.my_reaction);
+      setReactionCounts(data.reaction_counts || {});
+    }
+  };
+
+  const handleReply = async () => {
+    if (!replyText.trim()) return;
+    try {
+      await replyToStory(story.id, replyText.trim());
+      const peerId = story.userId ?? story.user_id ?? story.user?.id;
+      if (peerId) {
+        await apiFetchJson('chat/send/', {
+          method: 'POST',
+          json: {
+            peer_id: peerId,
+            text: `Replied to your story: ${replyText.trim()}`,
+          },
+        });
+      }
+      setReplyText('');
+      setReplySent(true);
+      setTimeout(() => setReplySent(false), 2200);
+    } catch {
+      setSavedToast('Could not send your reply.');
+      setTimeout(() => setSavedToast(''), 2200);
+    }
+  };
+
+  const handleDelete = async () => {
+    setMenuOpen(false);
+    if (!(await confirm('Delete this story?', { danger: true, confirmLabel: 'Delete' }))) return;
+    const ok = await deleteStory(story.id);
+    if (ok) {
+      onDeleted?.(story.id);
+      onClose();
+    } else {
+      setSavedToast('Could not delete this story.');
+      setTimeout(() => setSavedToast(''), 2200);
+    }
+  };
+
+  const handleDownload = () => {
+    setMenuOpen(false);
+    if (!currentMedia?.url) return;
+    const a = document.createElement('a');
+    a.href = currentMedia.url;
+    a.download = `story-${story.id}`;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.click();
+  };
+
+  const handleReport = async () => {
+    setMenuOpen(false);
+    if (!me || !(await confirm(`Report ${displayName}'s story to moderators?`, { confirmLabel: 'Report' }))) return;
+    try {
+      await apiFetchJson('moderation/flagged/', {
+        method: 'POST',
+        json: {
+          type: 'story',
+          content: `story:${story.id} @${displayName}: ${(story.text || '').slice(0, 200)}`,
+          reporter: me.username,
+        },
+      });
+      setReportSent(true);
+      setTimeout(() => setReportSent(false), 2200);
+    } catch {
+      setSavedToast('Could not submit the report.');
+      setTimeout(() => setSavedToast(''), 2200);
+    }
+  };
+
+  const handleMute = () => {
+    setMenuOpen(false);
+    const uid = story.userId ?? story.user_id ?? story.user?.id;
+    if (!uid) return;
+    muteStoryUser(uid);
+    onMuted?.();
+    onClose();
+  };
+
+  const handleSaveToConstellation = async () => {
+    setMenuOpen(false);
+    const result = await saveStoryToConstellation(story.id);
+    if (result) {
+      setSavedToast(`Saved to “${result.title}”`);
+    } else {
+      setSavedToast('Could not save this story.');
+    }
+    setTimeout(() => setSavedToast(''), 2200);
+  };
+
+  const handleSubmitSpotlight = async () => {
+    setMenuOpen(false);
+    if (spotlightSubmitting) return;
+    setSpotlightSubmitting(true);
+    try {
+      const res = await apiFetchJson(`stories/${story.id}/submit_spotlight/`, { method: 'POST' });
+      if (!res.ok) throw new Error('failed');
+      setSavedToast('Submitted to Spotlight.');
+    } catch {
+      setSavedToast('Could not submit to Spotlight.');
+    } finally {
+      setSpotlightSubmitting(false);
+      setTimeout(() => setSavedToast(''), 2200);
+    }
+  };
+
+  const handleVote = async (overlayId: string, optionIndex: number) => {
+    // Optimistic update so the tap feels instant.
+    setPollResults((prev) => {
+      const cur = prev[overlayId] ?? { counts: {}, total: 0, my_vote: null };
+      const counts = { ...cur.counts };
+      const prevVote = cur.my_vote;
+      if (prevVote !== null && prevVote !== undefined) {
+        counts[String(prevVote)] = Math.max(0, (counts[String(prevVote)] ?? 0) - 1);
+      }
+      counts[String(optionIndex)] = (counts[String(optionIndex)] ?? 0) + 1;
+      const total = prevVote === null || prevVote === undefined ? cur.total + 1 : cur.total;
+      return { ...prev, [overlayId]: { counts, total, my_vote: optionIndex } };
+    });
+    const result = await submitPollVote(story.id, overlayId, optionIndex);
+    if (result) {
+      setPollResults((prev) => ({ ...prev, [overlayId]: result }));
+    }
+  };
+
+  const handleSubmitAnswer = (overlayId: string, text: string) => {
+    submitQuestionResponse(story.id, overlayId, text);
+  };
+
+  const handleOpenResponses = async (overlayId: string) => {
+    setOpenResponsesOverlayId(overlayId);
+    const rows = await fetchQuestionResponses(story.id, overlayId);
+    setQuestionResponses(rows);
+  };
+
+  // Time Capsule: tick the countdown once a second while sealed.
+  useEffect(() => {
+    setLockCountdown(story.unlocksIn ?? 0);
+    if (!story.isLocked) return;
+    const id = setInterval(() => setLockCountdown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [story.id, story.isLocked, story.unlocksIn]);
+
+  useEffect(() => {
+    if (!story.isLocked || lockCountdown > 0) return;
+    onUnlocked?.();
+  }, [lockCountdown, story.isLocked, onUnlocked]);
+
+  // Reset poll/question local state whenever the displayed story changes.
+  useEffect(() => {
+    setPollResults(story.pollResults ?? {});
+    setQuestionResponseCounts(story.questionResponseCounts ?? {});
+    setOpenResponsesOverlayId(null);
+    setQuestionResponses([]);
+  }, [story.id]);
+
+  // Story Echo: poll reaction counts and spawn anonymized floating emoji
+  // bubbles for whatever changed since the last check — a light-weight
+  // "live" communal feel without needing websockets.
+  useEffect(() => {
+    echoBaselineRef.current = story.reactionCounts ?? {};
+    if (story.isLocked) return;
+    const poll = async () => {
+      try {
+        const res = await apiFetchJson(`stories/${story.id}/`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const counts: Record<string, number> = data.reaction_counts || {};
+        const spawned: { id: string; emoji: string }[] = [];
+        for (const [type, count] of Object.entries(counts)) {
+          const prev = echoBaselineRef.current[type] || 0;
+          const delta = count - prev;
+          if (delta > 0) {
+            const emoji = EMOJI_BY_REACTION_TYPE[type as ReactionType] || '✨';
+            for (let i = 0; i < Math.min(delta, 3); i++) {
+              spawned.push({ id: `${Date.now()}-${type}-${i}-${Math.random().toString(36).slice(2, 6)}`, emoji });
+            }
+          }
+        }
+        echoBaselineRef.current = counts;
+        if (spawned.length) {
+          setEchoes((cur) => [...cur, ...spawned]);
+          spawned.forEach((e) => {
+            setTimeout(() => setEchoes((cur) => cur.filter((x) => x.id !== e.id)), 2600);
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    const id = setInterval(poll, 4000);
+    return () => clearInterval(id);
+  }, [story.id, story.isLocked]);
+
+  const toggleViewers = async () => {
+    if (viewersOpen) {
+      setViewersOpen(false);
+      return;
+    }
+    setViewersOpen(true);
+    const rows = await fetchStoryViewers(story.id);
+    setViewers(rows);
+  };
+
   if (!story) return null;
 
   const segmentCount = Math.max(allMedia.length, 1);
   const displayName = story.name || story.user?.name || 'Story';
   const avatarSrc = story.avatar || story.user?.avatar || '';
+  const relativeTime = story.createdAt ? formatRelativeTime(story.createdAt) : '';
 
   return (
     <div className="story-viewer-backdrop" role="dialog" aria-modal="true" aria-label="Story viewer">
@@ -472,34 +782,177 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
           />
 
           <div className="story-viewer-header">
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div className="story-viewer-user min-w-0 flex-1">
               {avatarSrc ? (
-                <Image src={avatarSrc} alt={`${displayName} avatar`} width={40} height={40} className="story-viewer-avatar" unoptimized />
+                <Image src={avatarSrc} alt={`${displayName} avatar`} width={38} height={38} className="story-viewer-avatar" unoptimized />
               ) : (
                 <span className="story-viewer-avatar story-viewer-avatar--fallback">
                   {displayName.slice(0, 2).toUpperCase()}
                 </span>
               )}
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{displayName}</p>
-                {(story.views ?? 0) > 0 && (
-                  <p className="text-[11px] text-white/70 flex items-center gap-1">
-                    <EyeIcon className="h-3.5 w-3.5" />
-                    {(story.views ?? 0).toLocaleString()} views
-                  </p>
-                )}
+                <p className="story-viewer-name truncate">{displayName}</p>
+                <div className="story-viewer-subline">
+                  {relativeTime && <span>{relativeTime}</span>}
+                  {isOwner ? (
+                    (story.viewerCount ?? story.views ?? 0) > 0 && (
+                      <>
+                        {relativeTime && <span aria-hidden>·</span>}
+                        <button type="button" onClick={toggleViewers} className="story-viewer-subline-btn">
+                          <EyeIcon className="h-3.5 w-3.5" />
+                          {(story.viewerCount ?? story.views ?? 0).toLocaleString()}
+                        </button>
+                      </>
+                    )
+                  ) : (
+                    (story.views ?? 0) > 0 && (
+                      <>
+                        {relativeTime && <span aria-hidden>·</span>}
+                        <span className="story-viewer-subline-btn">
+                          <EyeIcon className="h-3.5 w-3.5" />
+                          {(story.views ?? 0).toLocaleString()}
+                        </span>
+                      </>
+                    )
+                  )}
+                  {story.locationName && (
+                    <>
+                      {(relativeTime || (story.views ?? 0) > 0) && <span aria-hidden>·</span>}
+                      <span className="story-viewer-subline-btn">
+                        <MapPinIcon className="h-3.5 w-3.5" />
+                        {story.locationName}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-            <button type="button" onClick={onClose} className="story-viewer-close" aria-label="Close">
-              <XMarkIcon className="h-5 w-5" />
-            </button>
+            <div className="story-viewer-actions">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
+                  className="story-viewer-icon-btn"
+                  aria-label="More options"
+                >
+                  <EllipsisHorizontalIcon className="h-5 w-5" />
+                </button>
+                {menuOpen && (
+                  <div className="story-viewer-menu">
+                    {isOwner ? (
+                      <>
+                        {currentMedia?.url && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={handleDownload}
+                            className="story-viewer-menu-item"
+                          >
+                            <ArrowDownTrayIcon className="h-4 w-4" /> Download
+                          </button>
+                        )}
+                        {!story.constellation && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={handleSaveToConstellation}
+                            className="story-viewer-menu-item"
+                          >
+                            <SparklesIcon className="h-4 w-4" /> Save to Constellation
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => void handleSubmitSpotlight()}
+                          disabled={spotlightSubmitting}
+                          className="story-viewer-menu-item"
+                        >
+                          <SparklesIcon className="h-4 w-4" /> {spotlightSubmitting ? 'Submitting...' : 'Submit to Spotlight'}
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={handleDelete}
+                          className="story-viewer-menu-item story-viewer-menu-item--danger"
+                        >
+                          <TrashIcon className="h-4 w-4" /> Delete story
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={handleMute}
+                          className="story-viewer-menu-item"
+                        >
+                          <SpeakerXMarkIcon className="h-4 w-4" /> Mute {displayName}
+                        </button>
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={handleReport}
+                          className="story-viewer-menu-item story-viewer-menu-item--danger"
+                        >
+                          <FlagIcon className="h-4 w-4" /> Report
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button type="button" onClick={onClose} className="story-viewer-icon-btn" aria-label="Close">
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
           </div>
+          {reportSent && <p className="story-viewer-toast">Reported — thanks for helping keep Cosmory safe.</p>}
+          {savedToast && <p className="story-viewer-toast">{savedToast}</p>}
+
+          {isOwner && viewersOpen && (
+            <div className="story-viewer-viewers-panel">
+              {viewers.length === 0 ? (
+                <p className="text-xs text-white/60 px-1 py-2">No views yet.</p>
+              ) : (
+                viewers.map((v) => (
+                  <div key={v.viewer.id} className="flex items-center gap-2 px-1 py-1.5">
+                    {v.viewer.avatar ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={v.viewer.avatar} alt={v.viewer.username} className="h-6 w-6 rounded-full object-cover" />
+                    ) : (
+                      <span className="h-6 w-6 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-white">
+                        {v.viewer.username.slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="text-xs text-white/85">@{v.viewer.username}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div className="story-viewer-body relative">
-          {isTextOnly ? (
-            <div className="story-viewer-text-only">
-              <p>{story.text}</p>
+          {!story.isLocked && story.mood && (
+            <div className="story-viewer-mood-aura" style={{ background: moodAuraCss(story.mood) }} aria-hidden />
+          )}
+
+          {story.isLocked ? (
+            <div className="story-viewer-locked">
+              <span className="story-viewer-locked-icon">
+                <LockClosedIcon className="h-8 w-8" />
+              </span>
+              <p className="story-viewer-locked-title">Time Capsule</p>
+              <p className="story-viewer-locked-sub">
+                {isOwner ? 'Sealed — even you have to wait.' : `Sealed by ${displayName}.`}
+              </p>
+              <p className="story-viewer-locked-countdown">Opens in {formatCountdown(lockCountdown)}</p>
+            </div>
+          ) : isTextOnly ? (
+            <div className="story-viewer-text-only" style={{ background: backgroundCss(story.backgroundStyle) }}>
+              {!hasDesign && <p>{story.text}</p>}
             </div>
           ) : allMedia.length > 0 ? (
             <div className="story-viewer-media">
@@ -508,21 +961,83 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
                   ref={videoRef}
                   src={currentMedia.url}
                   className="w-full h-full object-cover"
+                  style={{ filter: filterCss(story.filterStyle) }}
                   autoPlay
                   muted
                   playsInline
                   onLoadedMetadata={handleVideoMeta}
                 />
               ) : (
-                <Image src={currentMedia.url} alt={story.text ? `Story media from ${displayName}` : `${displayName} story media`} fill className="w-full h-full object-cover" unoptimized />
+                <Image
+                  src={currentMedia.url}
+                  alt={story.text ? `Story media from ${displayName}` : `${displayName} story media`}
+                  fill
+                  className="w-full h-full object-cover"
+                  style={{ filter: filterCss(story.filterStyle) }}
+                  unoptimized
+                />
               )}
               <div className="story-viewer-vignette" />
             </div>
           ) : null}
 
-          {story.text && !isTextOnly && (
+          {hasDesign && (
+            <StoryOverlaysLayer
+              overlays={story.overlays || []}
+              drawing={story.drawing || []}
+              interactive
+              isOwner={isOwner}
+              pollResults={pollResults}
+              questionResponseCounts={questionResponseCounts}
+              onVote={handleVote}
+              onSubmitAnswer={handleSubmitAnswer}
+              onOpenResponses={handleOpenResponses}
+            />
+          )}
+
+          {story.text && !isTextOnly && !hasDesign && (
             <div className="story-viewer-caption">
               <p>{story.text}</p>
+            </div>
+          )}
+
+          {story.sharedPost && (
+            <Link
+              href={`/post/${story.sharedPost.id}`}
+              className="story-shared-post-card"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="story-shared-post-icon">📤</span>
+              <div className="min-w-0">
+                <p className="story-shared-post-title">{t('stories.viewPost')}</p>
+                <p className="story-shared-post-sub">@{story.sharedPost.username}</p>
+              </div>
+            </Link>
+          )}
+
+          {openResponsesOverlayId && (
+            <div className="story-question-responses-panel" onClick={(e) => e.stopPropagation()}>
+              <div className="story-question-responses-header">
+                <p>{t('stories.answersTitle')}</p>
+                <button type="button" onClick={() => setOpenResponsesOverlayId(null)} aria-label={t('stories.closeAnswers')}>
+                  <XMarkIcon className="h-4 w-4" />
+                </button>
+              </div>
+              {questionResponses.length === 0 ? (
+                <p className="story-question-responses-empty">{t('stories.answersEmpty')}</p>
+              ) : (
+                questionResponses.map((r) => (
+                  <div key={r.id} className="story-question-responses-row">
+                    <span className="story-question-responses-avatar">
+                      {r.responder.username.slice(0, 2).toUpperCase()}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="story-question-responses-username">@{r.responder.username}</p>
+                      <p className="story-question-responses-text">{r.text}</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
@@ -563,7 +1078,56 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
               <PauseIcon className="h-10 w-10 text-white" />
             </div>
           )}
+
+          {echoes.length > 0 && (
+            <div className="story-echo-layer" aria-hidden>
+              {echoes.map((e, i) => (
+                <span
+                  key={e.id}
+                  className="story-echo-bubble"
+                  style={{ left: `${15 + ((i * 23) % 70)}%`, animationDelay: `${(i % 3) * 0.15}s` }}
+                >
+                  {e.emoji}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
+
+        {!isOwner && (
+          <div className="story-viewer-footer" onClick={(e) => e.stopPropagation()}>
+            <PostReactions
+              compact
+              contentType="story"
+              contentId={story.id}
+              onReaction={handleReact}
+              selectedReaction={myReaction ? EMOJI_BY_REACTION_TYPE[myReaction as ReactionType] : undefined}
+              reactionCounts={countsToEmojiMap(reactionCounts)}
+            />
+            <div className="story-viewer-reply-row">
+              <input
+                type="text"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                placeholder={`Reply to ${displayName}…`}
+                className="story-viewer-reply-input"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleReply();
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleReply}
+                className="story-viewer-reply-send"
+                aria-label="Send reply"
+                disabled={!replyText.trim()}
+              >
+                <PaperAirplaneIcon className="h-4 w-4" />
+              </button>
+            </div>
+            {replySent && <p className="story-viewer-reply-sent">Sent!</p>}
+          </div>
+        )}
       </div>
 
       {hasNext && (
@@ -577,100 +1141,7 @@ export function StoryModal({ story, onClose, onPrev, onNext, hasPrev, hasNext }:
   );
 }
 
-export function AddStoryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const [text, setText] = useState('');
-  const [mediaFile, setMediaFile] = useState<File | null>(null);
-  const [mediaPreview, setMediaPreview] = useState('');
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const mediaInputRef = useRef<HTMLInputElement>(null);
-
-  const handleMediaFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (mediaPreview) {
-        URL.revokeObjectURL(mediaPreview);
-      }
-      setMediaFile(file);
-      setMediaPreview(URL.createObjectURL(file));
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (mediaPreview) {
-        URL.revokeObjectURL(mediaPreview);
-      }
-    };
-  }, [mediaPreview]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!text.trim() && !mediaFile) {
-      setError('Please add story text, an image, or a video.');
-      return;
-    }
-    setError('');
-    setSubmitting(true);
-    try {
-      const form = new FormData();
-      if (text.trim()) form.append('text', text.trim());
-      if (mediaFile) {
-        if (mediaFile.type.startsWith('video')) form.append('video', mediaFile);
-        else form.append('image', mediaFile);
-      }
-      const res = await apiFetch('stories/', { method: 'POST', body: form });
-      if (!res.ok) throw new Error('Failed to publish story');
-      onCreated();
-      onClose();
-    } catch {
-      setError('Could not publish story. Try again.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="story-add-backdrop">
-      <form onSubmit={handleSubmit} className="story-add-form">
-        <button onClick={onClose} type="button" className="story-add-close" aria-label="Close">
-          <XMarkIcon className="h-5 w-5" />
-        </button>
-        <h3 className="story-add-title">New cosmic story</h3>
-        <p className="story-add-sub">Share a moment — text, photo, or short video</p>
-        <textarea
-          placeholder="Write something magical… (optional)"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          className="story-add-textarea"
-        />
-        <button type="button" onClick={() => mediaInputRef.current?.click()} className="story-add-media-btn">
-          🎬 Add image or video
-        </button>
-        <input
-          ref={mediaInputRef}
-          type="file"
-          accept="image/*,video/*"
-          className="hidden"
-          onChange={handleMediaFile}
-        />
-        {mediaPreview && (
-          <div className="story-add-preview">
-            {mediaFile?.type.startsWith('video') ? (
-              <video src={mediaPreview} controls className="w-full max-h-40 rounded-lg" />
-            ) : (
-              <Image src={mediaPreview} alt="Story media preview" width={320} height={160} className="w-full max-h-40 rounded-lg object-cover" unoptimized />
-            )}
-          </div>
-        )}
-        {error && <p className="story-add-error">{error}</p>}
-        <button type="submit" disabled={submitting} className="story-add-submit cosmic-btn w-full !py-3 mt-2">
-          {submitting ? 'Launching…' : 'Publish story'}
-        </button>
-      </form>
-    </div>
-  );
-}
+export { AddStoryModal };
 
 export default function StoriesSidebar() {
   const [startIdx, setStartIdx] = useState(0);
@@ -685,15 +1156,14 @@ export default function StoriesSidebar() {
   const fetchStories = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(API_URL);
-      const data = await res.json();
-      const list = Array.isArray(data) ? data : data.results || [];
-      const { rings, flat } = groupStoriesByUser(list.map(mapStoryFromApi));
+      const { rings, flat } = await fetchStoryRings();
       setStoryRings(rings);
       setPlaylist(flat);
     } catch {
-      setStoryRings([]);
-      setPlaylist([]);
+      // Keep whatever was already loaded — this is also called to refresh
+      // after a delete/mute action, and wiping the sidebar to "no stories"
+      // on a failed refresh would be misleading since that action already
+      // succeeded.
     } finally {
       setLoading(false);
     }
@@ -718,10 +1188,6 @@ export default function StoriesSidebar() {
   const handleNext = () => {
     if (hasNext) setShowStory(playlist[currentStoryIdx + 1]);
   };
-
-  const trackStoryView = useCallback((storyId: number) => {
-    fetch(`${API_URL}${storyId}/increment_views/`, { method: 'POST' }).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (showStory?.id) trackStoryView(showStory.id);
@@ -791,6 +1257,9 @@ export default function StoriesSidebar() {
                 count={ring.count}
                 size="lg"
                 isNew={ring.isNew}
+                mood={ring.mood}
+                isLocked={ring.isLocked}
+                audience={ring.audience}
                 onClick={() => openRing(ring)}
               />
               {hovered === ring.userId && (
@@ -887,6 +1356,8 @@ export default function StoriesSidebar() {
           onNext={handleNext}
           hasPrev={hasPrev}
           hasNext={hasNext}
+          onDeleted={() => fetchStories()}
+          onMuted={() => fetchStories()}
         />
       )}
       {/* Add story modal */}

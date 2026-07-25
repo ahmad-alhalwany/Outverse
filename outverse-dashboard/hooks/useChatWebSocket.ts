@@ -14,6 +14,9 @@ export type WsChatMessage = {
   attachment_url?: string | null;
   created_at: string;
   is_read?: boolean;
+  edited_at?: string | null;
+  is_deleted?: boolean;
+  expires_at?: string | null;
 };
 
 export type UploadProgress = {
@@ -28,6 +31,8 @@ type Options = {
   onTyping?: (userId: number, isTyping: boolean) => void;
   onConnected?: () => void;
   onReadReceipt?: (messageId: number) => void;
+  onEdited?: (msg: WsChatMessage) => void;
+  onDeleted?: (messageId: number) => void;
 };
 
 export function useChatWebSocket({
@@ -36,6 +41,8 @@ export function useChatWebSocket({
   onTyping,
   onConnected,
   onReadReceipt,
+  onEdited,
+  onDeleted,
 }: Options) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -44,13 +51,17 @@ export function useChatWebSocket({
   const onTypingRef = useRef(onTyping);
   const onConnectedRef = useRef(onConnected);
   const onReadReceiptRef = useRef(onReadReceipt);
+  const onEditedRef = useRef(onEdited);
+  const onDeletedRef = useRef(onDeleted);
 
   useEffect(() => {
     onMessageRef.current = onMessage;
     onTypingRef.current = onTyping;
     onConnectedRef.current = onConnected;
     onReadReceiptRef.current = onReadReceipt;
-  }, [onMessage, onTyping, onConnected, onReadReceipt]);
+    onEditedRef.current = onEdited;
+    onDeletedRef.current = onDeleted;
+  }, [onMessage, onTyping, onConnected, onReadReceipt, onEdited, onDeleted]);
 
   useEffect(() => {
     if (!conversationId) {
@@ -87,6 +98,10 @@ export function useChatWebSocket({
           const data = JSON.parse(ev.data);
           if (data.type === 'chat.message') {
             onMessageRef.current(data as WsChatMessage);
+          } else if (data.type === 'chat.message_edited') {
+            onEditedRef.current?.(data as WsChatMessage);
+          } else if (data.type === 'chat.message_deleted') {
+            onDeletedRef.current?.(data.id);
           } else if (data.type === 'chat.connected') {
             onConnectedRef.current?.();
           } else if (data.type === 'chat.typing') {
@@ -109,10 +124,10 @@ export function useChatWebSocket({
     };
   }, [conversationId]);
 
-  const sendMessage = useCallback((text: string) => {
+  const sendMessage = useCallback((text: string, expiresInSeconds?: number | null) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-    ws.send(JSON.stringify({ type: 'chat.send', text }));
+    ws.send(JSON.stringify({ type: 'chat.send', text, expires_in_seconds: expiresInSeconds || undefined }));
     return true;
   }, []);
 

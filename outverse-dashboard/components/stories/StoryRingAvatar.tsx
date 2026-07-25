@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { moodRingCss } from '@/lib/storyStudio';
 
 type Props = {
   name: string;
@@ -10,6 +11,9 @@ type Props = {
   isNew?: boolean;
   onClick?: () => void;
   layout?: 'vertical' | 'horizontal';
+  mood?: string;
+  isLocked?: boolean;
+  audience?: string;
 };
 
 const SIZES = {
@@ -26,27 +30,38 @@ export default function StoryRingAvatar({
   isNew = true,
   onClick,
   layout = 'vertical',
+  mood,
+  isLocked,
+  audience,
 }: Props) {
   const s = SIZES[size];
   const initials = (name || '?').slice(0, 2).toUpperCase();
   const label = name.split(' ')[0] || name;
+  const isCloseFriends = audience === 'close_friends';
+  // Close-friends audience always wins visually — it's a privacy signal,
+  // like IG's green ring, so it shouldn't be masked by the mood color.
+  const moodRing = isCloseFriends ? null : moodRingCss(mood);
 
   const ring = (
     <motion.div
       whileHover={{ scale: 1.06 }}
       whileTap={{ scale: 0.96 }}
-      className={`story-ring-outer relative rounded-full p-[3px] ${s.ring} ${isNew ? 'story-ring-new' : 'story-ring-seen'}`}
+      className={`story-ring-outer relative rounded-full p-[3px] ${s.ring} ${isNew ? 'story-ring-new' : 'story-ring-seen'}${isCloseFriends ? ' story-ring-close-friends' : ''}`}
+      style={moodRing ? { background: moodRing } : undefined}
     >
       <div
-        className={`story-ring-inner ${s.inner} rounded-full overflow-hidden flex items-center justify-center bg-[#1a1a2e]`}
+        className={`story-ring-inner ${s.inner} rounded-full overflow-hidden flex items-center justify-center bg-surface`}
       >
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatar} alt={name} className="w-full h-full object-cover" />
+          <img src={avatar} alt={name} className={`w-full h-full object-cover${isLocked ? ' story-ring-locked-media' : ''}`} />
         ) : (
-          <span className="w-full h-full flex items-center justify-center text-sm font-bold text-white bg-gradient-to-br from-vault via-bazaar to-lab">
+          <span className="w-full h-full flex items-center justify-center text-sm font-bold text-white bg-gradient-to-br from-[#7C3AED] to-[#22D3EE]">
             {initials}
           </span>
+        )}
+        {isLocked && (
+          <span className="story-ring-lock-badge" aria-label="Time capsule — sealed">🔒</span>
         )}
       </div>
       {count > 1 && (

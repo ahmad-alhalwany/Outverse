@@ -128,6 +128,15 @@ export interface AdminFlagged {
   created_at?: string;
 }
 
+export interface AdminVerificationRequest {
+  id: number;
+  user_id: number;
+  username: string;
+  reason: string;
+  links: string;
+  created_at: string;
+}
+
 export interface AdminIdea {
   id: number;
   title: string;

@@ -9,7 +9,7 @@ import { chromium, expect, FullConfig } from '@playwright/test';
 const API_URL = (process.env.E2E_API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
 const BASE_URL = (process.env.E2E_BASE_URL || 'http://localhost:3000').replace(/\/$/, '');
 const USERNAME = process.env.E2E_USERNAME || 'e2e_test_user';
-const PASSWORD = process.env.E2E_PASSWORD || 'OutverseE2E!2026';
+const PASSWORD = process.env.E2E_PASSWORD || 'CosmoryE2E!2026';
 
 async function ensureUser() {
   const res = await fetch(`${API_URL}/api/users/register/`, {
@@ -33,6 +33,8 @@ async function ensureUser() {
 
 async function globalSetup(config: FullConfig) {
   await ensureUser().catch((err) => {
+    // E2E setup logs are intentional for CI debugging.
+    // eslint-disable-next-line no-console
     console.warn('[e2e setup] User creation skipped or failed:', err.message);
   });
 
@@ -51,7 +53,7 @@ async function globalSetup(config: FullConfig) {
       });
       if (!res.ok) throw new Error(`Login failed: ${res.status}`);
       const data = await res.json();
-      if (data.user) localStorage.setItem('outverse_user', JSON.stringify(data.user));
+      if (data.user) localStorage.setItem('cosmory_user', JSON.stringify(data.user));
     },
     { apiUrl: API_URL, username: USERNAME, password: PASSWORD },
   );

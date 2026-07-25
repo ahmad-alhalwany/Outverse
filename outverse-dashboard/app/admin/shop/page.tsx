@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
-import { deleteShopItem, fetchShopItemsAdmin, saveShopItem } from '@/lib/adminApi';
+import { deleteShopItem, fetchAdminDashboard, fetchShopItemsAdmin, saveShopItem } from '@/lib/adminApi';
 import type { AdminShopItem } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 const EMPTY = {
   name: '',
@@ -17,13 +18,22 @@ const EMPTY = {
 };
 
 export default function AdminShopPage() {
+  const confirm = useConfirm();
   const [items, setItems] = useState<AdminShopItem[]>([]);
+  const [shopStats, setShopStats] = useState<{
+    orders_today: number;
+    revenue_today: number;
+    total_orders: number;
+  } | null>(null);
   const [form, setForm] = useState(EMPTY);
   const [editId, setEditId] = useState<number | null>(null);
   const [msg, setMsg] = useState('');
 
   const load = useCallback(() => {
     fetchShopItemsAdmin().then(setItems).catch(() => setMsg('Failed to load shop'));
+    fetchAdminDashboard()
+      .then((data) => setShopStats(data.shop))
+      .catch(() => setShopStats(null));
   }, []);
 
   useEffect(() => {
@@ -63,7 +73,7 @@ export default function AdminShopPage() {
   };
 
   const remove = async (id: number) => {
-    if (!window.confirm('Delete this product?')) return;
+    if (!(await confirm('Delete this product?', { danger: true, confirmLabel: 'Delete' }))) return;
     const res = await deleteShopItem(id);
     if (res.ok) {
       setMsg('Product removed.');
@@ -86,6 +96,18 @@ export default function AdminShopPage() {
       {msg && <div className="admin-alert admin-alert--success">{msg}</div>}
 
       <div className="admin-kpi-grid">
+        <div className="admin-kpi admin-kpi--warm">
+          <div className="admin-kpi__label">Revenue today</div>
+          <div className="admin-kpi__value">{shopStats?.revenue_today ?? 0} ✨</div>
+        </div>
+        <div className="admin-kpi admin-kpi--warm">
+          <div className="admin-kpi__label">Orders today</div>
+          <div className="admin-kpi__value">{shopStats?.orders_today ?? 0}</div>
+        </div>
+        <div className="admin-kpi admin-kpi--warm">
+          <div className="admin-kpi__label">Total orders</div>
+          <div className="admin-kpi__value">{shopStats?.total_orders ?? 0}</div>
+        </div>
         <div className="admin-kpi admin-kpi--warm">
           <div className="admin-kpi__label">Active products</div>
           <div className="admin-kpi__value">{items.filter((i) => i.is_available).length}</div>

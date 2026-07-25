@@ -8,16 +8,18 @@ import {
   FireIcon,
   LightBulbIcon,
   MagnifyingGlassIcon,
+  ShoppingBagIcon,
   Squares2X2Icon,
   SunIcon,
   UserIcon,
   ViewColumnsIcon,
+  PlayIcon,
 } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import { useTheme } from '@/components/ThemeProvider';
 import { apiFetch, mediaUrl } from '@/lib/api';
 
-type SearchTab = 'users' | 'ideas' | 'stories' | 'challenges';
+type SearchTab = 'users' | 'ideas' | 'stories' | 'challenges' | 'reels' | 'shop';
 type MoodFilter = 'bright' | 'calm' | 'creative' | 'energetic';
 type ViewMode = 'grid' | 'list';
 
@@ -29,6 +31,7 @@ type SearchResults = {
   stories: { id: number; title: string; description: string; owner: string }[];
   bottles: { id: number; message: string; emotion_type: string; sender: string }[];
   shop: { id: number; name: string; description: string; creator: string; price: number }[];
+  challenges: { id: number; title: string; description: string; type: string }[];
 };
 
 type ExploreCard = {
@@ -52,31 +55,32 @@ const EMPTY_RESULTS: SearchResults = {
   stories: [],
   bottles: [],
   shop: [],
+  challenges: [],
 };
 
 const PALETTES = {
   light: {
-    page: '#FFF9F6',
+    page: '#F3F0FC',
     card: '#FFFFFF',
-    cardSoft: '#FFF4EE',
-    border: 'rgba(160, 86, 59, 0.14)',
-    text: '#241814',
-    textMuted: '#7E655B',
-    accent: '#A0563B',
-    accentSoft: '#F4DDD3',
-    accentStrong: '#8E4A31',
-    shadow: '0 18px 40px rgba(160, 86, 59, 0.08)',
+    cardSoft: '#F5F1FE',
+    border: 'rgba(124, 58, 237, 0.16)',
+    text: '#211B3D',
+    textMuted: '#79709E',
+    accent: '#7C3AED',
+    accentSoft: '#EDE4FB',
+    accentStrong: '#5B21B6',
+    shadow: '0 18px 40px rgba(124, 58, 237, 0.10)',
   },
   dark: {
-    page: '#12131F',
-    card: '#1B1D2B',
-    cardSoft: '#23263A',
+    page: '#12101F',
+    card: '#1B1836',
+    cardSoft: '#231F3F',
     border: 'rgba(255, 255, 255, 0.08)',
-    text: '#F8F5F2',
-    textMuted: '#B8B2C7',
-    accent: '#E7A98D',
-    accentSoft: '#2D2230',
-    accentStrong: '#F3B79D',
+    text: '#F5F3FF',
+    textMuted: '#B0A6D9',
+    accent: '#C4B5FD',
+    accentSoft: '#2D2450',
+    accentStrong: '#A78BFA',
     shadow: '0 18px 40px rgba(0, 0, 0, 0.28)',
   },
 };
@@ -86,6 +90,8 @@ const SEARCH_TABS: { key: SearchTab; label: string; icon: React.ComponentType<{ 
   { key: 'ideas', label: 'Ideas', icon: LightBulbIcon },
   { key: 'stories', label: 'Stories', icon: BookOpenIcon },
   { key: 'challenges', label: 'Challenges', icon: FireIcon },
+  { key: 'reels', label: 'Signals', icon: PlayIcon },
+  { key: 'shop', label: 'Shop', icon: ShoppingBagIcon },
 ];
 
 const MOOD_FILTERS: { key: MoodFilter; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -171,7 +177,7 @@ const EXPLORE_FALLBACKS: ExploreCard[] = [
 ];
 
 function buildDynamicCards(results: SearchResults): ExploreCard[] {
-  const userCards: ExploreCard[] = results.users.slice(0, 3).map((user, index) => ({
+  const userCards: ExploreCard[] = results.users.map((user, index) => ({
     id: `user-${user.id}`,
     href: `/profile/${user.id}`,
     title: user.name || `@${user.username}`,
@@ -184,7 +190,7 @@ function buildDynamicCards(results: SearchResults): ExploreCard[] {
     mood: index % 2 === 0 ? 'bright' : 'calm',
   }));
 
-  const ideaCards: ExploreCard[] = results.ideas.slice(0, 3).map((idea, index) => ({
+  const ideaCards: ExploreCard[] = results.ideas.map((idea, index) => ({
     id: `idea-${idea.id}`,
     href: `/bazaar/${idea.id}`,
     title: idea.title,
@@ -197,7 +203,7 @@ function buildDynamicCards(results: SearchResults): ExploreCard[] {
     mood: index % 2 === 0 ? 'creative' : 'bright',
   }));
 
-  const storyCards: ExploreCard[] = results.stories.slice(0, 3).map((story, index) => ({
+  const storyCards: ExploreCard[] = results.stories.map((story, index) => ({
     id: `story-${story.id}`,
     href: `/forge?story=${story.id}`,
     title: story.title,
@@ -210,20 +216,61 @@ function buildDynamicCards(results: SearchResults): ExploreCard[] {
     mood: index % 2 === 0 ? 'calm' : 'creative',
   }));
 
-  const challengeCards: ExploreCard[] = results.posts.slice(0, 3).map((post, index) => ({
-    id: `challenge-${post.id}`,
-    href: `/post/${post.id}`,
-    title: post.snippet || 'Creative Challenge Spotlight',
-    subtitle: `By ${post.author} · Challenges`,
-    description: 'Jump into a fresh prompt, remix the concept, and share your own creative response.',
-    metricLeft: `${2.1 + index * 0.5}k views`,
-    metricRight: `${210 + index * 31} likes`,
-    image: `https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1200&q=80`,
-    tab: 'challenges',
-    mood: index % 2 === 0 ? 'energetic' : 'bright',
+  const challengeCards: ExploreCard[] = (
+    results.challenges?.length
+      ? results.challenges.map((ch, index) => ({
+          id: `challenge-${ch.id}`,
+          href: `/lab?challenge=${ch.id}`,
+          title: ch.title,
+          subtitle: `${ch.type} · Challenges`,
+          description: ch.description,
+          metricLeft: `${2.1 + index * 0.5}k views`,
+          metricRight: `${210 + index * 31} entries`,
+          image: `https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1200&q=80`,
+          tab: 'challenges' as SearchTab,
+          mood: (index % 2 === 0 ? 'energetic' : 'bright') as MoodFilter,
+        }))
+      : results.posts.slice(0, 3).map((post, index) => ({
+          id: `challenge-${post.id}`,
+          href: `/post/${post.id}`,
+          title: post.snippet || 'Creative Challenge Spotlight',
+          subtitle: `By ${post.author} · Posts`,
+          description: 'Jump into a fresh prompt and share your creative response.',
+          metricLeft: `${2.1 + index * 0.5}k views`,
+          metricRight: `${210 + index * 31} likes`,
+          image: `https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&w=1200&q=80`,
+          tab: 'challenges' as SearchTab,
+          mood: (index % 2 === 0 ? 'energetic' : 'bright') as MoodFilter,
+        }))
+  );
+
+  const reelCards: ExploreCard[] = results.reels.map((reel, index) => ({
+    id: `reel-${reel.id}`,
+    href: `/reels?id=${reel.id}`,
+    title: reel.caption || 'Cosmic signal',
+    subtitle: `By ${reel.author} · Signals`,
+    description: reel.tags?.length ? reel.tags.join(', ') : 'Short-form creative signal',
+    metricLeft: `${900 + index * 120} views`,
+    metricRight: `${40 + index * 8} echoes`,
+    image: `https://images.unsplash.com/photo-1611162616475-46b635cb6848?auto=format&fit=crop&w=1200&q=80`,
+    tab: 'reels',
+    mood: index % 2 === 0 ? 'energetic' : 'creative',
   }));
 
-  return [...userCards, ...ideaCards, ...storyCards, ...challengeCards];
+  const shopCards: ExploreCard[] = results.shop.map((item, index) => ({
+    id: `shop-${item.id}`,
+    href: `/shop/${item.id}`,
+    title: item.name,
+    subtitle: `By ${item.creator} · Shop`,
+    description: item.description,
+    metricLeft: `${item.price} ✨`,
+    metricRight: 'Madness Shop',
+    image: `https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80`,
+    tab: 'shop',
+    mood: index % 2 === 0 ? 'bright' : 'calm',
+  }));
+
+  return [...userCards, ...ideaCards, ...storyCards, ...challengeCards, ...reelCards, ...shopCards];
 }
 
 function ExploreCardView({
@@ -274,6 +321,10 @@ function ExploreCardView({
   );
 }
 
+const PAGINATED_CATEGORIES: SearchTab[] = ['users', 'ideas', 'stories', 'challenges', 'reels', 'shop'];
+const INITIAL_CATEGORY_CAP = 5;
+const LOAD_MORE_PAGE_SIZE = 12;
+
 function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -285,6 +336,8 @@ function SearchContent() {
   const [activeMood, setActiveMood] = useState<MoodFilter | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchValue, setSearchValue] = useState(searchParams.get('q')?.trim() ?? '');
+  const [moreAvailable, setMoreAvailable] = useState<Partial<Record<SearchTab, boolean>>>({});
+  const [loadingMore, setLoadingMore] = useState(false);
   const query = searchParams.get('q')?.trim() ?? '';
 
   useEffect(() => {
@@ -294,6 +347,7 @@ function SearchContent() {
   useEffect(() => {
     if (!query) {
       setResults(EMPTY_RESULTS);
+      setMoreAvailable({});
       return;
     }
     let cancelled = false;
@@ -304,7 +358,14 @@ function SearchContent() {
         return (await res.json()) as SearchResults;
       })
       .then((data) => {
-        if (!cancelled) setResults({ ...EMPTY_RESULTS, ...data });
+        if (cancelled) return;
+        const merged = { ...EMPTY_RESULTS, ...data };
+        setResults(merged);
+        const next: Partial<Record<SearchTab, boolean>> = {};
+        PAGINATED_CATEGORIES.forEach((tab) => {
+          next[tab] = (merged[tab as keyof SearchResults]?.length ?? 0) >= INITIAL_CATEGORY_CAP;
+        });
+        setMoreAvailable(next);
       })
       .catch(() => {
         if (!cancelled) setResults(EMPTY_RESULTS);
@@ -316,6 +377,27 @@ function SearchContent() {
       cancelled = true;
     };
   }, [query]);
+
+  async function loadMore() {
+    if (!PAGINATED_CATEGORIES.includes(activeTab) || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const offset = results[activeTab as keyof SearchResults]?.length ?? 0;
+      const res = await apiFetch(
+        `search/?q=${encodeURIComponent(query)}&category=${activeTab}&offset=${offset}&limit=${LOAD_MORE_PAGE_SIZE}`,
+        { cache: 'no-store' },
+      );
+      if (!res.ok) return;
+      const data = (await res.json()) as { results: unknown[]; count: number; has_more: boolean };
+      setResults((prev) => ({
+        ...prev,
+        [activeTab]: [...(prev[activeTab as keyof SearchResults] as unknown[]), ...data.results],
+      }));
+      setMoreAvailable((prev) => ({ ...prev, [activeTab]: data.has_more }));
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const dynamicCards = useMemo(() => buildDynamicCards(results), [results]);
   const cards = dynamicCards.length > 0 ? dynamicCards : EXPLORE_FALLBACKS;
@@ -338,7 +420,8 @@ function SearchContent() {
       results.ideas.length +
       results.stories.length +
       results.bottles.length +
-      results.shop.length,
+      results.shop.length +
+      (results.challenges?.length ?? 0),
     [results],
   );
 
@@ -389,7 +472,7 @@ function SearchContent() {
               if (event.key === 'Enter') submitSearch();
             }}
             placeholder="Search for inspiration..."
-            className="w-full bg-transparent text-sm outline-none placeholder:text-current"
+            className="w-full bg-transparent text-base outline-none placeholder:text-current"
             style={{ color: palette.textMuted }}
           />
         </div>
@@ -499,6 +582,20 @@ function SearchContent() {
             <ExploreCardView key={card.id} card={card} palette={palette} compact={viewMode === 'list'} />
           ))}
         </div>
+
+        {query && PAGINATED_CATEGORIES.includes(activeTab) && moreAvailable[activeTab] && (
+          <div className="flex justify-center pb-4">
+            <button
+              type="button"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              className="rounded-full px-6 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60"
+              style={{ background: palette.accentSoft, color: palette.accentStrong }}
+            >
+              {loadingMore ? 'Loading…' : 'View more'}
+            </button>
+          </div>
+        )}
       </div>
     </AppShell>
   );

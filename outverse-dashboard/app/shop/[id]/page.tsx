@@ -14,16 +14,16 @@ const BASE = apiUrl('shop/items');
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    brownDk: '#854330',
+    cream: '#F3F0FC',
+    text: '#211B3D',
+    text2: '#79709E',
+    brownDk: '#5B21B6',
   },
   dark: {
-    cream: '#1a1a2e',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    brownDk: '#a0563b',
+    cream: '#14102A',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    brownDk: '#A78BFA',
   },
 };
 
@@ -76,16 +76,21 @@ export default function ShopProductPage() {
     load();
   }, [load]);
 
-  async function buy() {
+  async function buy(shippingAddress?: string) {
     if (!item || owned) return;
     try {
-      const res = await apiFetchJson(`shop/items/${item.id}/purchase/`, { method: 'POST' });
+      const res = await apiFetchJson(`shop/items/${item.id}/purchase/`, {
+        method: 'POST',
+        json: item.type === 'physical' ? { shipping_address: shippingAddress || '' } : undefined,
+      });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         const msg =
           data.error === 'Insufficient coins.'
             ? t('shop.insufficientCoins', { price: item.price })
-            : data.error || t('shop.purchaseFailed');
+            : data.error === 'A shipping address is required for physical items.'
+              ? t('shop.shippingAddressRequired')
+              : data.error || t('shop.purchaseFailed');
         setToast(msg);
         if (typeof data.balance === 'number') setBalance(data.balance);
         setTimeout(() => setToast(''), 3500);
@@ -127,7 +132,7 @@ export default function ShopProductPage() {
           owned={owned}
           canAfford={balance == null || balance >= item.price}
           balance={balance}
-          onBuy={() => void buy()}
+          onBuy={(shippingAddress) => void buy(shippingAddress)}
           accessUrl={owned && item.type === 'digital' ? item.cover_url || item.cover : null}
         />
       )}

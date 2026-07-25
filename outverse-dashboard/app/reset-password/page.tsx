@@ -7,20 +7,21 @@ import { motion } from 'framer-motion';
 import { resetPassword } from '@/lib/auth';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
+import LostInSpaceIllustration from '@/components/auth/LostInSpaceIllustration';
 
 const PALETTES = {
   light: {
-    bgGradient: 'radial-gradient(circle at top right, rgba(160,86,59,0.12), transparent 30%), #FBF3EE',
+    bgGradient: 'radial-gradient(circle at top right, rgba(124,58,237,0.14), transparent 30%), #F3F0FC',
     panel: '#FFFFFF',
-    panelAlt: '#F9ECE4',
-    border: 'rgba(160,86,59,0.14)',
-    text: '#3D2B22',
-    muted: '#9A8278',
-    accent: '#A0563B',
-    accent2: '#854330',
+    panelAlt: '#F5F1FE',
+    border: 'rgba(124,58,237,0.16)',
+    text: '#211B3D',
+    muted: '#79709E',
+    accent: '#7C3AED',
+    accent2: '#5B21B6',
     success: '#2f8f6b',
     error: '#c0392b',
-    shadow: '0 24px 80px rgba(61,43,34,0.18)',
+    shadow: '0 24px 80px rgba(33,27,61,0.18)',
   },
   dark: {
     bgGradient: 'radial-gradient(circle at top right, rgba(34,211,238,0.18), transparent 30%), #050816',
@@ -79,8 +80,8 @@ function ResetPasswordContent() {
     <div className="min-h-screen flex items-center justify-center px-4 py-10" style={{ background: C.bgGradient }}>
       <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md rounded-[28px] p-8" style={{ background: C.panel, border: `1px solid ${C.border}`, boxShadow: C.shadow }}>
         <div className="mb-6 text-center">
-          <div className="text-3xl mb-2">☄️</div>
-          <h1 className="text-2xl font-semibold" style={{ color: C.text }}>{t('auth.newPasswordTitle')}</h1>
+          <LostInSpaceIllustration theme={theme} />
+          <h1 className="mt-2 text-2xl font-semibold" style={{ color: C.text }}>{t('auth.newPasswordTitle')}</h1>
           <p className="mt-2 text-sm" style={{ color: C.muted }}>{t('auth.newPasswordSubtitle')}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">

@@ -18,6 +18,7 @@ import { readSettingsPrefs } from '@/lib/settingsPrefs';
 import RelativeTime from '../../components/RelativeTime';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
+import { polishVaultTone } from '@/lib/aiCoachApi';
 import { searchLocation } from '@/lib/geocode';
 import { formatBottleTimeLeft } from '@/utils/bottleTime';
 import {
@@ -31,46 +32,47 @@ import {
 import { getUser } from '@/lib/auth';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { apiUrl } from '@/lib/api';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 import './vault.css';
 
 const BASE = apiUrl('bottles');
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#854330',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
-    headerBg: 'rgba(251,243,238,0.85)',
-    overlay: 'rgba(61,43,34,0.45)',
-    shadowSm: '0 2px 10px rgba(160,86,59,0.06)',
-    btnShadow: '0 6px 20px rgba(160,86,59,0.35)',
-    modalShadow: '0 20px 60px rgba(61,43,34,0.3)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
+    headerBg: 'rgba(243,240,252,0.85)',
+    overlay: 'rgba(33,27,61,0.45)',
+    shadowSm: '0 2px 10px rgba(124,58,237,0.08)',
+    btnShadow: '0 6px 20px rgba(124,58,237,0.3)',
+    modalShadow: '0 20px 60px rgba(33,27,61,0.3)',
     progressBg: 'rgba(0,0,0,0.06)',
-    fabShadow: '0 4px 16px rgba(160,86,59,0.5)',
+    fabShadow: '0 4px 16px rgba(124,58,237,0.5)',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
-    white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
-    headerBg: 'rgba(26,26,46,0.9)',
-    overlay: 'rgba(10,10,34,0.65)',
-    shadowSm: '0 2px 10px rgba(106,0,255,0.12)',
-    btnShadow: '0 6px 20px rgba(106,0,255,0.25)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
+    headerBg: 'rgba(20,16,42,0.9)',
+    overlay: 'rgba(10,8,24,0.65)',
+    shadowSm: '0 2px 10px rgba(167,139,250,0.14)',
+    btnShadow: '0 6px 20px rgba(167,139,250,0.3)',
     modalShadow: '0 20px 60px rgba(0,0,0,0.45)',
     progressBg: 'rgba(255,255,255,0.08)',
-    fabShadow: '0 4px 16px rgba(106,0,255,0.35)',
+    fabShadow: '0 4px 16px rgba(167,139,250,0.35)',
   },
 };
 
@@ -118,6 +120,7 @@ type ApiBottle = {
   caught_at?: string | null;
   expires_at?: string;
   is_mine?: boolean;
+  sender_username?: string | null;
 };
 type CaughtBottle = {
   id: number;
@@ -131,6 +134,7 @@ type PlaceLabelMap = Record<number, string>;
 function EmotionVaultContent() {
   const C = useVaultColors();
   const { theme } = useTheme();
+  const confirm = useConfirm();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [throwOpen, setThrowOpen] = useState(false);
@@ -147,24 +151,28 @@ function EmotionVaultContent() {
   const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const [placeLabels, setPlaceLabels] = useState<PlaceLabelMap>({});
   const [mapStyle, setMapStyle] = useState<VaultMapStyle>('street');
-  const [showOwnOnMap, setShowOwnOnMap] = useState(true);
-  const [hideOthersRecent, setHideOthersRecent] = useState(true);
   const [demoMode, setDemoMode] = useState(false);
   const [activeTab, setActiveTab] = useState<'vault' | 'catches'>('vault');
+  const [includeExpired, setIncludeExpired] = useState(false);
   const [caughtBottles, setCaughtBottles] = useState<ApiBottle[]>([]);
   const [emotionFilter, setEmotionFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [loadError, setLoadError] = useState(false);
   const authUser = useAuthUser();
 
   useEffect(() => {
     setMapStyle(readVaultMapStyle());
   }, []);
 
+  useEffect(() => {
+    if (searchParams.get('compose') === '1' || searchParams.get('idea_id')) {
+      setThrowOpen(true);
+    }
+  }, [searchParams]);
+
   const loadData = useCallback(async () => {
     const prefs = readSettingsPrefs();
-    setShowOwnOnMap(prefs.showOwnMessageOnMap);
-    setHideOthersRecent(prefs.hideOthersInRecent);
     let gotMarkers: VaultMapMarker[] = [];
     let gotRecent: ApiBottle[] = [];
     let gotDashboard: Dashboard | null = null;
@@ -178,7 +186,7 @@ function EmotionVaultContent() {
         apiFetch('bottles/dashboard/'),
         apiFetch('bottles/map/'),
         apiFetch('bottles/recent/'),
-        apiFetch(`bottles/my_bottles/?active=1${filterQs ? `&${filterQs}` : ''}`),
+        apiFetch(`bottles/my_bottles/?${includeExpired ? 'active=0' : 'active=1'}${filterQs ? `&${filterQs}` : ''}`),
         apiFetch(`bottles/caught/${filterQs ? `?${filterQs}` : ''}`),
       ]);
       if (dRes.ok) {
@@ -201,7 +209,7 @@ function EmotionVaultContent() {
               expiresAt: b.expires_at,
               isMine: b.is_mine,
               message: b.message,
-              showOwnMessage: prefs.showOwnMessageOnMap,
+              senderName: b.sender_username,
             };
           });
         setMarkers(gotMarkers);
@@ -230,6 +238,7 @@ function EmotionVaultContent() {
       } else {
         setDemoMode(false);
       }
+      setLoadError(false);
     } catch {
       const explicitDemo = process.env.NEXT_PUBLIC_ENABLE_VAULT_DEMO === 'true';
       if (explicitDemo) {
@@ -240,9 +249,10 @@ function EmotionVaultContent() {
         setPlaceLabels(demoPlaceLabels());
       } else {
         setDemoMode(false);
+        setLoadError(true);
       }
     }
-  }, [emotionFilter, startDate, endDate]);
+  }, [emotionFilter, startDate, endDate, includeExpired]);
 
   useEffect(() => {
     loadData();
@@ -377,22 +387,17 @@ function EmotionVaultContent() {
   };
 
   const displayRecent = demoMode ? recent : recent;
-  const previewMessage = (b: ApiBottle) => {
-    if (demoMode && b.message) return b.message;
-    if (b.is_mine && b.message) return b.message;
-    if (!hideOthersRecent) return b.message || null;
-    return null;
-  };
+  const previewMessage = (b: ApiBottle) => b.message || null;
 
   const deleteBottle = async (id: number) => {
-    if (!window.confirm('Delete this bottle permanently?')) return;
+    if (!(await confirm('Delete this bottle permanently?', { danger: true, confirmLabel: 'Delete' }))) return;
     try {
       const res = await apiFetch(`bottles/${id}/`, { method: 'DELETE' });
       if (!res.ok) return;
-      setMyActive((prev) => prev.filter((b) => b.id !== id));
       if (previewBottle?.id === id) {
         closeBottlePreview();
       }
+      await loadData();
     } catch {
       /* ignore */
     }
@@ -428,6 +433,13 @@ function EmotionVaultContent() {
           </div>
         </header>
 
+        {loadError && (
+          <div className="vault-error-banner">
+            <span>Could not load the vault. Showing your last known data.</span>
+            <button type="button" onClick={() => void loadData()}>Retry</button>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
           {/* LEFT */}
           <div className="lg:col-span-3 order-2 lg:order-1 space-y-4" id="timeline">
@@ -439,6 +451,12 @@ function EmotionVaultContent() {
                   <button type="button" onClick={() => setActiveTab('catches')} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: activeTab === 'catches' ? C.white : 'transparent', color: activeTab === 'catches' ? C.brown : C.text2 }}>My Catches</button>
                 </div>
               </div>
+              {activeTab === 'vault' && (
+                <label className="flex items-center gap-2 text-xs mb-2" style={{ color: C.text2 }}>
+                  <input type="checkbox" checked={includeExpired} onChange={(e) => setIncludeExpired(e.target.checked)} />
+                  Include expired bottles
+                </label>
+              )}
               <div className="space-y-3">
                 <select value={emotionFilter} onChange={(e) => setEmotionFilter(e.target.value)} className="w-full rounded-2xl px-3 py-2 text-sm outline-none" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text }}>
                   <option value="all">All emotions</option>
@@ -613,13 +631,7 @@ function EmotionVaultContent() {
                       {place}
                     </div>
                   )}
-                  {msg ? (
-                    <p className="vault-recent-card__msg">{msg}</p>
-                  ) : (
-                    <p className="vault-recent-card__msg" style={{ fontStyle: 'italic', color: 'var(--vault-muted)' }}>
-                      Message hidden — catch to read
-                    </p>
-                  )}
+                  {msg && <p className="vault-recent-card__msg">{msg}</p>}
                   <div className="flex items-center justify-between">
                     <span
                       className="px-2 py-0.5 rounded-full text-xs font-medium"
@@ -627,7 +639,12 @@ function EmotionVaultContent() {
                     >
                       {m.emoji} {m.label}
                     </span>
-                    <RelativeTime date={b.created_at} className="text-xs" style={{ color: 'var(--vault-muted)' }} />
+                    <span className="flex items-center gap-2">
+                      {b.sender_username && (
+                        <span className="text-xs" style={{ color: 'var(--vault-muted)' }}>@{b.sender_username}</span>
+                      )}
+                      <RelativeTime date={b.created_at} className="text-xs" style={{ color: 'var(--vault-muted)' }} />
+                    </span>
                   </div>
                 </button>
               );
@@ -637,7 +654,7 @@ function EmotionVaultContent() {
 
       <AnimatePresence>
         {throwOpen && (
-          <ThrowBottleModal onClose={() => setThrowOpen(false)} onThrown={loadData} />
+          <ThrowBottleModal ideaId={searchParams.get('idea_id')} onClose={() => setThrowOpen(false)} onThrown={loadData} />
         )}
       </AnimatePresence>
       <AnimatePresence>
@@ -651,7 +668,6 @@ function EmotionVaultContent() {
             bottle={previewBottle}
             missing={previewMissing}
             placeLabel={previewBottle ? placeLabels[previewBottle.id] : undefined}
-            hideOthersRecent={hideOthersRecent}
             linkCopied={linkCopied}
             onCopyLink={async () => {
               if (!previewBottle || typeof window === 'undefined') return;
@@ -797,14 +813,27 @@ function getLocation(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
-function ThrowBottleModal({ onClose, onThrown }: { onClose: () => void; onThrown: () => void }) {
+function ThrowBottleModal({ onClose, onThrown, ideaId }: { onClose: () => void; onThrown: () => void; ideaId?: string | null }) {
   const C = useVaultColors();
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(ideaId ? `A spark from Bazaar idea #${ideaId}…` : '');
   const [emotion, setEmotion] = useState('mystery');
   const [shareLocation, setShareLocation] = useState(true);
   const [throwing, setThrowing] = useState(false);
+  const [polishing, setPolishing] = useState(false);
+  const [polishNote, setPolishNote] = useState('');
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+
+  async function handlePolish() {
+    if (!message.trim()) return;
+    setPolishing(true);
+    setPolishNote('');
+    const result = await polishVaultTone({ text: message.trim(), kind: 'bottle' });
+    setPolishing(false);
+    if (result.error) { setError(result.error); return; }
+    setMessage(result.polished);
+    setPolishNote(result.note);
+  }
 
   async function handleThrow(e: React.FormEvent) {
     e.preventDefault();
@@ -885,6 +914,20 @@ function ThrowBottleModal({ onClose, onThrown }: { onClose: () => void; onThrown
             </label>
             <span className="text-xs" style={{ color: C.text2 }}>{message.length}/500</span>
           </div>
+          <div className="flex items-center justify-between mt-2">
+            {polishNote ? (
+              <span className="text-xs" style={{ color: C.text2 }}>✨ {polishNote}</span>
+            ) : <span />}
+            <button
+              type="button"
+              onClick={() => void handlePolish()}
+              disabled={polishing || !message.trim()}
+              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+              style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
+            >
+              {polishing ? '✨ Polishing…' : '✨ Polish tone'}
+            </button>
+          </div>
           {error && <div className="text-sm mt-2" style={{ color: '#c0392b' }}>{error}</div>}
           <button
             type="submit"
@@ -904,7 +947,6 @@ function BottlePreviewModal({
   bottle,
   missing,
   placeLabel,
-  hideOthersRecent,
   linkCopied,
   onCopyLink,
   onClose,
@@ -913,7 +955,6 @@ function BottlePreviewModal({
   bottle: ApiBottle | null;
   missing: boolean;
   placeLabel?: string;
-  hideOthersRecent: boolean;
   linkCopied: boolean;
   onCopyLink: () => void;
   onClose: () => void;
@@ -921,9 +962,6 @@ function BottlePreviewModal({
 }) {
   const C = useVaultColors();
   const m = bottle ? emotionMeta(bottle.emotion_type) : null;
-  const showMessage =
-    bottle?.is_mine || (!hideOthersRecent && bottle?.message);
-  const canReadOthers = bottle && !bottle.is_mine;
 
   return (
     <ModalShell onClose={onClose}>
@@ -958,15 +996,14 @@ function BottlePreviewModal({
               {placeLabel}
             </p>
           )}
-          {showMessage && bottle.message ? (
+          {bottle.sender_username && (
+            <p className="text-xs mt-2" style={{ color: C.text2 }}>from @{bottle.sender_username}</p>
+          )}
+          {bottle.message && (
             <p className="text-sm mt-4 leading-relaxed whitespace-pre-wrap" style={{ color: C.text }}>
               {bottle.message}
             </p>
-          ) : canReadOthers ? (
-            <p className="text-sm mt-4 italic" style={{ color: C.text2 }}>
-              Message hidden — catch a bottle to read strangers&apos; whispers.
-            </p>
-          ) : null}
+          )}
           {bottle.expires_at && (
             <p className="text-xs mt-3" style={{ color: C.text2 }}>
               ⏳ Vanishes in {formatBottleTimeLeft(bottle.expires_at)}

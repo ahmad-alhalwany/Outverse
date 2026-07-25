@@ -80,12 +80,16 @@ export default function EmotionVaultMap({
   const [internalFly, setInternalFly] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const flyTarget = controlledFly ?? internalFly;
   const setFlyTarget = onFlyTargetChange ?? setInternalFly;
-  const [internalMapStyle, setInternalMapStyle] = useState<VaultMapStyle>(() =>
-    typeof window !== 'undefined' ? readVaultMapStyle() : 'street',
-  );
+  // Starts as 'street' on both server and first client paint (hydration-safe),
+  // then syncs to the persisted preference once mounted.
+  const [internalMapStyle, setInternalMapStyle] = useState<VaultMapStyle>('street');
   const mapStyle = controlledMapStyle ?? internalMapStyle;
   const setMapStyle = onMapStyleChange ?? setInternalMapStyle;
   const mapRef = useRef<LeafletMap | null>(null);
+
+  useEffect(() => {
+    setInternalMapStyle(readVaultMapStyle());
+  }, []);
 
   useEffect(() => {
     persistVaultMapStyle(mapStyle);

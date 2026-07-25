@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { deleteBottle, fetchBottlesAdmin } from '@/lib/adminApi';
 import type { AdminBottle } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 export default function AdminVaultPage() {
+  const confirm = useConfirm();
   const [bottles, setBottles] = useState<AdminBottle[]>([]);
   const [msg, setMsg] = useState('');
 
@@ -73,7 +75,7 @@ export default function AdminVaultPage() {
                       type="button"
                       className="admin-btn admin-btn--danger"
                       onClick={async () => {
-                        if (!window.confirm('Remove this bottle?')) return;
+                        if (!(await confirm('Remove this bottle?', { danger: true, confirmLabel: 'Remove' }))) return;
                         const res = await deleteBottle(b.id);
                         if (res.ok) {
                           setMsg('Bottle removed.');

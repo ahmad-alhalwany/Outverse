@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { deleteCommentAdmin, deletePostAdmin, fetchCommentsAdmin, fetchPostsAdmin } from '@/lib/adminApi';
 import type { AdminComment, AdminPost } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 export default function AdminPostsPage() {
+  const confirm = useConfirm();
   const [posts, setPosts] = useState<AdminPost[]>([]);
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [selectedPostId, setSelectedPostId] = useState<number | null>(null);
@@ -25,7 +27,7 @@ export default function AdminPostsPage() {
   }, [loadPosts, loadComments]);
 
   const removePost = async (post: AdminPost) => {
-    if (!window.confirm('Delete this post?')) return;
+    if (!(await confirm('Delete this post?', { danger: true, confirmLabel: 'Delete' }))) return;
     const res = await deletePostAdmin(post.id);
     if (res.ok) {
       setMessage('Post deleted.');
@@ -35,7 +37,7 @@ export default function AdminPostsPage() {
   };
 
   const removeComment = async (comment: AdminComment) => {
-    if (!window.confirm('Delete this comment?')) return;
+    if (!(await confirm('Delete this comment?', { danger: true, confirmLabel: 'Delete' }))) return;
     const res = await deleteCommentAdmin(comment.id);
     if (res.ok) {
       setMessage('Comment deleted.');

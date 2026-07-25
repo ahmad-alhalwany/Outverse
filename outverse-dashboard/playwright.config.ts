@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright E2E configuration for Outverse dashboard.
+ * Playwright E2E configuration for Cosmory dashboard.
  *
  * Environment variables:
  * - E2E_BASE_URL: target Next.js app (default http://localhost:3000)
@@ -27,8 +27,14 @@ export default defineConfig({
     { name: 'setup', testMatch: /.*\.setup\.ts$/, teardown: 'cleanup' },
     {
       name: 'chromium',
+      testMatch: /(auth|authenticated|reels|inspiration)\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'], storageState: 'e2e/.auth/state.json' },
       dependencies: ['setup'],
+    },
+    {
+      name: 'smoke',
+      testMatch: /(coreflows|newpages|shop|lab|search)\.spec\.ts$/,
+      use: { ...devices['Desktop Chrome'] },
     },
     { name: 'cleanup', testMatch: /.*\.teardown\.ts$/ },
   ],

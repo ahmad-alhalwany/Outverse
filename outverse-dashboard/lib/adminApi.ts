@@ -11,7 +11,14 @@ import type {
   AdminReel,
   AdminShopItem,
   AdminStory,
+  AdminVerificationRequest,
 } from './adminTypes';
+
+/** Backend list endpoints paginate ({count, next, previous, results}); unwrap to a plain array. */
+async function unwrapList<T>(res: Response): Promise<T[]> {
+  const data = await res.json();
+  return Array.isArray(data) ? data : data.results || [];
+}
 
 export async function fetchAdminDashboard(): Promise<AdminDashboardData> {
   const res = await apiFetch('analytics/dashboard/');
@@ -23,7 +30,7 @@ export async function fetchAdminDashboard(): Promise<AdminDashboardData> {
 export async function fetchAdminProfiles(): Promise<AdminProfile[]> {
   const res = await apiFetch('users/profiles/');
   if (!res.ok) throw new Error('Failed to load users');
-  return res.json();
+  return unwrapList<AdminProfile>(res);
 }
 
 export async function patchProfile(
@@ -40,10 +47,65 @@ export async function promoteProfileToStaff(userId: number) {
   return apiFetchJson(`users/${userId}/promote/`, { method: 'POST' });
 }
 
+export async function toggleShadowBan(userId: number): Promise<{ ok: boolean; is_shadow_banned: boolean }> {
+  const res = await apiFetchJson(`users/${userId}/shadow-ban/`, { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, is_shadow_banned: !!data.is_shadow_banned };
+}
+
+export type MarketingSegment = 'all' | 'inactive_30d';
+
+export type MarketingCampaign = {
+  id: number;
+  subject: string;
+  body_html: string;
+  segment: MarketingSegment;
+  status: 'draft' | 'sending' | 'sent';
+  recipient_count: number;
+  created_at: string;
+  updated_at: string;
+  sent_at: string | null;
+};
+
+export async function fetchMarketingCampaigns(): Promise<MarketingCampaign[]> {
+  const res = await apiFetch('notifications/marketing-campaigns/');
+  if (!res.ok) throw new Error('Failed to load campaigns');
+  return res.json();
+}
+
+export async function createMarketingCampaign(data: {
+  subject: string;
+  body_html: string;
+  segment: MarketingSegment;
+}) {
+  return apiFetchJson('notifications/marketing-campaigns/', { method: 'POST', json: data });
+}
+
+export async function updateMarketingCampaign(
+  id: number,
+  data: Partial<{ subject: string; body_html: string; segment: MarketingSegment }>,
+) {
+  return apiFetchJson(`notifications/marketing-campaigns/${id}/`, { method: 'PATCH', json: data });
+}
+
+export async function deleteMarketingCampaign(id: number) {
+  return apiFetchJson(`notifications/marketing-campaigns/${id}/`, { method: 'DELETE' });
+}
+
+export async function previewMarketingCampaign(id: number): Promise<{ recipient_count: number }> {
+  const res = await apiFetchJson(`notifications/marketing-campaigns/${id}/preview/`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to preview recipients');
+  return res.json();
+}
+
+export async function sendMarketingCampaign(id: number) {
+  return apiFetchJson(`notifications/marketing-campaigns/${id}/send/`, { method: 'POST' });
+}
+
 export async function fetchShopItemsAdmin(): Promise<AdminShopItem[]> {
   const res = await apiFetch('shop/items/');
   if (!res.ok) throw new Error('Failed to load shop items');
-  return res.json();
+  return unwrapList<AdminShopItem>(res);
 }
 
 export async function saveShopItem(
@@ -63,7 +125,7 @@ export async function deleteShopItem(id: number) {
 export async function fetchChallengesAdmin(): Promise<AdminChallenge[]> {
   const res = await apiFetch('challenges/');
   if (!res.ok) throw new Error('Failed to load challenges');
-  return res.json();
+  return unwrapList<AdminChallenge>(res);
 }
 
 export async function saveChallenge(
@@ -83,7 +145,7 @@ export async function deleteChallenge(id: number) {
 export async function fetchReelsAdmin(): Promise<AdminReel[]> {
   const res = await apiFetch('reels/?admin=1');
   if (!res.ok) throw new Error('Failed to load reels');
-  return res.json();
+  return unwrapList<AdminReel>(res);
 }
 
 export async function patchReel(id: number, data: Partial<AdminReel>) {
@@ -97,13 +159,26 @@ export async function deleteReel(id: number) {
 export async function fetchFlagged(): Promise<AdminFlagged[]> {
   const res = await apiFetch('moderation/flagged/');
   if (!res.ok) throw new Error('Failed to load flagged content');
-  return res.json();
+  return unwrapList<AdminFlagged>(res);
 }
 
 export async function patchFlagged(id: number, status: 'approved' | 'rejected') {
   return apiFetchJson(`moderation/flagged/${id}/`, {
     method: 'PATCH',
     json: { status },
+  });
+}
+
+export async function fetchVerificationRequests(): Promise<AdminVerificationRequest[]> {
+  const res = await apiFetch('users/admin/verification/');
+  if (!res.ok) throw new Error('Failed to load verification requests');
+  return unwrapList<AdminVerificationRequest>(res);
+}
+
+export async function reviewVerificationRequest(id: number, action: 'approve' | 'reject') {
+  return apiFetchJson(`users/admin/verification/${id}/`, {
+    method: 'POST',
+    json: { action },
   });
 }
 
@@ -118,7 +193,7 @@ export async function checkStaffAccess(): Promise<'ok' | 'auth' | 'denied'> {
 export async function fetchIdeasAdmin(): Promise<AdminIdea[]> {
   const res = await apiFetch('ideas/?ordering=trending');
   if (!res.ok) throw new Error('Failed to load ideas');
-  return res.json();
+  return unwrapList<AdminIdea>(res);
 }
 
 export async function saveIdea(
@@ -138,7 +213,7 @@ export async function deleteIdea(id: number) {
 export async function fetchBottlesAdmin(): Promise<AdminBottle[]> {
   const res = await apiFetch('bottles/');
   if (!res.ok) throw new Error('Failed to load bottles');
-  return res.json();
+  return unwrapList<AdminBottle>(res);
 }
 
 export async function deleteBottle(id: number) {
@@ -148,7 +223,7 @@ export async function deleteBottle(id: number) {
 export async function fetchStoriesAdmin(): Promise<AdminStory[]> {
   const res = await apiFetch('forge/stories/');
   if (!res.ok) throw new Error('Failed to load stories');
-  return res.json();
+  return unwrapList<AdminStory>(res);
 }
 
 export async function deleteStoryAdmin(id: number) {
@@ -178,4 +253,68 @@ export async function deleteCommentAdmin(id: number) {
 
 export async function broadcastNotification(data: { title: string; message: string; user_ids?: number[] }) {
   return apiFetchJson('notifications/broadcast/', { method: 'POST', json: data });
+}
+
+export type AdminSubmission = {
+  id: number;
+  content: string;
+  is_approved: boolean;
+  submitted_at: string;
+  user: { id: number; username: string };
+  challenge_title?: string;
+};
+
+export async function fetchChallengeSubmissions(challengeId: number): Promise<AdminSubmission[]> {
+  const res = await apiFetch(`challenges/${challengeId}/submissions/`);
+  if (!res.ok) throw new Error('Failed to load submissions');
+  const data = await res.json();
+  return Array.isArray(data) ? data : data.results || [];
+}
+
+export async function approveChallengeSubmission(
+  challengeId: number,
+  submissionId: number,
+  isApproved = true,
+) {
+  return apiFetchJson(`challenges/${challengeId}/submissions/${submissionId}/approve/`, {
+    method: 'PATCH',
+    json: { is_approved: isApproved },
+  });
+}
+
+// ── Ads admin ─────────────────────────────────────────────────────────────────
+
+export type AdminAdCreative = {
+  id: number;
+  name: string;
+  format: string;
+  status: string;
+  headline: string;
+  primary_text: string;
+  cta_text: string;
+  landing_url: string;
+  media_urls: string[];
+  campaign: {
+    id: number;
+    name: string;
+    advertiser?: { username?: string } | number;
+  };
+  created_at: string;
+  reviewed_at: string | null;
+};
+
+export async function fetchAdCreativesAdmin(status?: string): Promise<AdminAdCreative[]> {
+  const params = status ? `?status=${status}` : '?status=pending_review';
+  const res = await apiFetch(`ads/creatives/${params}`);
+  if (!res.ok) throw new Error('Failed to load ad creatives');
+  const data = await res.json();
+  return Array.isArray(data) ? data : data.results || [];
+}
+
+export async function approveAdCreative(id: number) {
+  return apiFetchJson(`ads/creatives/${id}/approve/`, { method: 'POST' });
+}
+
+export async function rejectAdCreative(id: number) {
+  return apiFetchJson(`ads/creatives/${id}/reject/`, { method: 'POST' });
 }

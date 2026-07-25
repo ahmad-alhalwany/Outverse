@@ -19,7 +19,10 @@ export default function AdminModerationPage() {
 
   const load = useCallback(() => {
     fetchFlagged()
-      .then(setFlagged)
+      .then((data) => {
+        setFlagged(data);
+        setError('');
+      })
       .catch((e: Error) => setError(e.message));
   }, []);
 
@@ -29,6 +32,7 @@ export default function AdminModerationPage() {
 
   const act = async (id: number, status: 'approved' | 'rejected') => {
     setBusy(id);
+    setError('');
     try {
       const res = await patchFlagged(id, status);
       if (res.ok) load();

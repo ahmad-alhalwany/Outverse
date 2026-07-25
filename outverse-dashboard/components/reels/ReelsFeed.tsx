@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import type { ReelItem } from '@/lib/reelTypes';
+import type { ReactionType } from '@/lib/reactions';
 import ReelSlide from './ReelSlide';
 import ReelsFeedProgress from './ReelsFeedProgress';
 import { useLocale } from '../LocaleProvider';
@@ -19,6 +20,7 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [reactionError, setReactionError] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef<(HTMLElement | null)[]>([]);
 
@@ -32,7 +34,7 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
       const res = await apiFetch(`reels/${qs ? `?${qs}` : ''}`);
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
+        const list = Array.isArray(data) ? data : data.results || [];
         setReels(list);
         if (focusId) {
           const idx = list.findIndex((r: ReelItem) => r.id === focusId);
@@ -85,19 +87,30 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
     setActiveIdx(idx);
   }, [focusId, loading, reels]);
 
-  const handleLike = async (id: number) => {
+  const handleLike = async (id: number, reaction: ReactionType = 'spark') => {
     if (!getUser()) return null;
     try {
-      const res = await apiFetchJson(`reels/${id}/react/`, { method: 'POST' });
-      if (res.ok) return res.json();
+      const res = await apiFetchJson(`reels/${id}/react/`, {
+        method: 'POST',
+        json: { reaction },
+      });
+      if (res.ok) {
+        setReactionError('');
+        return res.json();
+      }
+      setReactionError(t('reels.reactionError'));
     } catch {
-      /* ignore */
+      setReactionError(t('reels.reactionError'));
     }
     return null;
   };
 
   const handleSavedChange = (id: number, saved: boolean) => {
     setReels((prev) => prev.map((reel) => (reel.id === id ? { ...reel, is_saved: saved } : reel)));
+  };
+
+  const handleDimmed = (id: number) => {
+    setReels((prev) => prev.filter((reel) => reel.id !== id));
   };
 
   const handleView = async (id: number) => {
@@ -107,6 +120,12 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
       /* ignore */
     }
   };
+
+  useEffect(() => {
+    if (!reactionError) return;
+    const timer = setTimeout(() => setReactionError(''), 3000);
+    return () => clearTimeout(timer);
+  }, [reactionError]);
 
   if (loading) {
     return (
@@ -133,26 +152,39 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
 
   return (
     <div className="reels-feed-wrap">
+      {reactionError && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/80 px-4 py-2 text-xs font-medium text-white">
+          {reactionError}
+        </div>
+      )}
       <ReelsFeedProgress total={reels.length} activeIndex={activeIdx} />
       <div ref={containerRef} className="reels-feed">
-      {reels.map((reel, i) => (
-        <div
-          key={reel.id}
-          ref={(el) => {
-            slideRefs.current[i] = el;
-          }}
-          className="reels-feed__snap"
-        >
-          <ReelSlide
-            reel={reel}
-            active={i === activeIdx}
-            onLike={handleLike}
-            onView={handleView}
-            onDeleted={load}
-            onSavedChange={handleSavedChange}
-          />
-        </div>
-      ))}
+      {reels.map((reel, i) => {
+        const isActive = i === activeIdx;
+        return (
+          <div
+            key={reel.id}
+            ref={(el) => {
+              slideRefs.current[i] = el;
+            }}
+            className="reels-feed__snap"
+          >
+            {isActive || i === activeIdx + 1 || i === activeIdx - 1 ? (
+              <ReelSlide
+                reel={reel}
+                active={isActive}
+                onLike={handleLike}
+                onView={handleView}
+                onDeleted={load}
+                onSavedChange={handleSavedChange}
+                onDimmed={handleDimmed}
+              />
+            ) : (
+              <div className="reels-feed__placeholder" />
+            )}
+          </div>
+        );
+      })}
       </div>
     </div>
   );

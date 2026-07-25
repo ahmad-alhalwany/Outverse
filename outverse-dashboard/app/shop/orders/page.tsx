@@ -11,30 +11,30 @@ import { ArrowLeftIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#854330',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
-    shadowSm: '0 2px 12px rgba(160,86,59,0.06)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
+    shadowSm: '0 2px 12px rgba(124,58,237,0.08)',
     successBg: '#e8f3ee',
     successText: '#2f8f6b',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
-    white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
-    shadowSm: '0 2px 12px rgba(106,0,255,0.12)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
+    shadowSm: '0 2px 12px rgba(167,139,250,0.14)',
     successBg: 'rgba(74,222,128,0.15)',
     successText: '#4ade80',
   },
@@ -135,7 +135,7 @@ export default function ShopOrdersPage() {
             {transactions.map((tx) => {
               const accessUrl =
                 tx.item.type === 'digital'
-                  ? tx.item.cover_url || tx.item.cover || ''
+                  ? tx.item.download_url || tx.item.cover_url || tx.item.cover || ''
                   : '';
               return (
                 <article
@@ -170,6 +170,14 @@ export default function ShopOrdersPage() {
                           >
                             {tx.status}
                           </span>
+                          {tx.item.type === 'physical' && tx.fulfillment_status !== 'not_applicable' && (
+                            <span
+                              className="px-2.5 py-1 rounded-full"
+                              style={{ background: C.card2, color: C.brownDk }}
+                            >
+                              {tx.fulfillment_status_display}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs mt-2" style={{ color: C.text2 }}>
                           {new Date(tx.timestamp).toLocaleString()}
@@ -190,7 +198,7 @@ export default function ShopOrdersPage() {
                         <a
                           href={accessUrl}
                           target="_blank"
-                          rel="noreferrer"
+                          rel="noopener noreferrer"
                           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold"
                           style={{ background: C.card2, color: C.brownDk, border: `1px solid ${C.line}` }}
                         >

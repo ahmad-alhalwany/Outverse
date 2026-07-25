@@ -1,16 +1,16 @@
 .cosmic-chat-root {
-  --cc-cream: #fbf3ee;
-  --cc-panel: #f5e4db;
-  --cc-panel-2: #f9ece4;
+  --cc-cream: #F3F0FC;
+  --cc-panel: #E9E1FA;
+  --cc-panel-2: #F5F1FE;
   --cc-white: #ffffff;
-  --cc-brown: #a0563b;
-  --cc-brown-dk: #703e32;
-  --cc-text: #3d2b22;
-  --cc-text-2: #9a8278;
-  --cc-line: rgba(160, 86, 59, 0.14);
-  --cc-bubble-in: #f5e4db;
-  --cc-bubble-out: #3d2b22;
-  --cc-shadow: 0 4px 24px rgba(61, 43, 34, 0.08);
+  --cc-brown: #7C3AED;
+  --cc-brown-dk: #5B21B6;
+  --cc-text: #211B3D;
+  --cc-text-2: #79709E;
+  --cc-line: rgba(124, 58, 237, 0.16);
+  --cc-bubble-in: #E9E1FA;
+  --cc-bubble-out: #5B21B6;
+  --cc-shadow: 0 4px 24px rgba(33, 27, 61, 0.08);
   min-height: 100dvh;
   background: var(--cc-cream);
   color: var(--cc-text);
@@ -47,6 +47,22 @@
 @media (max-width: 1023px) {
   .cosmic-chat-grid {
     grid-template-columns: minmax(72px, 0.85fr) minmax(0, 1.35fr) minmax(72px, 0.9fr);
+  }
+}
+
+/* Below tablet width, show one pane at a time instead of squeezing three columns. */
+@media (max-width: 767px) {
+  .cosmic-chat-grid {
+    grid-template-columns: 1fr;
+  }
+  .cosmic-chat-grid .cosmic-chat-col--shared {
+    display: none;
+  }
+  .cosmic-chat-grid[data-mobile-view='thread'] .cosmic-chat-col--list {
+    display: none;
+  }
+  .cosmic-chat-grid[data-mobile-view='list'] .cosmic-chat-col--thread {
+    display: none;
   }
 }
 
@@ -195,6 +211,7 @@
   flex-direction: column;
   gap: 0.65rem;
   background: var(--cc-cream);
+  position: relative;
 }
 
 .cosmic-chat-bubble {
@@ -277,7 +294,7 @@
 .cosmic-chat-progress {
   height: 6px;
   border-radius: 9999px;
-  background: rgba(61, 43, 34, 0.1);
+  background: rgba(33, 27, 61, 0.1);
   margin-top: 0.5rem;
   overflow: hidden;
 }
@@ -350,7 +367,7 @@
   position: fixed;
   inset: 0;
   z-index: 3000;
-  background: rgba(61, 43, 34, 0.55);
+  background: rgba(33, 27, 61, 0.55);
   backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
@@ -481,6 +498,57 @@
   color: #fff;
 }
 
+.cosmic-call-panel--group {
+  max-width: 640px;
+}
+
+.cosmic-call-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem;
+  margin: 1rem 0;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.cosmic-call-tile {
+  position: relative;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: #1a1a1a;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cosmic-call-tile-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cosmic-call-tile-avatar {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 9999px;
+  background: var(--cc-brown, #a0563b);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.cosmic-call-tile-name {
+  position: absolute;
+  bottom: 0.25rem;
+  left: 0.4rem;
+  font-size: 0.7rem;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
 .cosmic-chat-me-bar {
   margin-top: auto;
   padding: 0.65rem;
@@ -503,4 +571,140 @@
 .cosmic-chat-icon-btn:hover {
   background: var(--cc-panel);
   color: var(--cc-brown);
+}
+
+.cosmic-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  background: rgba(33, 27, 61, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.cosmic-modal-panel {
+  background: var(--cc-cream);
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  max-width: 420px;
+  width: 100%;
+  border: 1px solid var(--cc-line);
+  box-shadow: var(--cc-shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.cosmic-modal-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--cc-brown);
+  margin: 0;
+}
+
+.cosmic-modal-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.6rem;
+  border: 1px solid var(--cc-line);
+  background: var(--cc-panel);
+  color: var(--cc-text);
+  font-size: 0.9rem;
+}
+
+.cosmic-modal-list {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid var(--cc-line);
+  border-radius: 0.75rem;
+  padding: 0.4rem;
+  background: var(--cc-panel);
+}
+
+.cosmic-modal-empty {
+  color: var(--cc-text-2);
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  margin: 0;
+  text-align: center;
+}
+
+.cosmic-modal-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+}
+
+.cosmic-modal-row:hover {
+  background: var(--cc-panel-2);
+}
+
+.cosmic-modal-avatar {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  object-fit: cover;
+}
+
+.cosmic-modal-avatar--fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cc-brown);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.cosmic-modal-name {
+  font-size: 0.9rem;
+  color: var(--cc-text);
+}
+
+.cosmic-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.cosmic-modal-btn {
+  padding: 0.45rem 1rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.cosmic-modal-btn--ghost {
+  background: transparent;
+  border-color: var(--cc-line);
+  color: var(--cc-text-2);
+}
+
+.cosmic-modal-btn--ghost:hover {
+  background: var(--cc-panel);
+}
+
+.cosmic-modal-btn--primary {
+  background: var(--cc-brown);
+  color: #fff;
+}
+
+.cosmic-modal-btn--primary:hover {
+  filter: brightness(1.05);
+}
+
+.cosmic-modal-btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

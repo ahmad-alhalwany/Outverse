@@ -13,6 +13,7 @@ import {
   MagnifyingGlassIcon,
   SparklesIcon,
   ArrowDownTrayIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 import { StarIcon } from '@heroicons/react/24/solid';
 
@@ -22,38 +23,38 @@ const BASE = apiUrl('shop/items');
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#854330',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
-    headerBg: 'rgba(251,243,238,0.85)',
-    shadowSm: '0 2px 12px rgba(160,86,59,0.06)',
-    btnShadow: '0 6px 18px rgba(160,86,59,0.3)',
-    heroShadow: '0 8px 24px rgba(61,43,34,0.3)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
+    headerBg: 'rgba(243,240,252,0.85)',
+    shadowSm: '0 2px 12px rgba(124,58,237,0.08)',
+    btnShadow: '0 6px 18px rgba(124,58,237,0.3)',
+    heroShadow: '0 8px 24px rgba(33,27,61,0.3)',
     badgeBg: 'rgba(255,255,255,0.92)',
-    overlay: 'rgba(61,43,34,0.45)',
+    overlay: 'rgba(33,27,61,0.45)',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
-    white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
-    headerBg: 'rgba(26,26,46,0.9)',
-    shadowSm: '0 2px 12px rgba(106,0,255,0.12)',
-    btnShadow: '0 6px 20px rgba(106,0,255,0.25)',
-    heroShadow: '0 8px 24px rgba(106,0,255,0.2)',
-    badgeBg: 'rgba(42,42,69,0.92)',
-    overlay: 'rgba(10,10,34,0.65)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
+    headerBg: 'rgba(20,16,42,0.9)',
+    shadowSm: '0 2px 12px rgba(167,139,250,0.14)',
+    btnShadow: '0 6px 20px rgba(167,139,250,0.3)',
+    heroShadow: '0 8px 24px rgba(167,139,250,0.2)',
+    badgeBg: 'rgba(37,27,77,0.92)',
+    overlay: 'rgba(10,8,24,0.65)',
   },
 };
 
@@ -137,7 +138,10 @@ function ShopContent() {
         fetch(`${BASE}/featured/`),
         apiFetch('shop/items/wallet/'),
       ]);
-      if (iRes.ok) setItems(await iRes.json());
+      if (iRes.ok) {
+        const data = await iRes.json();
+        setItems(Array.isArray(data) ? data : data.results || []);
+      }
       else {
         setItems([]);
         setLoadError(true);
@@ -247,6 +251,14 @@ function ShopContent() {
           </div>
         <div className="flex flex-wrap items-center gap-2 shrink-0">
             <Link
+              href="/shop/dashboard"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold"
+              style={{ background: C.white, color: C.brownDk, border: `1px solid ${C.line}` }}
+            >
+              <ChartBarIcon className="h-4 w-4" />
+              {t('shop.myShop')}
+            </Link>
+            <Link
               href="/shop/orders"
               className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-semibold"
               style={{ background: C.white, color: C.brownDk, border: `1px solid ${C.line}` }}
@@ -290,7 +302,7 @@ function ShopContent() {
                     <a
                       href={item.cover_url || item.cover}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       onClick={(e) => e.stopPropagation()}
                       className="mx-2 mb-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
                       style={{ background: C.card2, color: C.brownDk }}

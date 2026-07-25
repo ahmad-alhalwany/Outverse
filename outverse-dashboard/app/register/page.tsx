@@ -19,6 +19,7 @@ import {
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { checkUsernameAvailability, register } from '@/lib/auth';
+import { useLocale } from '@/components/LocaleProvider';
 
 const QUIZ_OPTIONS = {
   environment: [
@@ -38,19 +39,19 @@ const QUIZ_OPTIONS = {
 const STEPS = ['Basic Info', 'Interests', 'Avatar'] as const;
 
 const COLORS = {
-  page: '#FFF8F4',
+  page: '#F3F0FC',
   panel: '#FFFFFF',
-  panelSoft: '#FFD9CC',
-  panelMuted: '#F8E7E0',
-  border: '#F2D7CC',
-  borderStrong: '#D9B4A6',
-  text: '#2E2320',
-  muted: '#6F5A53',
-  accent: '#9E5A43',
-  accentDark: '#7F4634',
-  accentSoft: '#F7CFC2',
-  success: '#9E5A43',
-  shadow: '0 24px 60px rgba(92, 53, 39, 0.08)',
+  panelSoft: '#DCC9FA',
+  panelMuted: '#F5F1FE',
+  border: '#E3D9F7',
+  borderStrong: '#C4B5FD',
+  text: '#211B3D',
+  muted: '#79709E',
+  accent: '#7C3AED',
+  accentDark: '#5B21B6',
+  accentSoft: '#EDE4FB',
+  success: '#7C3AED',
+  shadow: '0 24px 60px rgba(33, 27, 61, 0.10)',
 };
 
 type QuizState = {
@@ -58,27 +59,32 @@ type QuizState = {
   power: string;
 };
 
-function ProgressBar() {
+function ProgressBar({ currentStep }: { currentStep: number }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-sm font-medium" style={{ color: COLORS.muted }}>
-        {STEPS.map((step) => (
-          <span key={step}>{step}</span>
+        {STEPS.map((step, index) => (
+          <span key={step} style={{ color: index === currentStep ? COLORS.text : COLORS.muted, fontWeight: index === currentStep ? 700 : 500 }}>
+            {step}
+          </span>
         ))}
       </div>
       <div className="h-2 overflow-hidden rounded-full" style={{ background: '#F3ECE8' }}>
-        <div className="h-full rounded-full" style={{ width: '33.333%', background: COLORS.text }} />
+        <div
+          className="h-full rounded-full transition-all"
+          style={{ width: `${((currentStep + 1) / STEPS.length) * 100}%`, background: COLORS.text }}
+        />
       </div>
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold" style={{ color: COLORS.text }}>Step 1 of 3</p>
+        <p className="text-sm font-semibold" style={{ color: COLORS.text }}>Step {currentStep + 1} of {STEPS.length}</p>
         <div className="flex items-center gap-2">
-          {[0, 1, 2].map((index) => (
+          {STEPS.map((_, index) => (
             <span
               key={index}
               className="h-4 w-4 rounded-full border"
               style={{
-                borderColor: index === 0 ? COLORS.accent : COLORS.borderStrong,
-                background: index === 0 ? COLORS.accent : 'transparent',
+                borderColor: index <= currentStep ? COLORS.accent : COLORS.borderStrong,
+                background: index <= currentStep ? COLORS.accent : 'transparent',
               }}
             />
           ))}
@@ -107,17 +113,18 @@ function Field({
 }) {
   return (
     <label
-      className="flex items-center gap-3 rounded-2xl border px-4 py-4 transition focus-within:border-[#9E5A43]"
+      className="flex items-center gap-3 rounded-2xl border px-4 py-4 transition focus-within:border-[#7C3AED]"
       style={{ borderColor: COLORS.border, background: COLORS.panel }}
     >
-      <Icon size={20} style={{ color: '#8E7A73' }} />
+      <Icon size={20} style={{ color: '#79709E' }} />
       <input
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        aria-label={placeholder}
         autoComplete={autoComplete}
-        className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#9A847C]"
+        className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[#9691B8]"
         style={{ color: COLORS.text }}
       />
       {trailing}
@@ -127,6 +134,7 @@ function Field({
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { t, dir } = useLocale();
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -136,6 +144,8 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [agreed, setAgreed] = useState(false);
+  const [step, setStep] = useState(0);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
   const [quiz, setQuiz] = useState<QuizState>({
     environment: 'ocean',
@@ -162,22 +172,52 @@ export default function RegisterPage() {
   const firstName = useMemo(() => fullName.trim().split(/\s+/).filter(Boolean)[0] ?? '', [fullName]);
   const lastName = useMemo(() => fullName.trim().split(/\s+/).filter(Boolean).slice(1).join(' '), [fullName]);
 
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
+  function validateBasicInfo(): string | null {
     if (!fullName.trim() || !email.trim() || !username.trim() || !password || !confirmPassword) {
-      setError('Please complete all fields to continue.');
-      return;
+      return 'Please complete all fields to continue.';
     }
     if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
-      return;
+      return 'Password must be at least 6 characters.';
     }
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
+      return 'Passwords do not match.';
     }
     if (usernameStatus === 'taken') {
-      setError('That username is already taken.');
+      return 'That username is already taken.';
+    }
+    return null;
+  }
+
+  function goNext() {
+    if (step === 0) {
+      const validationError = validateBasicInfo();
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+    setError('');
+    setStep((current) => Math.min(current + 1, STEPS.length - 1));
+  }
+
+  function goBack() {
+    setError('');
+    setStep((current) => Math.max(current - 1, 0));
+  }
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (step < STEPS.length - 1) {
+      goNext();
+      return;
+    }
+    const validationError = validateBasicInfo();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (!agreed) {
+      setError('Please accept the Terms of Service and Privacy Policy to continue.');
       return;
     }
 
@@ -212,129 +252,162 @@ export default function RegisterPage() {
               Join the Community
             </h1>
             <div className="mt-8">
-              <ProgressBar />
+              <ProgressBar currentStep={step} />
             </div>
 
             <form onSubmit={submit} className="mt-8 space-y-8">
-              <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
-                <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Basic Information</h2>
-                <div className="mt-6 grid gap-4">
-                  <Field icon={User} placeholder="Enter your name" value={fullName} onChange={setFullName} autoComplete="name" />
-                  <Field icon={Mail} placeholder="your@email.com" value={email} onChange={setEmail} autoComplete="email" type="email" />
-                  <Field icon={User} placeholder="Choose a username" value={username} onChange={setUsername} autoComplete="username" />
-                  <Field
-                    icon={Lock}
-                    placeholder="Create a password"
-                    value={password}
-                    onChange={setPassword}
-                    autoComplete="new-password"
-                    type={showPassword ? 'text' : 'password'}
-                    trailing={
-                      <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-[#8E7A73]">
-                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                      </button>
-                    }
-                  />
-                  <Field
-                    icon={Lock}
-                    placeholder="Confirm password"
-                    value={confirmPassword}
-                    onChange={setConfirmPassword}
-                    autoComplete="new-password"
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    trailing={
-                      <button type="button" onClick={() => setShowConfirmPassword((current) => !current)} className="text-[#8E7A73]">
-                        {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                      </button>
-                    }
-                  />
-                </div>
-                {usernameStatus !== 'idle' && (
-                  <p className="mt-4 text-sm font-medium" style={{ color: usernameStatus === 'taken' ? '#B4533D' : COLORS.success }}>
-                    {usernameStatus === 'checking'
-                      ? 'Checking username availability...'
-                      : usernameStatus === 'available'
-                        ? 'Username is available.'
-                        : 'Username is already taken.'}
-                  </p>
-                )}
-              </section>
-
-              <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Quick Personality Quiz</h2>
-                    <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>Help us personalize your experience</p>
-                  </div>
-                  <CheckCircle2 size={28} style={{ color: COLORS.accent }} />
-                </div>
-
-                <div className="mt-8">
-                  <h3 className="text-2xl font-semibold tracking-[-0.02em]" style={{ color: COLORS.text }}>Pick your favorite environment:</h3>
-                  <div className="mt-5 grid grid-cols-2 gap-4">
-                    {QUIZ_OPTIONS.environment.map(({ id, label, icon: Icon }) => {
-                      const active = quiz.environment === id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setQuiz((current) => ({ ...current, environment: id }))}
-                          className="rounded-[20px] border p-4 text-left transition hover:-translate-y-0.5"
-                          style={{
-                            background: COLORS.panelSoft,
-                            borderColor: active ? COLORS.accent : COLORS.panelSoft,
-                            boxShadow: active ? 'inset 0 0 0 1px #9E5A43' : 'none',
-                          }}
-                        >
-                          <div className="flex h-28 items-center justify-center rounded-2xl" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.2))' }}>
-                            <Icon size={42} style={{ color: COLORS.accentDark }} />
-                          </div>
-                          <p className="mt-4 text-center text-2xl font-semibold" style={{ color: COLORS.accentDark }}>{label}</p>
+              {step === 0 && (
+                <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
+                  <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Basic Information</h2>
+                  <div className="mt-6 grid gap-4">
+                    <Field icon={User} placeholder="Enter your name" value={fullName} onChange={setFullName} autoComplete="name" />
+                    <Field icon={Mail} placeholder="your@email.com" value={email} onChange={setEmail} autoComplete="email" type="email" />
+                    <Field icon={User} placeholder="Choose a username" value={username} onChange={setUsername} autoComplete="username" />
+                    <Field
+                      icon={Lock}
+                      placeholder="Create a password"
+                      value={password}
+                      onChange={setPassword}
+                      autoComplete="new-password"
+                      type={showPassword ? 'text' : 'password'}
+                      trailing={
+                        <button type="button" onClick={() => setShowPassword((current) => !current)} className="text-[#79709E]">
+                          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                         </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="mt-8">
-                  <h3 className="text-2xl font-semibold tracking-[-0.02em]" style={{ color: COLORS.text }}>Choose your superpower:</h3>
-                  <div className="mt-5 grid grid-cols-2 gap-4">
-                    {QUIZ_OPTIONS.power.map(({ id, label }) => {
-                      const active = quiz.power === id;
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          onClick={() => setQuiz((current) => ({ ...current, power: id }))}
-                          className="rounded-[18px] border px-4 py-5 text-center text-xl font-semibold transition"
-                          style={{
-                            background: active ? '#F4C8B8' : COLORS.panelSoft,
-                            borderColor: active ? COLORS.accent : COLORS.panelSoft,
-                            color: COLORS.accentDark,
-                          }}
-                        >
-                          {label}
+                      }
+                    />
+                    <Field
+                      icon={Lock}
+                      placeholder="Confirm password"
+                      value={confirmPassword}
+                      onChange={setConfirmPassword}
+                      autoComplete="new-password"
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      trailing={
+                        <button type="button" onClick={() => setShowConfirmPassword((current) => !current)} className="text-[#79709E]">
+                          {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                         </button>
-                      );
-                    })}
+                      }
+                    />
                   </div>
-                </div>
+                  {usernameStatus !== 'idle' && (
+                    <p className="mt-4 text-sm font-medium" style={{ color: usernameStatus === 'taken' ? '#B4533D' : COLORS.success }}>
+                      {usernameStatus === 'checking'
+                        ? 'Checking username availability...'
+                        : usernameStatus === 'available'
+                          ? 'Username is available.'
+                          : 'Username is already taken.'}
+                    </p>
+                  )}
+                </section>
+              )}
 
-                <div className="mt-8 rounded-[20px] p-5" style={{ background: COLORS.panelSoft }}>
-                  <p className="text-2xl font-semibold" style={{ color: COLORS.accentDark }}>Your Future Avatar</p>
-                  <div
-                    className="mt-4 flex min-h-[180px] items-center justify-center rounded-[20px] border-2 border-dashed px-6 py-10 text-center"
-                    style={{ borderColor: COLORS.borderStrong, background: COLORS.panel }}
-                  >
+              {step === 1 && (
+                <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
+                  <div className="flex items-start justify-between gap-4">
                     <div>
-                      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: COLORS.panelMuted }}>
-                        <User size={28} style={{ color: COLORS.accentDark }} />
-                      </div>
-                      <p className="mt-4 text-2xl" style={{ color: COLORS.muted }}>Complete step 3 to customize</p>
+                      <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Quick Personality Quiz</h2>
+                      <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>Help us personalize your experience</p>
+                    </div>
+                    <CheckCircle2 size={28} style={{ color: COLORS.accent }} />
+                  </div>
+
+                  <div className="mt-8">
+                    <h3 className="text-2xl font-semibold tracking-[-0.02em]" style={{ color: COLORS.text }}>Pick your favorite environment:</h3>
+                    <div className="mt-5 grid grid-cols-2 gap-4">
+                      {QUIZ_OPTIONS.environment.map(({ id, label, icon: Icon }) => {
+                        const active = quiz.environment === id;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setQuiz((current) => ({ ...current, environment: id }))}
+                            className="rounded-[20px] border p-4 text-left transition hover:-translate-y-0.5"
+                            style={{
+                              background: COLORS.panelSoft,
+                              borderColor: active ? COLORS.accent : COLORS.panelSoft,
+                              boxShadow: active ? 'inset 0 0 0 1px #7C3AED' : 'none',
+                            }}
+                          >
+                            <div className="flex h-28 items-center justify-center rounded-2xl" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.2))' }}>
+                              <Icon size={42} style={{ color: COLORS.accentDark }} />
+                            </div>
+                            <p className="mt-4 text-center text-2xl font-semibold" style={{ color: COLORS.accentDark }}>{label}</p>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
-              </section>
+
+                  <div className="mt-8">
+                    <h3 className="text-2xl font-semibold tracking-[-0.02em]" style={{ color: COLORS.text }}>Choose your superpower:</h3>
+                    <div className="mt-5 grid grid-cols-2 gap-4">
+                      {QUIZ_OPTIONS.power.map(({ id, label }) => {
+                        const active = quiz.power === id;
+                        return (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => setQuiz((current) => ({ ...current, power: id }))}
+                            className="rounded-[18px] border px-4 py-5 text-center text-xl font-semibold transition"
+                            style={{
+                              background: active ? '#F4C8B8' : COLORS.panelSoft,
+                              borderColor: active ? COLORS.accent : COLORS.panelSoft,
+                              color: COLORS.accentDark,
+                            }}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {step === 2 && (
+                <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
+                  <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Your Avatar</h2>
+                  <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>You'll fully customize this in the next step</p>
+                  <div className="mt-8 rounded-[20px] p-5" style={{ background: COLORS.panelSoft }}>
+                    <p className="text-2xl font-semibold" style={{ color: COLORS.accentDark }}>Your Future Avatar</p>
+                    <div
+                      className="mt-4 flex min-h-[180px] items-center justify-center rounded-[20px] border-2 border-dashed px-6 py-10 text-center"
+                      style={{ borderColor: COLORS.borderStrong, background: COLORS.panel }}
+                    >
+                      <div>
+                        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl" style={{ background: COLORS.panelMuted }}>
+                          <User size={28} style={{ color: COLORS.accentDark }} />
+                        </div>
+                        <p className="mt-4 text-2xl" style={{ color: COLORS.muted }}>Customize your avatar and accessories after signup</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <label
+                    className="mt-6 flex items-start gap-3 rounded-2xl border p-4 text-sm"
+                    style={{ borderColor: COLORS.border, background: COLORS.panelSoft, color: COLORS.text, direction: dir }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={agreed}
+                      onChange={(e) => setAgreed(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                      style={{ accentColor: COLORS.accent }}
+                    />
+                    <span>
+                      {t('legal.agreeTerms')}{' '}
+                      <Link href="/terms" target="_blank" rel="noopener noreferrer" className="font-medium underline" style={{ color: COLORS.accent }}>
+                        {t('legal.termsTitle')}
+                      </Link>{' '}
+                      &{' '}
+                      <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-medium underline" style={{ color: COLORS.accent }}>
+                        {t('legal.privacyTitle')}
+                      </Link>
+                    </span>
+                  </label>
+                </section>
+              )}
 
               {error && (
                 <div className="rounded-2xl border px-4 py-3 text-sm font-medium" style={{ borderColor: '#E8B7A8', background: '#FFF1EC', color: '#A24F39' }}>
@@ -343,16 +416,28 @@ export default function RegisterPage() {
               )}
 
               <div className="flex items-center justify-between gap-4">
-                <Link href="/login" className="text-lg font-medium" style={{ color: COLORS.muted }}>
-                  Back
-                </Link>
+                {step === 0 ? (
+                  <Link href="/login" className="text-lg font-medium" style={{ color: COLORS.muted }}>
+                    Back
+                  </Link>
+                ) : (
+                  <button type="button" onClick={goBack} className="text-lg font-medium" style={{ color: COLORS.muted }}>
+                    Back
+                  </button>
+                )}
                 <button
                   type="submit"
                   disabled={loading}
                   className="inline-flex items-center gap-3 rounded-2xl px-7 py-4 text-lg font-semibold text-white transition disabled:opacity-60"
                   style={{ background: COLORS.accent }}
                 >
-                  {loading ? 'Creating account...' : 'Continue to Interests'}
+                  {loading
+                    ? 'Creating account...'
+                    : step === 0
+                      ? 'Continue to Interests'
+                      : step === 1
+                        ? 'Continue to Avatar'
+                        : 'Create Account'}
                   <ArrowRight size={20} />
                 </button>
               </div>

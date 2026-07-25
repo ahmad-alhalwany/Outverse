@@ -18,7 +18,7 @@ export type VaultMapMarker = {
   expiresAt?: string;
   isMine?: boolean;
   message?: string | null;
-  showOwnMessage?: boolean;
+  senderName?: string | null;
 };
 
 function bottleDivIcon(emoji: string, color: string, cosmic: boolean, isMine: boolean) {
@@ -67,8 +67,7 @@ function BottleMapMarker({ marker: m, cosmic }: { marker: VaultMapMarker; cosmic
     [m.emoji, m.color, cosmic, isMine],
   );
   const timeLeft = m.expiresAt ? formatBottleTimeLeft(m.expiresAt) : null;
-  const showMessage =
-    isMine && m.showOwnMessage !== false && m.message && m.message.trim().length > 0;
+  const hasMessage = !!m.message && m.message.trim().length > 0;
 
   return (
     <Marker position={[m.lat, m.lng]} icon={icon}>
@@ -77,23 +76,20 @@ function BottleMapMarker({ marker: m, cosmic }: { marker: VaultMapMarker; cosmic
           {isMine && (
             <span
               className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full mb-1"
-              style={{ background: 'rgba(160,86,59,0.2)', color: '#a0563b' }}
+              style={{ background: 'rgba(124,58,237,0.2)', color: '#7C3AED' }}
             >
               Your bottle
             </span>
           )}
           <div className="text-lg leading-none mb-1">{m.emoji} 🍶</div>
           <strong>{m.label || 'Mood'}</strong>
-          {showMessage ? (
+          {m.senderName && (
+            <p className="text-xs mt-1 opacity-75">from @{m.senderName}</p>
+          )}
+          {hasMessage && (
             <p className="text-sm mt-2 leading-relaxed max-w-[220px] whitespace-pre-wrap">
               {m.message}
             </p>
-          ) : (
-            !isMine && (
-              <p className="text-xs mt-2 opacity-75">
-                Catch a bottle to read strangers&apos; messages
-              </p>
-            )
           )}
           {timeLeft && (
             <p className="vault-map-popup-ttl text-xs mt-2 opacity-80">
@@ -115,7 +111,7 @@ type Props = {
   onMapReady?: (map: L.Map) => void;
 };
 
-function tileFor(variant: 'light' | 'dark', mapStyle: VaultMapStyle) {
+function tileFor(mapStyle: VaultMapStyle) {
   if (mapStyle === 'cosmic') {
     return {
       url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
@@ -123,17 +119,14 @@ function tileFor(variant: 'light' | 'dark', mapStyle: VaultMapStyle) {
         '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO',
     };
   }
-  return variant === 'dark'
-    ? {
-        url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO',
-      }
-    : {
-        url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO',
-      };
+  // The "street" style always uses the richly-detailed Voyager tiles (roads, parks,
+  // building footprints) regardless of app theme — map embeds read best with real
+  // cartographic detail; only the "cosmic" style opts into a flat dark look.
+  return {
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO',
+  };
 }
 
 export default function EmotionVaultMapInner({
@@ -149,7 +142,7 @@ export default function EmotionVaultMapInner({
     : [20, 0];
   const defaultZoom = markers.length ? 3 : 2;
 
-  const tile = useMemo(() => tileFor(variant, mapStyle), [variant, mapStyle]);
+  const tile = useMemo(() => tileFor(mapStyle), [mapStyle]);
   const cosmic = mapStyle === 'cosmic';
 
   return (

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { type AuthUser, getUser, logout, refreshSession } from '@/lib/auth';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { apiUrl } from '@/lib/api';
@@ -22,17 +23,19 @@ import {
   MagnifyingGlassIcon,
   SparklesIcon,
   SunIcon,
-  MoonIcon
+  MoonIcon,
+  Cog6ToothIcon,
 } from '@heroicons/react/24/outline';
 import { useRef } from 'react';
 import { useLocale } from '@/components/LocaleProvider';
+import { useLiveNotifications, type LiveNotification } from '@/hooks/useLiveNotifications';
 
 type TabId = 'home' | 'lab' | 'bazaar' | 'vault' | 'story' | 'shop';
 
 interface Tab {
   id: TabId;
   name: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>;
   color: string;
 }
 
@@ -52,9 +55,11 @@ interface SearchResults {
 interface AppNotification {
   id: number;
   actor: { id: number; username: string; avatar: string | null };
-  verb: 'reaction' | 'comment' | 'follow';
+  verb: 'reaction' | 'comment' | 'follow' | string;
   post: number | null;
   reel: number | null;
+  story?: number | null;
+  idea?: number | null;
   text: string;
   is_read: boolean;
   created_at: string;
@@ -70,15 +75,28 @@ const TAB_ROUTES: Record<TabId, string> = {
   home: '/',
   lab: '/lab',
   bazaar: '/bazaar',
-  vault: '/bottles',
+  vault: '/vault',
   story: '/forge',
   shop: '/shop',
 };
 
+function notificationHref(n: AppNotification): string | null {
+  const kind = n.verb;
+  if (kind === 'follow' && n.actor?.id) return `/profile/${n.actor.id}`;
+  if (n.reel) return `/reels/${n.reel}`;
+  if (n.post) return `/post/${n.post}`;
+  if (n.story) return `/?story=${n.story}`;
+  if (n.idea || kind.startsWith('idea_')) return n.idea ? `/bazaar/${n.idea}` : '/bazaar';
+  if (kind === 'chat_message') return '/chat';
+  if (kind === 'going_live') return '/live';
+  if (kind.includes('video')) return '/videos';
+  return null;
+}
+
 function tabFromPath(pathname: string): TabId {
   if (pathname.startsWith('/lab')) return 'lab';
   if (pathname.startsWith('/bazaar')) return 'bazaar';
-  if (pathname.startsWith('/bottles')) return 'vault';
+  if (pathname.startsWith('/vault') || pathname.startsWith('/bottles') || pathname.startsWith('/capsules')) return 'vault';
   if (pathname.startsWith('/forge')) return 'story';
   if (pathname.startsWith('/shop')) return 'shop';
   return 'home';
@@ -106,6 +124,7 @@ const Header = () => {
     shop: [],
   });
   const [showSearch, setShowSearch] = useState(false);
+  const [notifActionError, setNotifActionError] = useState('');
   const notifRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -140,16 +159,19 @@ const Header = () => {
     searchResults.bottles.length +
     searchResults.shop.length;
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (silent = true) => {
     try {
       const res = await apiFetch('notifications/');
       if (res.ok) {
         const data = await res.json();
         setNotifications(Array.isArray(data.results) ? data.results : []);
         setUnreadCount(data.unread_count || 0);
+        if (!silent) setNotifActionError('');
+      } else if (!silent) {
+        setNotifActionError('Could not refresh notifications.');
       }
     } catch {
-      /* ignore */
+      if (!silent) setNotifActionError('Could not refresh notifications.');
     }
   };
 
@@ -158,11 +180,43 @@ const Header = () => {
   }, [pathname]);
 
   useEffect(() => {
+    if (!notifActionError) return;
+    const timer = setTimeout(() => setNotifActionError(''), 3500);
+    return () => clearTimeout(timer);
+  }, [notifActionError]);
+
+  useEffect(() => {
     refreshSession().then((u) => setUser(u ?? getUser()));
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
+    const interval = setInterval(fetchNotifications, 120000);
     return () => clearInterval(interval);
   }, []);
+
+  useLiveNotifications({
+    enabled: !!user,
+    onNotification: (payload) => {
+      const actor = payload.actor;
+      const row: AppNotification = {
+        id: payload.id,
+        verb: payload.verb,
+        text: payload.text,
+        post: payload.post ?? null,
+        reel: payload.reel ?? null,
+        story: payload.story ?? null,
+        idea: payload.idea ?? null,
+        is_read: false,
+        created_at: payload.created_at || new Date().toISOString(),
+        actor: actor
+          ? { id: actor.id, username: actor.username, avatar: actor.avatar ?? null }
+          : { id: payload.actor_id ?? 0, username: 'User', avatar: null },
+      };
+      setNotifications((prev) => {
+        if (prev.some((n) => n.id === row.id)) return prev;
+        return [row, ...prev].slice(0, 20);
+      });
+      setUnreadCount((c) => c + 1);
+    },
+  });
 
   function navigateTab(tabId: TabId) {
     setActiveTab(tabId);
@@ -175,15 +229,18 @@ const Header = () => {
       if (res.ok) {
         setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
         setUnreadCount(0);
+        setNotifActionError('');
+      } else {
+        setNotifActionError('Could not mark all as read.');
       }
     } catch {
-      /* ignore */
+      setNotifActionError('Could not mark all as read.');
     }
   }
 
   function toggleNotifications() {
     setShowNotifications((v) => {
-      if (!v) fetchNotifications();
+      if (!v) void fetchNotifications(false);
       return !v;
     });
   }
@@ -198,9 +255,12 @@ const Header = () => {
             prev.map((x) => (x.id === id ? { ...x, is_read: true } : x)),
           );
           setUnreadCount(data.unread_count ?? 0);
+          setNotifActionError('');
+        } else {
+          setNotifActionError('Could not update notification.');
         }
       } catch {
-        /* ignore */
+        setNotifActionError('Could not update notification.');
       }
     }
   }
@@ -208,13 +268,8 @@ const Header = () => {
   async function handleNotificationClick(n: AppNotification) {
     await markNotificationRead(n.id);
     setShowNotifications(false);
-    if (n.verb === 'follow' && n.actor?.id) {
-      router.push(`/profile/${n.actor.id}`);
-    } else if (n.reel) {
-      router.push(`/reels/${n.reel}`);
-    } else if (n.post) {
-      router.push(`/post/${n.post}`);
-    }
+    const href = notificationHref(n);
+    if (href) router.push(href);
   }
 
   async function handleLogout() {
@@ -260,18 +315,20 @@ const Header = () => {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 bg-background/80 backdrop-blur-lg border-b border-surface z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-4">
+      <div className="mx-auto max-w-7xl">
+        <div className="flex h-16 items-center justify-between rounded-[24px] border border-white/10 bg-background/72 px-3 shadow-[0_20px_60px_rgba(9,6,28,0.35)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/62 sm:px-5">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/" className="text-2xl font-bold text-text hover:opacity-90 transition">
-              Outverse
+            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-text hover:opacity-90 transition">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/cosmory-icon.svg" alt="Cosmory" width={36} height={36} className="h-9 w-9 rounded-xl" />
+              <span>Cosmory</span>
             </Link>
           </div>
 
           {/* Navigation Tabs */}
-          <nav className="flex space-x-1">
+          <nav className="hidden lg:flex space-x-1 rounded-2xl border border-white/6 bg-white/[0.03] p-1" aria-label={t('nav.mainNavigation')}>
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -279,19 +336,21 @@ const Header = () => {
                 <button
                   key={tab.id}
                   onClick={() => navigateTab(tab.id)}
-                  className={`relative px-4 py-2 rounded-lg flex items-center space-x-2 transition-all duration-200 group
-                    ${isActive ? tabColors[tab.id] : 'text-text-secondary hover:text-text'}
+                  aria-label={tab.name}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`relative flex items-center gap-2 rounded-xl px-3 py-2 transition-all duration-200 group
+                    ${isActive ? `${tabColors[tab.id]} shadow-[0_10px_24px_rgba(17,12,42,0.22)]` : 'text-text-secondary hover:bg-white/[0.04] hover:text-text'}
                   `}
                   style={isActive ? { fontWeight: 700 } : {}}
                 >
                   <motion.span
-                    whileHover={{ scale: 1.15 }}
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={{ scale: 1.12 }}
+                    whileTap={{ scale: 0.96 }}
                     className="flex items-center"
                   >
-                    <Icon className="h-5 w-5" />
+                    <Icon className="h-5 w-5" strokeWidth={1.75} />
                   </motion.span>
-                  <span className="hidden md:inline-block">{tab.name}</span>
+                  <span className="hidden md:inline-block text-sm">{tab.name}</span>
                   {isActive && (
                     <motion.div
                       layoutId="activeTab"
@@ -306,8 +365,8 @@ const Header = () => {
           </nav>
 
           {/* Right Side Icons */}
-          <div className="flex items-center space-x-4">
-            <div className="relative">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="relative hidden sm:block">
               <input
                 type="text"
                 placeholder="Search creators & posts..."
@@ -315,11 +374,11 @@ const Header = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowSearch(true)}
                 onBlur={() => setTimeout(() => setShowSearch(false), 150)}
-                className="bg-surface text-text rounded-full pl-10 pr-4 py-2 w-56 focus:outline-none focus:ring-2 focus:ring-lab"
+                className="cosmic-input w-44 rounded-full border-white/10 bg-white/[0.05] py-2 pl-10 pr-4 text-sm sm:w-56"
               />
-              <MagnifyingGlassIcon className="h-5 w-5 text-text-secondary absolute left-3 top-1/2 transform -translate-y-1/2" />
+              <MagnifyingGlassIcon className="h-4 w-4 text-text-secondary absolute left-3.5 top-1/2 transform -translate-y-1/2" strokeWidth={1.75} />
               {showSearch && searchQuery.trim() && (
-                <div className="absolute left-0 top-12 w-72 bg-background rounded-xl shadow-2xl z-50 overflow-hidden border border-surface max-h-96 overflow-y-auto">
+                <div className="absolute left-0 top-14 z-50 max-h-96 w-72 overflow-y-auto rounded-[22px] border border-white/10 bg-background/95 shadow-2xl backdrop-blur-2xl">
                   {totalSearchResults === 0 ? (
                     <div className="px-4 py-6 text-center text-text-secondary text-sm">No results found.</div>
                   ) : (
@@ -388,32 +447,34 @@ const Header = () => {
             </div>
 
             <motion.button
-              whileHover={{ scale: 1.15, rotate: 15 }}
-              whileTap={{ scale: 0.9 }}
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.94 }}
               onClick={toggleTheme}
-              className="p-2 text-text-secondary hover:text-story transition-colors"
+              className="icon-only border border-white/6 bg-white/[0.04] p-2"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               aria-label="Toggle theme"
             >
               {theme === 'dark' ? (
-                <SunIcon className="h-6 w-6" />
+                <SunIcon className="h-5 w-5" strokeWidth={1.75} />
               ) : (
-                <MoonIcon className="h-6 w-6" />
+                <MoonIcon className="h-5 w-5" strokeWidth={1.75} />
               )}
             </motion.button>
 
             <div className="relative flex items-center justify-center">
               <motion.button
                 ref={notifRef}
-                whileHover={{ scale: 1.15 }}
-                whileTap={{ scale: 0.95 }}
-                className="p-2 text-text-secondary hover:text-lab transition-colors relative"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.94 }}
+                className="icon-only relative border border-white/6 bg-white/[0.04] p-2"
                 onClick={toggleNotifications}
+                aria-label={t('notifications.title')}
+                aria-expanded={showNotifications}
               >
-                <BellIcon className="h-6 w-6" />
+                <BellIcon className="h-5 w-5" strokeWidth={1.75} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-gradient-to-tr from-yellow-400 to-pink-400 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center animate-pulse shadow-lg border-2 border-background z-10">
-                    {unreadCount}
+                  <span className="absolute -top-1 -right-1 bg-gradient-to-tr from-yellow-400 to-pink-400 text-white text-[10px] font-bold rounded-full min-w-[1.1rem] h-[1.1rem] flex items-center justify-center px-1 shadow-lg border-2 border-background z-10">
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
                 {unreadCount > 0 && <OrbitStars />}
@@ -423,16 +484,16 @@ const Header = () => {
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 top-12 w-80 bg-background rounded-2xl shadow-2xl z-50 overflow-hidden border border-surface backdrop-blur-xl"
+                  className="absolute right-0 top-14 z-50 w-80 overflow-hidden rounded-[24px] border border-white/10 bg-background/92 shadow-2xl backdrop-blur-2xl"
                   style={{ boxShadow: '0 8px 32px 0 rgba(80, 0, 120, 0.25)' }}
                 >
                   <div className="relative p-4 border-b border-surface flex items-center gap-2 bg-gradient-to-r from-purple-700/80 to-blue-700/80">
                     <motion.span
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}
-                      className="inline-block text-2xl text-blue-200 drop-shadow-glow"
+                      className="inline-flex items-center justify-center w-8 h-8 text-blue-200 drop-shadow-glow"
                     >
-                      <SparklesIcon className="h-7 w-7 animate-pulse" />
+                      <SparklesIcon className="h-5 w-5" strokeWidth={1.75} />
                     </motion.span>
                     <span className="font-bold text-base text-white tracking-wide drop-shadow">Notifications</span>
                     {unreadCount > 0 && (
@@ -441,10 +502,15 @@ const Header = () => {
                       </button>
                     )}
                   </div>
+                  {notifActionError && (
+                    <div className="px-4 py-2 text-xs font-medium text-red-400 bg-red-500/10" role="alert">
+                      {notifActionError}
+                    </div>
+                  )}
                   <ul className="max-h-80 overflow-y-auto">
                     {notifications.length === 0 ? (
                       <li className="p-8 text-center text-text-secondary flex flex-col items-center gap-2">
-                        <SparklesIcon className="h-10 w-10 animate-bounce" />
+                        <SparklesIcon className="h-8 w-8 animate-bounce" strokeWidth={1.75} />
                         <span>All is calm in the cosmos 🚀</span>
                       </li>
                     ) : (
@@ -492,28 +558,38 @@ const Header = () => {
             
             <Link
               href="/chat"
-              className="p-2 text-text-secondary hover:text-bazaar transition-colors inline-flex"
+              className="icon-only hidden border border-white/6 bg-white/[0.04] p-2 sm:inline-flex"
               title="Cosmic Chat"
               aria-label="Cosmic Chat"
             >
-              <ChatBubbleLeftRightIcon className="h-6 w-6" />
+              <ChatBubbleLeftRightIcon className="h-5 w-5" strokeWidth={1.75} />
+            </Link>
+
+            <Link
+              href="/settings"
+              className="icon-only hidden border border-white/6 bg-white/[0.04] p-2 sm:inline-flex"
+              title="Settings"
+              aria-label="Settings"
+            >
+              <Cog6ToothIcon className="h-5 w-5" strokeWidth={1.75} />
             </Link>
             
             <div className="relative">
               <motion.button
-                whileHover={{ scale: 1.15 }}
-                whileTap={{ scale: 0.95 }}
-                className="p-2 text-text-secondary hover:text-vault transition-colors flex items-center gap-2"
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                className="flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] py-1 pl-1 pr-2 transition-colors hover:bg-white/[0.08]"
                 onClick={() => setShowAccount(v => !v)}
+                aria-label="Account menu"
               >
-                <UserCircleIcon className="h-6 w-6" />
-                {user && <span className="hidden md:inline-block text-sm font-medium">{user.username}</span>}
+                <UserCircleIcon className="h-6 w-6 text-text-secondary" strokeWidth={1.75} />
+                {user && <span className="hidden lg:inline-block text-sm font-medium">{user.username}</span>}
               </motion.button>
               {showAccount && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="absolute right-0 top-12 w-48 bg-background rounded-xl shadow-2xl z-50 overflow-hidden border border-surface"
+                  className="absolute right-0 top-14 z-50 w-56 overflow-hidden rounded-[22px] border border-white/10 bg-background/95 shadow-2xl backdrop-blur-2xl"
                 >
                   {user ? (
                     <>

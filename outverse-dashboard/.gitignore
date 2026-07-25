@@ -41,3 +41,12 @@ next-env.d.ts
 
 # local scratch
 posts_api_response.json
+
+# playwright
+/test-results/
+/e2e-report/
+/playwright-report/
+
+# editor/build scratch
+*.bak
+.hermes-tmp*

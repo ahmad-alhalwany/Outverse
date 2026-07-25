@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
-import { deleteChallenge, fetchChallengesAdmin, saveChallenge } from '@/lib/adminApi';
+import { deleteChallenge, fetchChallengesAdmin, saveChallenge, fetchChallengeSubmissions, approveChallengeSubmission, type AdminSubmission } from '@/lib/adminApi';
 import type { AdminChallenge } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 const EMPTY = {
   title: '',
@@ -16,10 +17,27 @@ const EMPTY = {
 };
 
 export default function AdminChallengesPage() {
+  const confirm = useConfirm();
   const [challenges, setChallenges] = useState<AdminChallenge[]>([]);
   const [form, setForm] = useState(EMPTY);
   const [editId, setEditId] = useState<number | null>(null);
   const [msg, setMsg] = useState('');
+  const [reviewChallengeId, setReviewChallengeId] = useState<number | null>(null);
+  const [submissions, setSubmissions] = useState<AdminSubmission[]>([]);
+  const [submissionsLoading, setSubmissionsLoading] = useState(false);
+
+  const loadSubmissions = useCallback(async (challengeId: number) => {
+    setSubmissionsLoading(true);
+    try {
+      const rows = await fetchChallengeSubmissions(challengeId);
+      setSubmissions(rows);
+    } catch {
+      setMsg('Failed to load submissions');
+      setSubmissions([]);
+    } finally {
+      setSubmissionsLoading(false);
+    }
+  }, []);
 
   const load = useCallback(() => {
     fetchChallengesAdmin().then(setChallenges).catch(() => setMsg('Failed to load challenges'));
@@ -35,13 +53,17 @@ export default function AdminChallengesPage() {
       ...form,
       end_date: new Date(form.end_date).toISOString(),
     };
-    const res = await saveChallenge(payload, editId ?? undefined);
-    if (res.ok) {
-      setMsg(editId ? 'Challenge updated.' : 'Challenge created.');
-      setEditId(null);
-      setForm(EMPTY);
-      load();
-    } else {
+    try {
+      const res = await saveChallenge(payload, editId ?? undefined);
+      if (res.ok) {
+        setMsg(editId ? 'Challenge updated.' : 'Challenge created.');
+        setEditId(null);
+        setForm(EMPTY);
+        load();
+      } else {
+        setMsg('Save failed.');
+      }
+    } catch {
       setMsg('Save failed.');
     }
   };
@@ -103,9 +125,13 @@ export default function AdminChallengesPage() {
                         className="admin-btn admin-btn--danger"
                         style={{ marginLeft: 6 }}
                         onClick={async () => {
-                          if (!window.confirm('Delete challenge?')) return;
-                          await deleteChallenge(c.id);
-                          load();
+                          if (!(await confirm('Delete challenge?', { danger: true, confirmLabel: 'Delete' }))) return;
+                          const res = await deleteChallenge(c.id);
+                          if (res.ok) {
+                            load();
+                          } else {
+                            setMsg('Failed to delete challenge.');
+                          }
                         }}
                       >
                         Delete
@@ -128,7 +154,7 @@ export default function AdminChallengesPage() {
                     setEditId(c.id);
                     setForm({ title: c.title, description: c.description || '', type: c.type, difficulty: c.difficulty, is_daily: c.is_daily, is_active: c.is_active, end_date: c.end_date.slice(0, 16) });
                   }}>Edit</button>
-                  <button type="button" className="admin-btn admin-btn--danger" onClick={async () => { if (!window.confirm('Delete challenge?')) return; await deleteChallenge(c.id); load(); }}>Delete</button>
+                  <button type="button" className="admin-btn admin-btn--danger" onClick={async () => { if (!(await confirm('Delete challenge?', { danger: true, confirmLabel: 'Delete' }))) return; const res = await deleteChallenge(c.id); if (res.ok) load(); else setMsg('Failed to delete challenge.'); }}>Delete</button>
                 </div>
               </div>
             ))}
@@ -169,6 +195,90 @@ export default function AdminChallengesPage() {
             <button type="submit" className="admin-btn admin-btn--primary">{editId ? 'Save' : 'Create'}</button>
           </form>
         </div>
+      </div>
+
+      <div className="admin-panel" style={{ marginTop: 24 }}>
+        <h3 className="admin-panel__title">Review submissions</h3>
+        <div className="admin-form-row">
+          <label>Challenge</label>
+          <select
+            className="admin-input"
+            value={reviewChallengeId ?? ''}
+            onChange={(e) => {
+              const id = Number(e.target.value);
+              setReviewChallengeId(Number.isFinite(id) && id > 0 ? id : null);
+              if (Number.isFinite(id) && id > 0) void loadSubmissions(id);
+              else setSubmissions([]);
+            }}
+          >
+            <option value="">Select a challenge…</option>
+            {challenges.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        </div>
+        {submissionsLoading ? (
+          <p className="admin-muted">Loading submissions…</p>
+        ) : reviewChallengeId && submissions.length === 0 ? (
+          <p className="admin-muted">No submissions yet.</p>
+        ) : (
+          <div className="admin-table-wrap admin-table--desktop">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Content</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {submissions.map((sub) => (
+                  <tr key={sub.id}>
+                    <td>@{sub.user?.username || 'unknown'}</td>
+                    <td>{sub.content.slice(0, 120)}{sub.content.length > 120 ? '…' : ''}</td>
+                    <td>{sub.is_approved ? 'Approved' : 'Pending'}</td>
+                    <td className="admin-actions-wrap">
+                      {!sub.is_approved && reviewChallengeId ? (
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--primary"
+                          onClick={async () => {
+                            const res = await approveChallengeSubmission(reviewChallengeId, sub.id, true);
+                            if (res.ok) {
+                              setMsg('Submission approved.');
+                              void loadSubmissions(reviewChallengeId);
+                            } else {
+                              setMsg('Failed to approve submission.');
+                            }
+                          }}
+                        >
+                          Approve
+                        </button>
+                      ) : null}
+                      {sub.is_approved && reviewChallengeId ? (
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--ghost"
+                          onClick={async () => {
+                            const res = await approveChallengeSubmission(reviewChallengeId, sub.id, false);
+                            if (res.ok) {
+                              void loadSubmissions(reviewChallengeId);
+                            } else {
+                              setMsg('Failed to revoke submission.');
+                            }
+                          }}
+                        >
+                          Revoke
+                        </button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </AdminShell>
   );

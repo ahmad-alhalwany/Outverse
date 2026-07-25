@@ -17,6 +17,7 @@ import {
   type ReelItem,
   type ReelMood,
 } from '@/lib/reelTypes';
+import ReelCreatorStats from '@/components/reels/ReelCreatorStats';
 import { useLocale } from '@/components/LocaleProvider';
 
 function ReelThumb({ reel, onClick }: { reel: ReelItem; onClick: () => void }) {
@@ -98,6 +99,8 @@ export default function ReelsDiscoverPage() {
         </h1>
         <p>{t('reels.discoverSub')}</p>
       </header>
+
+      <ReelCreatorStats />
 
       {loading && (
         <div className="reels-discover__loading">

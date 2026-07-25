@@ -1,62 +1,71 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeftIcon,
+  BookmarkIcon,
   ChatBubbleLeftRightIcon,
   HeartIcon,
   PencilSquareIcon,
   TrashIcon,
   UsersIcon,
   FlagIcon,
+  RocketLaunchIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
-import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
+import { HeartIcon as HeartSolid, BookmarkIcon as BookmarkSolid } from '@heroicons/react/24/solid';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 import { apiFetchJson, mediaUrl } from '@/lib/api';
 import {
   bazaarCategoryLabel,
   bazaarOwnerName,
+  formatIdeaTargetDate,
   type BazaarCollaborationRequest,
   type BazaarIdea,
   type BazaarIdeaComment,
+  type IdeaMilestone,
 } from '@/lib/bazaarTypes';
-import { getUser } from '@/lib/auth';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
+import IdeaConstellationSection from '@/components/bazaar/IdeaConstellationSection';
+import IdeaCrewPanel from '@/components/bazaar/IdeaCrewPanel';
+import type { IdeaConstellation, IdeaCrew } from '@/lib/differentiatorApi';
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#854330',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
     progressBg: 'rgba(0,0,0,0.06)',
     fundedBg: '#e8f3ee',
     fundedText: '#2f8f6b',
-    btnShadow: '0 6px 20px rgba(160,86,59,0.3)',
-    overlay: 'rgba(61,43,34,0.45)',
+    btnShadow: '0 6px 20px rgba(124,58,237,0.3)',
+    overlay: 'rgba(33,27,61,0.45)',
     toastBg: '#2f8f6b',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
-    white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
     progressBg: 'rgba(255,255,255,0.08)',
     fundedBg: 'rgba(74,222,128,0.15)',
     fundedText: '#4ade80',
-    btnShadow: '0 6px 20px rgba(106,0,255,0.25)',
-    overlay: 'rgba(10,10,34,0.65)',
+    btnShadow: '0 6px 20px rgba(167,139,250,0.3)',
+    overlay: 'rgba(10,8,24,0.65)',
     toastBg: '#4ade80',
   },
 };
@@ -64,7 +73,10 @@ const PALETTES = {
 type Props = {
   idea: BazaarIdea;
   voted: boolean;
+  saved: boolean;
   onVote: () => void;
+  onToggleSave: () => void;
+  onPledge: () => void;
   canManage?: boolean;
   onEdit?: () => void;
   onDelete?: () => void;
@@ -75,6 +87,11 @@ type Props = {
   onCommentCreated: (comment: BazaarIdeaComment) => void;
   onReportSuccess: () => void;
   onApplySuccess: () => void;
+  onApplicantResponded?: (result: { collab_project_id?: number; idea_status?: string }) => void;
+  onLaunchCollab?: () => void;
+  launchCollabBusy?: boolean;
+  constellation?: IdeaConstellation | null;
+  crew?: IdeaCrew | null;
 };
 
 function formatDate(value?: string) {
@@ -92,7 +109,10 @@ function displayName(user: BazaarIdea['owner']) {
 export default function IdeaDetailView({
   idea,
   voted,
+  saved,
   onVote,
+  onToggleSave,
+  onPledge,
   canManage,
   onEdit,
   onDelete,
@@ -103,6 +123,11 @@ export default function IdeaDetailView({
   onCommentCreated,
   onReportSuccess,
   onApplySuccess,
+  onApplicantResponded,
+  onLaunchCollab,
+  launchCollabBusy = false,
+  constellation,
+  crew,
 }: Props) {
   const { theme } = useTheme();
   const { t, locale } = useLocale();
@@ -111,7 +136,9 @@ export default function IdeaDetailView({
     ? Math.min(100, Math.round((idea.funding_raised / idea.funding_goal) * 100))
     : null;
   const ownerName = bazaarOwnerName(idea);
-  const me = getUser();
+  const me = useAuthUser();
+  const confirm = useConfirm();
+  const dueLabel = formatIdeaTargetDate(idea.target_date, locale);
   const [comment, setComment] = useState('');
   const [commenting, setCommenting] = useState(false);
   const [commentError, setCommentError] = useState('');
@@ -122,6 +149,25 @@ export default function IdeaDetailView({
   const [applying, setApplying] = useState(false);
   const [toast, setToast] = useState('');
   const [reporting, setReporting] = useState(false);
+  const [localComments, setLocalComments] = useState(comments);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [applicantsLocal, setApplicantsLocal] = useState(applicants);
+  const [milestonesLocal, setMilestonesLocal] = useState<IdeaMilestone[]>(idea.milestones || []);
+  const [newMilestone, setNewMilestone] = useState('');
+  const [milestonesSaving, setMilestonesSaving] = useState(false);
+
+  useEffect(() => {
+    setLocalComments(comments);
+  }, [comments]);
+
+  useEffect(() => {
+    setApplicantsLocal(applicants);
+  }, [applicants]);
+
+  useEffect(() => {
+    setMilestonesLocal(idea.milestones || []);
+  }, [idea.milestones]);
 
   async function submitComment() {
     if (!comment.trim()) {
@@ -137,6 +183,7 @@ export default function IdeaDetailView({
       });
       if (!res.ok) throw new Error('failed');
       const data = (await res.json()) as BazaarIdeaComment;
+      setLocalComments((current) => [data, ...current]);
       onCommentCreated(data);
       setComment('');
     } catch {
@@ -144,6 +191,96 @@ export default function IdeaDetailView({
     } finally {
       setCommenting(false);
     }
+  }
+
+  async function updateComment(commentId: number) {
+    if (!editCommentText.trim()) return;
+    try {
+      const res = await apiFetchJson(`ideas/${idea.id}/comments/${commentId}/`, {
+        method: 'PATCH',
+        json: { content: editCommentText.trim() },
+      });
+      if (!res.ok) throw new Error('failed');
+      const data = (await res.json()) as BazaarIdeaComment;
+      setLocalComments((current) => current.map((c) => (c.id === commentId ? data : c)));
+      setEditingCommentId(null);
+      setEditCommentText('');
+    } catch {
+      setToast('Could not update your comment.');
+      setTimeout(() => setToast(''), 2500);
+    }
+  }
+
+  async function removeComment(commentId: number) {
+    if (!(await confirm('Delete this comment?', { danger: true, confirmLabel: 'Delete' }))) return;
+    try {
+      const res = await apiFetchJson(`ideas/${idea.id}/comments/${commentId}/`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('failed');
+      setLocalComments((current) => current.filter((c) => c.id !== commentId));
+    } catch {
+      setToast('Could not delete your comment.');
+      setTimeout(() => setToast(''), 2500);
+    }
+  }
+
+  async function respondApplicant(applicantId: number, action: 'accept' | 'reject') {
+    try {
+      const res = await apiFetchJson(`ideas/${idea.id}/applicants/${applicantId}/respond/`, {
+        method: 'POST',
+        json: { action },
+      });
+      if (!res.ok) throw new Error('failed');
+      const data = (await res.json()) as BazaarCollaborationRequest;
+      onApplySuccess();
+      setApplicantsLocal((current) => current.map((a) => (a.id === applicantId ? data : a)));
+      if (data.collab_project_id || data.idea_status) {
+        onApplicantResponded?.({
+          collab_project_id: data.collab_project_id,
+          idea_status: data.idea_status,
+        });
+      }
+    } catch {
+      setToast('Could not respond to this applicant. Please try again.');
+      setTimeout(() => setToast(''), 2500);
+    }
+  }
+
+  async function persistMilestones(next: IdeaMilestone[]) {
+    setMilestonesSaving(true);
+    try {
+      const res = await apiFetchJson(`ideas/${idea.id}/`, {
+        method: 'PATCH',
+        json: { milestones: next },
+      });
+      if (!res.ok) throw new Error('failed');
+      const data = (await res.json()) as BazaarIdea;
+      setMilestonesLocal(data.milestones || next);
+    } catch {
+      setToast('Could not update milestones.');
+      setTimeout(() => setToast(''), 2500);
+    } finally {
+      setMilestonesSaving(false);
+    }
+  }
+
+  async function toggleMilestone(milestoneId: string) {
+    const next = milestonesLocal.map((item) =>
+      item.id === milestoneId ? { ...item, done: !item.done } : item,
+    );
+    setMilestonesLocal(next);
+    await persistMilestones(next);
+  }
+
+  async function addMilestone() {
+    const title = newMilestone.trim();
+    if (!title) return;
+    const next = [
+      ...milestonesLocal,
+      { id: `m-${Date.now()}`, title, done: false, due_date: null },
+    ];
+    setNewMilestone('');
+    setMilestonesLocal(next);
+    await persistMilestones(next);
   }
 
   async function submitApplication() {
@@ -187,6 +324,9 @@ export default function IdeaDetailView({
       if (!res.ok) throw new Error('failed');
       onReportSuccess();
       setToast('Idea reported successfully.');
+      setTimeout(() => setToast(''), 2500);
+    } catch {
+      setToast('Could not report this idea. Please try again.');
       setTimeout(() => setToast(''), 2500);
     } finally {
       setReporting(false);
@@ -242,6 +382,15 @@ export default function IdeaDetailView({
                 : t('bazaar.completed')}
             </span>
           )}
+          {idea.collab_project_id ? (
+            <span
+              className="ms-2 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{ background: C.fundedBg, color: C.fundedText }}
+            >
+              <RocketLaunchIcon className="h-3.5 w-3.5" />
+              {t('bazaar.collabActive')}
+            </span>
+          ) : null}
           <h1 className="text-2xl font-bold mt-3" style={{ color: C.text }}>
             {idea.title}
           </h1>
@@ -251,15 +400,49 @@ export default function IdeaDetailView({
           >
             {idea.description}
           </p>
+          {dueLabel ? (
+            <p className="inline-flex items-center gap-1.5 text-sm mt-3" style={{ color: C.brownDk }}>
+              <CalendarDaysIcon className="h-4 w-4" />
+              {t('bazaar.dueBy').replace('{date}', dueLabel)}
+            </p>
+          ) : null}
+          {idea.tags && idea.tags.length > 0 ? (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {idea.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2.5 py-1 rounded-full text-xs font-medium"
+                  style={{ background: C.card2, color: C.brownDk }}
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {idea.silent_unlocked ? (
+            <div className="mt-4 rounded-xl px-4 py-3 text-sm font-medium" style={{ background: C.fundedBg, color: C.fundedText }}>
+              {t('bazaar.silentUnlocked')}
+            </div>
+          ) : null}
           {pct != null && (
             <div className="mt-4">
               <div className="h-2 rounded-full overflow-hidden" style={{ background: C.progressBg }}>
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, background: C.brown }} />
               </div>
-              <p className="text-xs mt-1" style={{ color: C.text2 }}>
-                ${idea.funding_raised.toLocaleString()} {t('bazaar.raised')} · $
-                {idea.funding_goal?.toLocaleString()} {t('bazaar.goal')}
-              </p>
+              <div className="flex items-center justify-between mt-1 gap-3">
+                <p className="text-xs" style={{ color: C.text2 }}>
+                  ${idea.funding_raised.toLocaleString()} {t('bazaar.raised')} · $
+                  {idea.funding_goal?.toLocaleString()} {t('bazaar.goal')}
+                </p>
+                <button
+                  type="button"
+                  onClick={onPledge}
+                  className="shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+                  style={{ background: C.brown }}
+                >
+                  {t('bazaar.pledgeCta')}
+                </button>
+              </div>
             </div>
           )}
           {idea.roles_needed?.length > 0 && (
@@ -274,6 +457,68 @@ export default function IdeaDetailView({
                 </span>
               ))}
             </div>
+          )}
+          {constellation ? <IdeaConstellationSection data={constellation} /> : null}
+          {crew ? <IdeaCrewPanel crew={crew} /> : null}
+          {(milestonesLocal.length > 0 || canManage) && (
+            <section className="mt-5 rounded-xl p-4" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
+              <h2 className="text-sm font-semibold mb-3" style={{ color: C.text }}>
+                {t('bazaar.milestones')}
+              </h2>
+              {milestonesLocal.length === 0 ? (
+                <p className="text-xs" style={{ color: C.text2 }}>
+                  {t('bazaar.addMilestone')}
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {milestonesLocal.map((milestone) => (
+                    <li key={milestone.id} className="flex items-start gap-2 text-sm">
+                      {canManage ? (
+                        <input
+                          type="checkbox"
+                          checked={milestone.done}
+                          disabled={milestonesSaving}
+                          onChange={() => void toggleMilestone(milestone.id)}
+                          className="mt-1"
+                        />
+                      ) : (
+                        <span style={{ color: milestone.done ? C.fundedText : C.text2 }}>
+                          {milestone.done ? '✓' : '○'}
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          color: milestone.done ? C.text2 : C.text,
+                          textDecoration: milestone.done ? 'line-through' : 'none',
+                        }}
+                      >
+                        {milestone.title}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canManage ? (
+                <div className="flex gap-2 mt-3">
+                  <input
+                    value={newMilestone}
+                    onChange={(event) => setNewMilestone(event.target.value)}
+                    placeholder={t('bazaar.milestoneTitle')}
+                    className="flex-1 rounded-lg px-3 py-2 text-sm outline-none"
+                    style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void addMilestone()}
+                    disabled={milestonesSaving || !newMilestone.trim()}
+                    className="rounded-lg px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    style={{ background: C.brownDk }}
+                  >
+                    {t('bazaar.addMilestone')}
+                  </button>
+                </div>
+              ) : null}
+            </section>
           )}
           <div
             className="flex items-center justify-between mt-5 pt-4 border-t"
@@ -304,7 +549,28 @@ export default function IdeaDetailView({
             </div>
           </div>
           {canManage ? (
-            <div className="flex gap-2 mt-4">
+            <div className="flex flex-wrap gap-2 mt-4">
+              {idea.collab_project_id ? (
+                <Link
+                  href={`/collab?project=${idea.collab_project_id}`}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-white min-w-[10rem]"
+                  style={{ background: C.brownDk }}
+                >
+                  <RocketLaunchIcon className="h-4 w-4" />
+                  {t('bazaar.openCollabHub')}
+                </Link>
+              ) : onLaunchCollab ? (
+                <button
+                  type="button"
+                  onClick={onLaunchCollab}
+                  disabled={launchCollabBusy}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-white min-w-[10rem] disabled:opacity-60"
+                  style={{ background: C.brownDk }}
+                >
+                  <RocketLaunchIcon className="h-4 w-4" />
+                  {launchCollabBusy ? t('bazaar.launchingCollab') : t('bazaar.launchCollabHub')}
+                </button>
+              ) : null}
               <button
                 type="button"
                 onClick={onEdit}
@@ -325,11 +591,11 @@ export default function IdeaDetailView({
               </button>
             </div>
           ) : null}
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid gap-3 sm:grid-cols-3">
             <button
               type="button"
               onClick={onVote}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white"
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-white sm:col-span-1"
               style={{
                 background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`,
                 boxShadow: C.btnShadow,
@@ -338,11 +604,24 @@ export default function IdeaDetailView({
               {voted ? <HeartSolid className="h-5 w-5" /> : <HeartIcon className="h-5 w-5" />}
               {voted ? t('bazaar.supported') : t('bazaar.supportIdea')}
             </button>
+            <button
+              type="button"
+              onClick={onToggleSave}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold"
+              style={{
+                background: saved ? C.fundedBg : C.card2,
+                color: saved ? C.fundedText : C.brownDk,
+                border: `1px solid ${C.line}`,
+              }}
+            >
+              {saved ? <BookmarkSolid className="h-5 w-5" /> : <BookmarkIcon className="h-5 w-5" />}
+              {saved ? t('bazaar.savedIdea') : t('bazaar.bookmarkIdea')}
+            </button>
             {idea.roles_needed?.length > 0 && !canManage ? (
               <button
                 type="button"
                 onClick={() => setApplyOpen(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold sm:col-span-1"
                 style={{ background: C.card2, color: C.brownDk, border: `1px solid ${C.line}` }}
               >
                 <UsersIcon className="h-5 w-5" />
@@ -351,13 +630,11 @@ export default function IdeaDetailView({
             ) : (
               <button
                 type="button"
-                onClick={() => void reportIdea()}
-                disabled={reporting}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold"
+                onClick={onPledge}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold sm:col-span-1"
                 style={{ background: C.card2, color: C.brownDk, border: `1px solid ${C.line}` }}
               >
-                <FlagIcon className="h-5 w-5" />
-                {reporting ? 'Reporting…' : 'Report idea'}
+                {t('bazaar.pledge')}
               </button>
             )}
           </div>
@@ -389,20 +666,20 @@ export default function IdeaDetailView({
               Collaboration applicants
             </h2>
             <span className="text-xs" style={{ color: C.text2 }}>
-              {idea.collaboration_request_count ?? applicants.length} total
+              {idea.collaboration_request_count ?? applicantsLocal.length} total
             </span>
           </div>
           {applicantsLoading ? (
             <p className="text-sm" style={{ color: C.text2 }}>
               Loading applicants…
             </p>
-          ) : applicants.length === 0 ? (
+          ) : applicantsLocal.length === 0 ? (
             <div className="rounded-xl p-4 text-sm" style={{ background: C.card2, color: C.text2 }}>
               No collaboration requests yet.
             </div>
           ) : (
             <div className="space-y-3">
-              {applicants.map((applicant) => (
+              {applicantsLocal.map((applicant) => (
                 <div
                   key={applicant.id}
                   className="rounded-xl p-4"
@@ -437,6 +714,26 @@ export default function IdeaDetailView({
                       <p className="mt-2 text-xs" style={{ color: C.text2 }}>
                         {formatDate(applicant.created_at)}
                       </p>
+                      {canManage && applicant.status === 'pending' ? (
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void respondApplicant(applicant.id, 'accept')}
+                            className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
+                            style={{ background: C.brownDk }}
+                          >
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void respondApplicant(applicant.id, 'reject')}
+                            className="rounded-lg px-3 py-1.5 text-xs font-semibold"
+                            style={{ background: C.card2, color: C.text }}
+                          >
+                            Reject
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -455,7 +752,7 @@ export default function IdeaDetailView({
             Discussion
           </h2>
           <span className="text-xs" style={{ color: C.text2 }}>
-            {comments.length} comments
+            {localComments.length} comments
           </span>
         </div>
         <div className="rounded-xl p-4 mb-4" style={{ background: C.card2 }}>
@@ -488,13 +785,13 @@ export default function IdeaDetailView({
           <p className="text-sm" style={{ color: C.text2 }}>
             Loading comments…
           </p>
-        ) : comments.length === 0 ? (
+        ) : localComments.length === 0 ? (
           <div className="rounded-xl p-4 text-sm" style={{ background: C.card2, color: C.text2 }}>
             No comments yet. Start the discussion.
           </div>
         ) : (
           <div className="space-y-3">
-            {comments.map((item) => (
+            {localComments.map((item) => (
               <div
                 key={item.id}
                 className="rounded-xl p-4"
@@ -517,10 +814,49 @@ export default function IdeaDetailView({
                       <span className="text-xs" style={{ color: C.text2 }}>
                         {formatDate(item.created_at)}
                       </span>
+                      {me?.id === item.user.id ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingCommentId(item.id);
+                              setEditCommentText(item.content);
+                            }}
+                            className="text-xs font-semibold"
+                            style={{ color: C.brown }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void removeComment(item.id)}
+                            className="text-xs font-semibold"
+                            style={{ color: '#c0392b' }}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      ) : null}
                     </div>
-                    <p className="mt-2 text-sm whitespace-pre-wrap" style={{ color: C.text2 }}>
-                      {item.content}
-                    </p>
+                    {editingCommentId === item.id ? (
+                      <div className="mt-2 space-y-2">
+                        <textarea
+                          value={editCommentText}
+                          onChange={(e) => setEditCommentText(e.target.value)}
+                          rows={3}
+                          className="w-full rounded-xl px-3 py-2 text-sm outline-none resize-none"
+                          style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+                        />
+                        <div className="flex gap-2">
+                          <button type="button" onClick={() => void updateComment(item.id)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{ background: C.brownDk }}>Save</button>
+                          <button type="button" onClick={() => setEditingCommentId(null)} className="rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: C.white, color: C.text }}>Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm whitespace-pre-wrap" style={{ color: C.text2 }}>
+                        {item.content}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

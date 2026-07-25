@@ -2,7 +2,7 @@ import type { AppLocale } from '@/lib/settingsPrefs';
 import { ar } from './ar';
 import { en, type Messages } from './en';
 
-const catalogs: Record<AppLocale, Messages> = { en: en as Messages, ar };
+const catalogs: Record<AppLocale, Messages> = { en: en as Messages, ar: ar as Messages };
 
 function getByPath(obj: Record<string, unknown>, path: string): string | undefined {
   const parts = path.split('.');

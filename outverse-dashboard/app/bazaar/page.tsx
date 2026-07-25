@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { apiFetchJson } from '@/lib/api';
+import { apiFetchJson, mediaUrl } from '@/lib/api';
+import { coachIdea, type IdeaCoachResult } from '@/lib/aiCoachApi';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 import WorldShell from '@/components/world/WorldShell';
@@ -12,7 +13,9 @@ import {
   BAZAAR_CATEGORIES,
   bazaarCategoryLabel,
   bazaarOwnerName,
+  formatIdeaTargetDate,
   type BazaarIdea,
+  type BazaarIdeaUser,
 } from '@/lib/bazaarTypes';
 import {
   MagnifyingGlassIcon,
@@ -21,48 +24,53 @@ import {
   HeartIcon,
   TrashIcon,
   UsersIcon,
+  BookmarkIcon,
+  RocketLaunchIcon,
+  CalendarDaysIcon,
+  Squares2X2Icon,
+  Bars3Icon,
 } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
+import { BookmarkIcon as BookmarkSolid } from '@heroicons/react/24/solid';
 
-import { apiUrl, mediaUrl } from '@/lib/api';
-import { getUser } from '@/lib/auth';
-
-const BASE = apiUrl('ideas');
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
+import PledgeModal from '@/components/bazaar/PledgeModal';
+import { toggleIdeaSave } from '@/lib/bazaarApi';
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#854330',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
-    headerBg: 'rgba(251,243,238,0.85)',
-    overlay: 'rgba(61,43,34,0.45)',
-    shadowSm: '0 2px 12px rgba(160,86,59,0.06)',
-    btnShadow: '0 6px 20px rgba(160,86,59,0.3)',
-    modalShadow: '0 20px 60px rgba(61,43,34,0.3)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
+    headerBg: 'rgba(243,240,252,0.85)',
+    overlay: 'rgba(33,27,61,0.45)',
+    shadowSm: '0 2px 12px rgba(124,58,237,0.08)',
+    btnShadow: '0 6px 20px rgba(124,58,237,0.3)',
+    modalShadow: '0 20px 60px rgba(33,27,61,0.3)',
     progressBg: 'rgba(0,0,0,0.06)',
     fundedBg: '#e8f3ee',
     fundedText: '#2f8f6b',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
-    white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
-    headerBg: 'rgba(26,26,46,0.9)',
-    overlay: 'rgba(10,10,34,0.65)',
-    shadowSm: '0 2px 12px rgba(106,0,255,0.12)',
-    btnShadow: '0 6px 20px rgba(106,0,255,0.25)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
+    headerBg: 'rgba(20,16,42,0.9)',
+    overlay: 'rgba(10,8,24,0.65)',
+    shadowSm: '0 2px 12px rgba(167,139,250,0.14)',
+    btnShadow: '0 6px 20px rgba(167,139,250,0.3)',
     modalShadow: '0 20px 60px rgba(0,0,0,0.45)',
     progressBg: 'rgba(255,255,255,0.08)',
     fundedBg: 'rgba(74,222,128,0.15)',
@@ -81,6 +89,13 @@ const TABS = [
   { key: 'needs_help', labelKey: 'bazaar.needsHelp' },
 ] as const;
 
+const SORT_OPTIONS = [
+  { key: 'newest', labelKey: 'bazaar.sortNewest' },
+  { key: 'funded', labelKey: 'bazaar.sortMostFunded' },
+  { key: 'supporters', labelKey: 'bazaar.sortMostSupported' },
+] as const;
+type SortKey = (typeof SORT_OPTIONS)[number]['key'];
+
 function BazaarContent() {
   const C = useBazaarColors();
   const { t, locale } = useLocale();
@@ -91,28 +106,58 @@ function BazaarContent() {
   const [tab, setTab] = useState('trending');
   const [category, setCategory] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [voted, setVoted] = useState<Record<number, boolean>>({});
   const [search, setSearch] = useState('');
   const [editingIdea, setEditingIdea] = useState<BazaarIdea | null>(null);
   const [deletingIdea, setDeletingIdea] = useState<BazaarIdea | null>(null);
+  const [pledgingIdea, setPledgingIdea] = useState<BazaarIdea | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [sortBy, setSortBy] = useState<SortKey>('newest');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (pageNum = 1, append = false) => {
+    if (append) setLoadingMore(true);
+    else {
+      setLoading(true);
+      setLoadError(false);
+    }
     try {
       const ordering = tab === 'new' ? 'new' : 'trending';
+      const tag = searchParams.get('tag');
+      const params = new URLSearchParams({
+        ordering,
+        category,
+        page: String(pageNum),
+      });
+      if (tag) params.set('tag', tag);
       const [iRes, fRes] = await Promise.all([
-        fetch(`${BASE}/?ordering=${ordering}&category=${category}`),
-        fetch(`${BASE}/featured/`),
+        apiFetchJson(`ideas/?${params.toString()}`),
+        pageNum === 1 ? apiFetchJson('ideas/featured/') : Promise.resolve(null),
       ]);
-      if (iRes.ok) setIdeas(await iRes.json());
-      if (fRes.ok) setFeatured(await fRes.json());
+      if (iRes?.ok) {
+        const data = await iRes.json();
+        const rows = Array.isArray(data) ? data : data.results || [];
+        setIdeas((prev) => (append ? [...prev, ...rows] : rows));
+        setHasMore(Array.isArray(data) ? false : !!data.next);
+        setPage(pageNum);
+      } else if (!append) {
+        setIdeas([]);
+        setLoadError(true);
+      }
+      if (fRes?.ok) setFeatured(await fRes.json());
     } catch {
-      setIdeas([]);
+      if (!append) {
+        setIdeas([]);
+        setLoadError(true);
+      }
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
-  }, [tab, category]);
+  }, [tab, category, searchParams]);
 
   useEffect(() => {
     load();
@@ -143,8 +188,14 @@ function BazaarContent() {
           bazaarCategoryLabel(i.category, locale).toLowerCase().includes(q),
       );
     }
+    list = [...list];
+    if (sortBy === 'funded') {
+      list.sort((a, b) => (b.funding_raised || 0) - (a.funding_raised || 0));
+    } else if (sortBy === 'supporters') {
+      list.sort((a, b) => (b.supporters || 0) - (a.supporters || 0));
+    }
     return list;
-  }, [ideas, tab, q]);
+  }, [ideas, tab, q, locale, sortBy]);
 
   const shownFeatured = useMemo(() => {
     if (!q) return featured;
@@ -160,27 +211,39 @@ function BazaarContent() {
       const res = await apiFetchJson(`ideas/${id}/vote/`, { method: 'POST' });
       if (!res.ok) throw new Error('vote failed');
       const data = await res.json();
-      setVoted((v) => ({ ...v, [id]: data.voted }));
       setIdeas((list) =>
-        list.map((i) => (i.id === id ? { ...i, supporters: data.supporters } : i)),
+        list.map((i) => (i.id === id ? { ...i, supporters: data.supporters, is_voted: data.voted } : i)),
       );
       setFeatured((list) =>
-        list.map((i) => (i.id === id ? { ...i, supporters: data.supporters } : i)),
+        list.map((i) => (i.id === id ? { ...i, supporters: data.supporters, is_voted: data.voted } : i)),
       );
-      if (data.voted !== undefined) {
-        setVoted((prev) => ({ ...prev, [id]: data.voted }));
-      }
     } catch {
       load();
     }
   }
 
+  async function handleSave(id: number) {
+    const result = await toggleIdeaSave(id);
+    if (!result) return;
+    const patch = { is_saved: result.saved };
+    setIdeas((list) => list.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    setFeatured((list) => list.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  }
+
+  function applyPledgeResult(id: number, funding_raised: number) {
+    setIdeas((list) => list.map((i) => (i.id === id ? { ...i, funding_raised } : i)));
+    setFeatured((list) => list.map((i) => (i.id === id ? { ...i, funding_raised } : i)));
+  }
+
   return (
     <WorldShell colors={C}>
-        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold" style={{ color: C.brown }}>{t('bazaar.title')}</h1>
-            <p className="text-sm" style={{ color: C.text2 }}>{t('bazaar.subtitle')}</p>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
+          <div className="max-w-xl">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: C.brown }}>
+              Worlds · Bazaar
+            </p>
+            <h1 className="text-3xl md:text-4xl font-bold tracking-tight" style={{ color: C.text }}>{t('bazaar.title')}</h1>
+            <p className="mt-2 text-sm md:text-base leading-relaxed" style={{ color: C.text2 }}>{t('bazaar.subtitle')}</p>
           </div>
           <button
             type="button"
@@ -249,30 +312,96 @@ function BazaarContent() {
           />
         </div>
 
+        <div className="flex items-center justify-between gap-3 mt-4">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortKey)}
+            aria-label={t('bazaar.sortBy')}
+            className="rounded-xl px-3 py-2 text-sm outline-none"
+            style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.key} value={opt.key}>{t(opt.labelKey)}</option>
+            ))}
+          </select>
+          <div className="flex items-center gap-1 rounded-xl p-1" style={{ background: C.card2 }}>
+            <button
+              type="button"
+              onClick={() => setView('grid')}
+              aria-label={t('bazaar.gridView')}
+              aria-pressed={view === 'grid'}
+              className="rounded-lg p-1.5"
+              style={{ background: view === 'grid' ? C.white : 'transparent', color: view === 'grid' ? C.brown : C.text2 }}
+            >
+              <Squares2X2Icon className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('list')}
+              aria-label={t('bazaar.listView')}
+              aria-pressed={view === 'list'}
+              className="rounded-lg p-1.5"
+              style={{ background: view === 'list' ? C.white : 'transparent', color: view === 'list' ? C.brown : C.text2 }}
+            >
+              <Bars3Icon className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
           {/* Ideas grid */}
           <div className="lg:col-span-9">
+            {!loading && !q && shownFeatured.length > 0 ? (
+              <FeaturedHero idea={shownFeatured[0]} onOpen={() => openIdea(shownFeatured[0])} />
+            ) : null}
             {loading ? (
               <div className="text-center py-16" style={{ color: C.text2 }}>{t('bazaar.loading')}</div>
+            ) : loadError ? (
+              <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
+                <p className="font-semibold mb-2" style={{ color: C.text }}>Could not load ideas</p>
+                <button
+                  type="button"
+                  onClick={() => void load(1, false)}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
+                  style={{ background: C.brownDk }}
+                >
+                  Try again
+                </button>
+              </div>
             ) : shown.length === 0 ? (
               <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text2 }}>
                 {q ? t('bazaar.noSearch') : t('bazaar.empty')}
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
+              <div className={view === 'grid' ? 'grid sm:grid-cols-2 xl:grid-cols-3 gap-5' : 'flex flex-col gap-4'}>
                 {shown.map((idea) => (
                   <IdeaCard
                     key={idea.id}
                     idea={idea}
-                    voted={!!voted[idea.id]}
+                    view={view}
                     onOpen={() => openIdea(idea)}
                     onVote={() => handleVote(idea.id)}
+                    onSave={() => handleSave(idea.id)}
                     onEdit={() => setEditingIdea(idea)}
                     onDelete={() => setDeletingIdea(idea)}
+                    onPledge={() => setPledgingIdea(idea)}
                   />
                 ))}
               </div>
             )}
+            {!loading && hasMore ? (
+              <div className="flex justify-center mt-6">
+                <button
+                  type="button"
+                  onClick={() => void load(page + 1, true)}
+                  disabled={loadingMore}
+                  className="px-5 py-2.5 rounded-xl text-sm font-semibold text-white"
+                  style={{ background: C.brownDk, opacity: loadingMore ? 0.7 : 1 }}
+                >
+                  {loadingMore ? t('common.loading') : t('feed.loadMoreFeed')}
+                </button>
+              </div>
+            ) : null}
           </div>
 
           {/* Right sidebar */}
@@ -322,6 +451,8 @@ function BazaarContent() {
           </aside>
         </div>
 
+        <BazaarCreatorFooter onCreate={() => setCreateOpen(true)} />
+
       <AnimatePresence>
         {createOpen && <CreateIdeaModal onClose={() => setCreateOpen(false)} onCreated={load} />}
         {editingIdea && (
@@ -344,6 +475,16 @@ function BazaarContent() {
             }}
           />
         )}
+        {pledgingIdea && (
+          <PledgeModal
+            idea={pledgingIdea}
+            onClose={() => setPledgingIdea(null)}
+            onPledged={(funding_raised) => {
+              applyPledgeResult(pledgingIdea.id, funding_raised);
+              setPledgingIdea(null);
+            }}
+          />
+        )}
       </AnimatePresence>
     </WorldShell>
   );
@@ -351,27 +492,158 @@ function BazaarContent() {
 
 // ----------------------------- Sub-components -----------------------------
 
+function BazaarCreatorFooter({ onCreate }: { onCreate: () => void }) {
+  const C = useBazaarColors();
+  const { t } = useLocale();
+
+  return (
+    <section
+      className="mt-10 rounded-2xl overflow-hidden"
+      style={{ border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
+    >
+      <div
+        className="px-6 py-8 md:px-10 md:py-10"
+        style={{ background: `linear-gradient(135deg, ${C.card} 0%, ${C.card2} 55%, ${C.white} 100%)` }}
+      >
+        <div className="max-w-2xl">
+          <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: C.brown }}>
+            {t('bazaar.footerEyebrow')}
+          </p>
+          <h2 className="text-xl md:text-2xl font-bold leading-snug" style={{ color: C.text }}>
+            {t('bazaar.footerTitle')}
+          </h2>
+          <p className="mt-3 text-sm md:text-base leading-relaxed" style={{ color: C.text2 }}>
+            {t('bazaar.footerBody')}
+          </p>
+          <button
+            type="button"
+            onClick={onCreate}
+            className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-white"
+            style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`, boxShadow: C.btnShadow }}
+          >
+            <PlusIcon className="h-4 w-4" />
+            {t('bazaar.footerCta')}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CollaboratorAvatars({
+  collaborators,
+  max = 3,
+}: {
+  collaborators?: BazaarIdeaUser[];
+  max?: number;
+}) {
+  const C = useBazaarColors();
+  if (!collaborators?.length) return null;
+  return (
+    <div className="flex items-center gap-1">
+      <div className="flex -space-x-2 rtl:space-x-reverse">
+        {collaborators.slice(0, max).map((user) => (
+          <div
+            key={user.id ?? user.username}
+            className="w-6 h-6 rounded-full border-2 bg-center bg-cover shrink-0"
+            style={{
+              borderColor: C.white,
+              background: user.avatar ? `url(${mediaUrl(user.avatar)}) center/cover` : C.card,
+            }}
+            title={user.username}
+          />
+        ))}
+      </div>
+      {collaborators.length > max ? (
+        <span className="text-xs" style={{ color: C.text2 }}>
+          +{collaborators.length - max}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function FeaturedHero({ idea, onOpen }: { idea: BazaarIdea; onOpen: () => void }) {
+  const C = useBazaarColors();
+  const { t, locale } = useLocale();
+  const dueLabel = formatIdeaTargetDate(idea.target_date, locale);
+
+  return (
+    <motion.button
+      type="button"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      onClick={onOpen}
+      className="w-full mb-6 rounded-2xl overflow-hidden text-left"
+      style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
+    >
+      <div className="grid sm:grid-cols-5 gap-0">
+        <div
+          className="sm:col-span-2 h-44 sm:h-auto min-h-[11rem] bg-center bg-cover"
+          style={{
+            background: idea.cover_url
+              ? `url(${idea.cover_url}) center/cover`
+              : `linear-gradient(135deg, ${C.brown}, ${C.brownDk})`,
+          }}
+        />
+        <div className="sm:col-span-3 p-5 flex flex-col justify-center">
+          <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.brown }}>
+            {t('bazaar.featured')}
+          </span>
+          <h2 className="text-xl font-bold mt-1" style={{ color: C.text }}>
+            {idea.title}
+          </h2>
+          <p className="text-sm mt-2 line-clamp-2" style={{ color: C.text2 }}>
+            {idea.description}
+          </p>
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+            <span className="text-xs font-medium" style={{ color: C.text2 }}>
+              {idea.supporters} {t('bazaar.supporters')}
+            </span>
+            {dueLabel ? (
+              <span className="inline-flex items-center gap-1 text-xs" style={{ color: C.brownDk }}>
+                <CalendarDaysIcon className="h-4 w-4" />
+                {t('bazaar.dueBy').replace('{date}', dueLabel)}
+              </span>
+            ) : null}
+            <CollaboratorAvatars collaborators={idea.collaborators} />
+            <span className="ms-auto text-sm font-semibold" style={{ color: C.brown }}>
+              {t('bazaar.featuredHeroCta')} →
+            </span>
+          </div>
+        </div>
+      </div>
+    </motion.button>
+  );
+}
+
 function IdeaCard({
   idea,
-  voted,
+  view = 'grid',
   onOpen,
   onVote,
+  onSave,
   onEdit,
   onDelete,
+  onPledge,
 }: {
   idea: BazaarIdea;
-  voted: boolean;
+  view?: 'grid' | 'list';
   onOpen: () => void;
   onVote: () => void;
+  onSave: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onPledge: () => void;
 }) {
   const C = useBazaarColors();
   const { t, locale } = useLocale();
   const ownerName = bazaarOwnerName(idea);
-  const me = getUser();
+  const me = useAuthUser();
   const canManage = !!(me && idea.owner?.id && me.id === idea.owner.id);
   const pct = idea.funding_goal ? Math.min(100, Math.round((idea.funding_raised / idea.funding_goal) * 100)) : null;
+  const dueLabel = formatIdeaTargetDate(idea.target_date, locale);
+  const isList = view === 'list';
 
   return (
     <motion.div
@@ -383,17 +655,23 @@ function IdeaCard({
       <button
         type="button"
         onClick={onOpen}
-        className="text-left flex flex-col flex-1 min-h-0"
+        className={isList ? 'text-left flex flex-row flex-1 min-w-0' : 'text-left flex flex-col flex-1 min-h-0'}
       >
       <div
-        className="h-40 bg-center bg-cover w-full"
+        className={isList ? 'w-32 sm:w-44 shrink-0 bg-center bg-cover' : 'h-40 bg-center bg-cover w-full'}
         style={{ background: idea.cover_url ? `url(${idea.cover_url}) center/cover` : `linear-gradient(135deg, ${C.card}, ${C.card2})` }}
       />
-      <div className="p-4 flex flex-col flex-1">
-        <div className="flex items-center gap-2 mb-2">
+      <div className={isList ? 'p-4 flex flex-col flex-1 min-w-0' : 'p-4 flex flex-col flex-1'}>
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: C.card2, color: C.brown }}>
             {bazaarCategoryLabel(idea.category, locale)}
           </span>
+          {idea.collab_project_id ? (
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: C.fundedBg, color: C.fundedText }}>
+              <RocketLaunchIcon className="h-3.5 w-3.5" />
+              {t('bazaar.collabActive')}
+            </span>
+          ) : null}
           {idea.status !== 'proposed' && (
             <span className="px-2.5 py-1 rounded-full text-xs" style={{ background: C.fundedBg, color: C.fundedText }}>
               {idea.status === 'in_progress' ? t('bazaar.inProgress') : t('bazaar.completed')}
@@ -403,16 +681,46 @@ function IdeaCard({
         <h3 className="font-semibold leading-snug" style={{ color: C.text }}>{idea.title}</h3>
         <p className="text-sm mt-1 line-clamp-2 flex-1" style={{ color: C.text2 }}>{idea.description}</p>
 
+        {dueLabel ? (
+          <p className="inline-flex items-center gap-1 text-xs mt-2" style={{ color: C.brownDk }}>
+            <CalendarDaysIcon className="h-3.5 w-3.5" />
+            {t('bazaar.dueBy').replace('{date}', dueLabel)}
+          </p>
+        ) : null}
+
         {pct != null && (
           <div className="mt-3">
             <div className="h-2 rounded-full overflow-hidden" style={{ background: C.progressBg }}>
               <div className="h-full rounded-full" style={{ width: `${pct}%`, background: C.brown }} />
             </div>
-            <div className="text-xs mt-1" style={{ color: C.text2 }}>
-              ${idea.funding_raised.toLocaleString()} {t('bazaar.raised')} · ${idea.funding_goal?.toLocaleString()} {t('bazaar.goal')}
+            <div className="flex items-center justify-between mt-1 gap-2">
+              <div className="text-xs" style={{ color: C.text2 }}>
+                ${idea.funding_raised.toLocaleString()} {t('bazaar.raised')} · ${idea.funding_goal?.toLocaleString()} {t('bazaar.goal')}
+              </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPledge();
+                }}
+                className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-white"
+                style={{ background: C.brown }}
+              >
+                {t('bazaar.pledgeCta')}
+              </button>
             </div>
           </div>
         )}
+
+        {idea.tags && idea.tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5 mt-3">
+            {idea.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="px-2 py-1 rounded-md text-xs" style={{ background: C.card2, color: C.text2 }}>
+                #{tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         {idea.roles_needed?.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">
@@ -426,9 +734,10 @@ function IdeaCard({
         </div>
       </button>
         <div className="flex items-center justify-between px-4 pb-4">
-          <div className="flex items-center gap-2 text-xs" style={{ color: C.text2 }}>
-            <div className="w-6 h-6 rounded-full bg-center bg-cover" style={{ background: idea.owner?.avatar ? `url(${mediaUrl(idea.owner.avatar)})` : C.card }} />
-            {ownerName}
+          <div className="flex items-center gap-2 text-xs min-w-0" style={{ color: C.text2 }}>
+            <div className="w-6 h-6 rounded-full bg-center bg-cover shrink-0" style={{ background: idea.owner?.avatar ? `url(${mediaUrl(idea.owner.avatar)})` : C.card }} />
+            <span className="truncate">{ownerName}</span>
+            <CollaboratorAvatars collaborators={idea.collaborators} />
           </div>
           <div className="flex items-center gap-2">
             {canManage ? (
@@ -461,12 +770,24 @@ function IdeaCard({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
+                onSave();
+              }}
+              className="inline-flex items-center justify-center rounded-lg p-2"
+              style={{ background: C.card2, color: idea.is_saved ? C.brown : C.text2 }}
+              aria-label={idea.is_saved ? t('bazaar.unsaveIdea') : t('bazaar.bookmarkIdea')}
+            >
+              {idea.is_saved ? <BookmarkSolid className="h-4 w-4" /> : <BookmarkIcon className="h-4 w-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
                 onVote();
               }}
               className="flex items-center gap-1 text-sm font-medium"
               style={{ color: C.brown }}
             >
-              {voted ? <HeartSolid className="h-5 w-5" /> : <HeartIcon className="h-5 w-5" />}
+              {idea.is_voted ? <HeartSolid className="h-5 w-5" /> : <HeartIcon className="h-5 w-5" />}
               {idea.supporters}
             </button>
           </div>
@@ -483,6 +804,7 @@ function EditIdeaModal({ idea, onClose, onSaved }: { idea: BazaarIdea; onClose: 
   const [category, setCategory] = useState(idea.category);
   const [roles, setRoles] = useState((idea.roles_needed || []).join(', '));
   const [tags, setTags] = useState((idea.tags || []).join(', '));
+  const [targetDate, setTargetDate] = useState(idea.target_date || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const field = { background: C.white, border: `1px solid ${C.line}`, color: C.text } as const;
@@ -500,6 +822,7 @@ function EditIdeaModal({ idea, onClose, onSaved }: { idea: BazaarIdea; onClose: 
           category,
           roles_needed: roles.split(',').map((r) => r.trim()).filter(Boolean),
           tags: tags.split(',').map((r) => r.trim()).filter(Boolean),
+          target_date: targetDate || null,
         },
       });
       if (!res.ok) throw new Error('failed');
@@ -529,7 +852,9 @@ function EditIdeaModal({ idea, onClose, onSaved }: { idea: BazaarIdea; onClose: 
         <label className="text-sm font-medium" style={{ color: C.text2 }}>Roles needed</label>
         <input value={roles} onChange={(e) => setRoles(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} />
         <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.tagsLabel')}</label>
-        <input value={tags} onChange={(e) => setTags(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} placeholder={t('bazaar.tagsHint')} />
+        <input value={tags} onChange={(e) => setTags(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder={t('bazaar.tagsHint')} />
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.targetDateLabel')}</label>
+        <input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} />
         {error && <div className="text-sm mt-3" style={{ color: '#c0392b' }}>{error}</div>}
         <button type="submit" disabled={saving} className="mt-5 w-full rounded-xl py-3 font-semibold text-white disabled:opacity-60" style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}>
           {saving ? t('bazaar.savingIdea') : t('bazaar.saveIdea')}
@@ -578,15 +903,32 @@ function DeleteIdeaDialog({ idea, onClose, onDeleted }: { idea: BazaarIdea; onCl
 
 function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const C = useBazaarColors();
-  const { locale } = useLocale();
+  const { locale, t } = useLocale();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('technology');
   const [coverUrl, setCoverUrl] = useState('');
   const [goal, setGoal] = useState('');
   const [roles, setRoles] = useState('');
+  const [tags, setTags] = useState('');
+  const [targetDate, setTargetDate] = useState('');
+  const [milestones, setMilestones] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [coachBusy, setCoachBusy] = useState(false);
+  const [coachResult, setCoachResult] = useState<IdeaCoachResult | null>(null);
+
+  async function handleCoach() {
+    if (!title.trim() && !description.trim()) return;
+    setCoachBusy(true);
+    setCoachResult(null);
+    const result = await coachIdea({ title: title.trim(), description: description.trim(), lang: locale as 'en' | 'ar' });
+    setCoachBusy(false);
+    if (result.error) { setError(result.error); return; }
+    setCoachResult(result);
+    if (!title.trim() && result.title) setTitle(result.title);
+    if (result.milestones.length) setMilestones(result.milestones);
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -608,6 +950,11 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
           roles_needed: roles
             ? roles.split(',').map((r) => r.trim()).filter(Boolean)
             : [],
+          tags: tags
+            ? tags.split(',').map((r) => r.trim()).filter(Boolean)
+            : [],
+          target_date: targetDate || null,
+          milestones: milestones.length ? milestones : undefined,
         },
       });
       if (!res.ok) throw new Error('create failed');
@@ -647,7 +994,49 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
         <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder="A name for your idea" />
 
         <label className="text-sm font-medium" style={{ color: C.text2 }}>Description</label>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none resize-none" style={field} placeholder="What is it about?" />
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-2 outline-none resize-none" style={field} placeholder="What is it about?" />
+
+        <div className="flex justify-end mb-3">
+          <button
+            type="button"
+            onClick={() => void handleCoach()}
+            disabled={coachBusy || (!title.trim() && !description.trim())}
+            className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-all"
+            style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
+          >
+            {coachBusy ? '✨ Coaching…' : '✨ Idea Coach'}
+          </button>
+        </div>
+
+        {coachResult && !coachResult.error && (
+          <div className="rounded-xl p-3 mb-3 text-xs space-y-2" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
+            {coachResult.title && coachResult.title !== title && (
+              <div>
+                <span className="font-semibold" style={{ color: C.text }}>Suggested title: </span>
+                <button type="button" className="underline" style={{ color: C.brown }} onClick={() => setTitle(coachResult.title)}>
+                  {coachResult.title}
+                </button>
+                <span style={{ color: C.text2 }}> (click to apply)</span>
+              </div>
+            )}
+            {coachResult.milestones.length > 0 && (
+              <div>
+                <p className="font-semibold mb-1" style={{ color: C.text }}>Milestones applied ({coachResult.milestones.length}):</p>
+                <ul className="list-disc list-inside space-y-0.5" style={{ color: C.text2 }}>
+                  {coachResult.milestones.map((m, i) => <li key={i}>{m}</li>)}
+                </ul>
+              </div>
+            )}
+            {coachResult.constellation_questions.length > 0 && (
+              <div>
+                <p className="font-semibold mb-1" style={{ color: C.text }}>Questions to explore:</p>
+                <ul className="list-disc list-inside space-y-0.5" style={{ color: C.text2 }}>
+                  {coachResult.constellation_questions.map((q, i) => <li key={i}>{q}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -668,7 +1057,13 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
         <input value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder="https://…  (optional)" />
 
         <label className="text-sm font-medium" style={{ color: C.text2 }}>Roles needed (comma separated)</label>
-        <input value={roles} onChange={(e) => setRoles(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} placeholder="Writer, Designer, Developer" />
+        <input value={roles} onChange={(e) => setRoles(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder="Writer, Designer, Developer" />
+
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.tagsLabel')}</label>
+        <input value={tags} onChange={(e) => setTags(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder={t('bazaar.tagsHint')} />
+
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.targetDateLabel')}</label>
+        <input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} />
 
         {error && <div className="text-sm mt-3" style={{ color: '#c0392b' }}>{error}</div>}
 

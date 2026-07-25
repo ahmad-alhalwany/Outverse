@@ -12,9 +12,11 @@ import { reelAuthorName } from '@/lib/reelTypes';
 import { useLocale } from '../LocaleProvider';
 import CommentMediaPicker, { type PickerTab } from '../comments/CommentMediaPicker';
 import ReelCommentRow from './ReelCommentRow';
+import { useReelCommentsWebSocket } from '@/hooks/useReelCommentsWebSocket';
 
 interface ReelCommentsSheetProps {
   reelId: number;
+  reelOwnerId?: number;
   open: boolean;
   onClose: () => void;
   onCountChange?: (n: number) => void;
@@ -30,6 +32,14 @@ function mapComment(c: Record<string, unknown>): ReelCommentItem {
     text: (c.text as string) || '',
     gif_url: (c.gif_url as string) || undefined,
     sticker_url: (c.sticker_url as string) || undefined,
+    edited_at: (c.edited_at as string) || undefined,
+    is_pinned: Boolean(c.is_pinned ?? c.pin_order),
+    pin_order: (c.pin_order as number | null) ?? null,
+    sparked_by_author: Boolean(c.sparked_by_author),
+    is_post_author: Boolean(c.is_post_author),
+    vote_score: (c.vote_score as number) ?? 0,
+    my_vote: (c.my_vote as 'boost' | 'dim' | null) ?? null,
+    quoted_comment: (c.quoted_comment as ReelCommentItem['quoted_comment']) || null,
     created_at: c.created_at as string,
     reaction_counts: (c.reaction_counts as Record<string, number>) || {},
     my_reaction: (c.my_reaction as string) || null,
@@ -45,36 +55,71 @@ export function countAllComments(list: ReelCommentItem[]): number {
 
 export default function ReelCommentsSheet({
   reelId,
+  reelOwnerId,
   open,
   onClose,
   onCountChange,
 }: ReelCommentsSheetProps) {
   const { t } = useLocale();
   const [comments, setComments] = useState<ReelCommentItem[]>([]);
+  const [commentSort, setCommentSort] = useState<'old' | 'new' | 'best' | 'controversial'>('old');
+  const [hasMore, setHasMore] = useState(false);
+  const offsetRef = useRef(0);
   const [text, setText] = useState('');
   const [gifUrl, setGifUrl] = useState<string | null>(null);
   const [stickerUrl, setStickerUrl] = useState<string | null>(null);
   const [pickerTab, setPickerTab] = useState<PickerTab | null>(null);
   const [replyingTo, setReplyingTo] = useState<ReelCommentItem | null>(null);
+  const [error, setError] = useState('');
   const attachEl = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (reset = true) => {
     try {
-      const res = await apiFetch(`reel-comments/?reel=${reelId}`);
+      const offset = reset ? 0 : offsetRef.current;
+      const res = await apiFetch(
+        `reel-comments/?reel=${reelId}&sort=${commentSort}&limit=30&offset=${offset}`,
+      );
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data.map(mapComment) : [];
-        setComments(list);
-        onCountChange?.(countAllComments(list));
+        const rows = Array.isArray(data) ? data : data.results || [];
+        const list = rows.map(mapComment);
+        setComments((prev) => {
+          const merged = reset ? list : [...prev, ...list];
+          onCountChange?.(countAllComments(merged));
+          return merged;
+        });
+        offsetRef.current = offset + list.length;
+        setHasMore(Array.isArray(data) ? false : !!data.has_more);
+        setError('');
+      } else {
+        setError(t('reels.loadCommentsFailed'));
       }
     } catch {
-      /* ignore */
+      setError(t('reels.loadCommentsFailed'));
     }
-  }, [reelId, onCountChange]);
+  }, [reelId, commentSort, onCountChange, t]);
 
   useEffect(() => {
-    if (open) load();
-  }, [open, load]);
+    if (open) load(true);
+  }, [open, commentSort, load]);
+
+  useReelCommentsWebSocket({
+    reelId: open ? reelId : null,
+    open,
+    onUpdate: (payload) => {
+      if (payload?.action === 'created' && payload.comment) {
+        const created = mapComment(payload.comment);
+        setComments((prev) => {
+          if (prev.some((c) => c.id === created.id)) return prev;
+          const merged = [...prev, created];
+          onCountChange?.(countAllComments(merged));
+          return merged;
+        });
+        return;
+      }
+      void load(true);
+    },
+  });
 
   const resetComposer = () => {
     setText('');
@@ -87,21 +132,54 @@ export default function ReelCommentsSheet({
   const submit = async () => {
     if (!getUser()) return;
     if (!text.trim() && !gifUrl && !stickerUrl) return;
+    const me = getUser();
+    const tempId = -Date.now();
+    const optimistic = mapComment({
+      id: tempId,
+      reel: reelId,
+      parent: replyingTo?.id ?? null,
+      text: text.trim(),
+      gif_url: gifUrl || '',
+      sticker_url: stickerUrl || '',
+      created_at: new Date().toISOString(),
+      user: me
+        ? {
+            id: me.id,
+            username: me.username,
+            first_name: me.first_name,
+            last_name: me.last_name,
+            avatar: me.avatar,
+          }
+        : { id: 0, username: 'you' },
+      replies: [],
+    });
+    setComments((prev) => {
+      const merged = [...prev, optimistic];
+      onCountChange?.(countAllComments(merged));
+      return merged;
+    });
+    const payload = {
+      reel: reelId,
+      parent: replyingTo?.id ?? null,
+      text: text.trim(),
+      gif_url: gifUrl || '',
+      sticker_url: stickerUrl || '',
+    };
+    resetComposer();
+    setError('');
     try {
-      await apiFetchJson('reel-comments/', {
-        method: 'POST',
-        json: {
-          reel: reelId,
-          parent: replyingTo?.id ?? null,
-          text: text.trim(),
-          gif_url: gifUrl || '',
-          sticker_url: stickerUrl || '',
-        },
-      });
-      resetComposer();
-      await load();
+      const res = await apiFetchJson('reel-comments/', { method: 'POST', json: payload });
+      if (res.ok) {
+        const created = mapComment((await res.json()) as Record<string, unknown>);
+        setComments((prev) => prev.map((c) => (c.id === tempId ? created : c)));
+      } else {
+        setComments((prev) => prev.filter((c) => c.id !== tempId));
+        setError(t('reels.commentSendFailed'));
+        await load(true);
+      }
     } catch {
-      /* ignore */
+      setComments((prev) => prev.filter((c) => c.id !== tempId));
+      setError(t('reels.commentSendFailed'));
     }
   };
 
@@ -125,10 +203,25 @@ export default function ReelCommentsSheet({
           >
             <div className="reel-comments-sheet__head">
               <h3>{t('reels.commentsTitle')}</h3>
-              <button type="button" onClick={onClose} className="reels-chrome__btn">
+              <button type="button" onClick={onClose} className="reels-chrome__btn" aria-label={t('common.close')}>
                 <XMarkIcon className="h-5 w-5" />
               </button>
             </div>
+
+            {comments.length > 0 && (
+              <div className="cosmic-comments__sortbar px-3">
+                {(['best', 'new', 'old', 'controversial'] as const).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`cosmic-comments__sort${commentSort === key ? ' cosmic-comments__sort--active' : ''}`}
+                    onClick={() => setCommentSort(key)}
+                  >
+                    {t(`feed.sort_${key}`)}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div className="reel-comments-sheet__list">
               {comments.length === 0 ? (
@@ -138,18 +231,25 @@ export default function ReelCommentsSheet({
                   <ReelCommentRow
                     key={c.id}
                     reelId={reelId}
+                    reelOwnerId={reelOwnerId}
                     comment={c}
                     onReply={(parent) => {
                       setReplyingTo(parent);
                       setPickerTab(null);
                     }}
-                    onChanged={load}
+                    onChanged={() => load(true)}
                   />
                 ))
+              )}
+              {hasMore && (
+                <button type="button" className="cosmic-comments__loadmore" onClick={() => load(false)}>
+                  {t('feed.loadMoreComments')}
+                </button>
               )}
             </div>
 
             <div className="reel-comments-sheet__composer" ref={attachEl}>
+              {error && <p className="reel-comments-sheet__empty" style={{ color: '#f87171' }}>{error}</p>}
               {replyingTo && (
                 <div className="reel-comments-sheet__replying">
                   <span>

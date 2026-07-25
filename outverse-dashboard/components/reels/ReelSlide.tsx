@@ -10,23 +10,35 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import {
+  ArrowPathRoundedSquareIcon,
   BookmarkIcon,
   ChatBubbleLeftIcon,
   EyeIcon,
   FlagIcon,
-  HeartIcon,
   PencilSquareIcon,
+  RectangleStackIcon,
+  ScissorsIcon,
   ShareIcon,
   SpeakerWaveIcon,
   SpeakerXMarkIcon,
   TrashIcon,
+  EyeSlashIcon,
 } from '@heroicons/react/24/outline';
 
-import { HeartIcon as HeartSolid } from '@heroicons/react/24/solid';
-
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
-import { getUser } from '@/lib/auth';
+import {
+  countsToEmojiMap,
+  COSMIC_REACTIONS,
+  EMOJI_BY_REACTION_TYPE,
+  REACTION_TYPE_BY_EMOJI,
+  hapticReaction,
+  type ReactionType,
+} from '@/lib/reactions';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { reelPageUrl } from '@/lib/fetchReel';
+import { recordContentShare } from '@/lib/shareApi';
+import type { ShareChannel } from '@/lib/shareUtils';
+import { shareReelToStory } from '@/lib/storyUtils';
 import {
   enforceTrimLoop,
   musicTrimFromReel,
@@ -42,22 +54,35 @@ import {
 } from '@/lib/reelTypes';
 
 import RelativeTime from '@/components/RelativeTime';
+import MentionText from '@/components/MentionText';
 
 import { useLocale } from '../LocaleProvider';
 
 import ShareCosmicPanel from '../ShareCosmicPanel';
+import PostReactions from '../PostReactions';
 import ReelCommentsSheet from './ReelCommentsSheet';
+import ReelRemixBadge from './ReelRemixBadge';
+import ReelOverlays, { useReelClock } from './ReelOverlays';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
+
+interface ReelLikeResult {
+  liked: boolean;
+  likes_count: number;
+  reaction_counts?: Record<string, number>;
+  my_reaction?: ReactionType | null;
+}
 
 interface ReelSlideProps {
   reel: ReelItem;
   active: boolean;
-  onLike: (id: number) => Promise<{ liked: boolean; likes_count: number } | null>;
+  onLike: (id: number, reaction: ReactionType) => Promise<ReelLikeResult | null>;
   onView: (id: number) => void;
   onDeleted?: () => void;
   onSavedChange?: (id: number, saved: boolean) => void;
+  onDimmed?: (id: number) => void;
 }
 
-export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onSavedChange }: ReelSlideProps) {
+export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onSavedChange, onDimmed }: ReelSlideProps) {
 
   const { t } = useLocale();
 
@@ -66,10 +91,17 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const [liked, setLiked] = useState(reel.is_liked);
-
   const [likes, setLikes] = useState(reel.likes_count);
+  const [reactionCounts, setReactionCounts] = useState<Record<string, number>>(() =>
+    countsToEmojiMap(reel.reaction_counts),
+  );
+  const [selectedEmoji, setSelectedEmoji] = useState<string | undefined>(() =>
+    reel.my_reaction ? EMOJI_BY_REACTION_TYPE[reel.my_reaction] : undefined,
+  );
+  const [burstEmoji, setBurstEmoji] = useState('✨');
 
   const [commentsCount, setCommentsCount] = useState(reel.comments_count);
+  const [shares, setShares] = useState(reel.shares_count);
   const [saved, setSaved] = useState(Boolean(reel.is_saved));
 
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -89,13 +121,21 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
   const [filterDraft, setFilterDraft] = useState<ReelFilter>((reel.filter_style || 'none') as ReelFilter);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editError, setEditError] = useState('');
+  const [actionError, setActionError] = useState('');
+
+  const flashActionError = (msg: string) => {
+    setActionError(msg);
+    setTimeout(() => setActionError((cur) => (cur === msg ? '' : cur)), 3000);
+  };
 
   const viewedRef = useRef(false);
   const progressFrameRef = useRef<number | null>(null);
 
   const lastTap = useRef(0);
-
-
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speeding = useRef(false);
+  const dwellSent = useRef<Set<string>>(new Set());
+  const currentTime = useReelClock(active, videoRef);
 
   const mood = REEL_MOOD_META[reel.mood] || REEL_MOOD_META.cosmic;
 
@@ -108,18 +148,37 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
   const musicUrl = reelMusicPlaybackUrl(reel);
   const hasOverlayMusic = !!musicUrl;
   const musicTrim = musicTrimFromReel(reel);
-  const me = getUser();
+  const me = useAuthUser();
+  const confirm = useConfirm();
   const isOwner = me?.id === reel.user.id;
+
+  useEffect(() => {
+    if (!active || !me) return;
+    const sec = currentTime;
+    const mark = sec >= 10 ? '10' : sec >= 3 ? '3' : null;
+    if (!mark || dwellSent.current.has(mark)) return;
+    dwellSent.current.add(mark);
+    void apiFetchJson(`reels/${reel.id}/dwell/`, {
+      method: 'POST',
+      json: { seconds: sec },
+    }).catch(() => {});
+  }, [active, currentTime, me, reel.id]);
+
+  useEffect(() => {
+    if (!active) dwellSent.current = new Set();
+  }, [active, reel.id]);
 
 
 
   useEffect(() => {
 
     setLiked(reel.is_liked);
-
     setLikes(reel.likes_count);
+    setReactionCounts(countsToEmojiMap(reel.reaction_counts));
+    setSelectedEmoji(reel.my_reaction ? EMOJI_BY_REACTION_TYPE[reel.my_reaction] : undefined);
 
     setCommentsCount(reel.comments_count);
+    setShares(reel.shares_count);
     setSaved(Boolean(reel.is_saved));
 
     setProgress(0);
@@ -128,7 +187,47 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
     setFilterDraft((reel.filter_style || 'none') as ReelFilter);
     setEditError('');
 
-  }, [reel.id, reel.is_liked, reel.likes_count, reel.comments_count, reel.is_saved]);
+  }, [reel.id, reel.is_liked, reel.likes_count, reel.reaction_counts, reel.my_reaction, reel.comments_count, reel.shares_count, reel.is_saved, reel.caption, reel.tags, reel.filter_style]);
+
+
+
+  const applyLikeResult = useCallback((res: ReelLikeResult | null) => {
+    if (!res) return;
+    setLiked(res.liked);
+    setLikes(res.likes_count);
+    if (res.reaction_counts) setReactionCounts(countsToEmojiMap(res.reaction_counts));
+    setSelectedEmoji(res.my_reaction ? EMOJI_BY_REACTION_TYPE[res.my_reaction] : undefined);
+  }, []);
+
+  const handleReelReaction = useCallback(
+    async (emoji: string) => {
+      const type = REACTION_TYPE_BY_EMOJI[emoji];
+      if (!type) return;
+      const res = await onLike(reel.id, type);
+      applyLikeResult(res);
+      if (res?.liked) {
+        setBurstEmoji(emoji);
+        setBurst((b) => b + 1);
+        setLikePop(true);
+        setTimeout(() => setLikePop(false), 700);
+      }
+    },
+    [applyLikeResult, onLike, reel.id],
+  );
+
+  const quickSpark = useCallback(async () => {
+    const emoji = selectedEmoji || '✨';
+    hapticReaction('medium');
+    setBurstEmoji(emoji);
+    setBurst((b) => b + 1);
+    const type = REACTION_TYPE_BY_EMOJI[emoji] || 'spark';
+    const res = await onLike(reel.id, type);
+    applyLikeResult(res);
+    if (res?.liked) {
+      setLikePop(true);
+      setTimeout(() => setLikePop(false), 700);
+    }
+  }, [applyLikeResult, onLike, reel.id, selectedEmoji]);
 
 
 
@@ -303,56 +402,60 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
 
 
-  const toggleLike = useCallback(async () => {
-
-    const res = await onLike(reel.id);
-
-    if (res) {
-
-      setLiked(res.liked);
-
-      setLikes(res.likes_count);
-
-      if (res.liked) {
-
-        setLikePop(true);
-
-        setTimeout(() => setLikePop(false), 700);
-
-      }
-
-    }
-
-  }, [onLike, reel.id]);
-
-
-
   const onVideoTap = () => {
-
+    if (speeding.current) return;
     const now = Date.now();
-
     if (now - lastTap.current < 320) {
-
-      toggleLike();
-
-      setBurst((b) => b + 1);
-
+      void quickSpark();
     } else {
-
       const v = videoRef.current;
-
       if (v) {
-
         if (v.paused) syncPlayback(true);
-
         else syncPlayback(false);
-
       }
-
     }
-
     lastTap.current = now;
+  };
 
+  const setPlaybackRate = (rate: number) => {
+    const v = videoRef.current;
+    const a = audioRef.current;
+    if (v) v.playbackRate = rate;
+    if (a) a.playbackRate = rate;
+  };
+
+  const onHoldStart = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(() => {
+      speeding.current = true;
+      setPlaybackRate(2);
+    }, 280);
+  };
+
+  const onHoldEnd = () => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (speeding.current) {
+      setPlaybackRate(1);
+      speeding.current = false;
+    }
+  };
+
+  const dimSignal = async () => {
+    if (!me || isOwner) return;
+    try {
+      const res = await apiFetchJson(`reels/${reel.id}/dim/`, { method: 'POST' });
+      if (!res.ok) {
+        flashActionError(t('reels.actionFailed'));
+        return;
+      }
+      const data = await res.json();
+      if (data.dimmed) onDimmed?.(reel.id);
+    } catch {
+      flashActionError(t('reels.actionFailed'));
+    }
   };
 
 
@@ -369,7 +472,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
   const reportReel = async () => {
     if (!me || isOwner) return;
-    if (!window.confirm(t('reels.confirmReportReel'))) return;
+    if (!(await confirm(t('reels.confirmReportReel'), { confirmLabel: 'Report' }))) return;
     try {
       const res = await apiFetchJson('moderation/flagged/', {
         method: 'POST',
@@ -381,7 +484,18 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
       });
       if (res.ok) {
         window.alert('Report submitted successfully.');
+      } else {
+        window.alert('Could not submit the report. Please try again.');
       }
+    } catch {
+      window.alert('Could not submit the report. Please try again.');
+    }
+  };
+
+  const recordShare = async (channel: ShareChannel = 'unknown') => {
+    try {
+      const data = await recordContentShare('reel', reel.id, channel);
+      if (data?.shares_count != null) setShares(data.shares_count);
     } catch {
       /* ignore */
     }
@@ -391,24 +505,48 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
     if (!me) return;
     try {
       const res = await apiFetchJson(`reels/${reel.id}/save/`, { method: 'POST' });
-      if (!res.ok) return;
+      if (!res.ok) {
+        flashActionError(t('reels.actionFailed'));
+        return;
+      }
       const data = await res.json();
       const nextSaved = Boolean(data.saved);
       setSaved(nextSaved);
       onSavedChange?.(reel.id, nextSaved);
     } catch {
-      /* ignore */
+      flashActionError(t('reels.actionFailed'));
+    }
+  };
+
+  const [crossposted, setCrossposted] = useState(false);
+  const [crosspostBusy, setCrosspostBusy] = useState(false);
+
+  const handleShareToFeed = async () => {
+    if (!me || crosspostBusy || crossposted) return;
+    setCrosspostBusy(true);
+    try {
+      const res = await apiFetchJson('posts/', {
+        method: 'POST',
+        json: { text: '', shared_reel_id: reel.id },
+      });
+      if (res.ok) setCrossposted(true);
+      else flashActionError(t('reels.actionFailed'));
+    } catch {
+      flashActionError(t('reels.actionFailed'));
+    } finally {
+      setCrosspostBusy(false);
     }
   };
 
   const deleteReel = async () => {
     if (!me || !isOwner) return;
-    if (!window.confirm(t('reels.confirmDeleteReel'))) return;
+    if (!(await confirm(t('reels.confirmDeleteReel'), { danger: true, confirmLabel: 'Delete' }))) return;
     try {
       const res = await apiFetch(`reels/${reel.id}/`, { method: 'DELETE' });
       if (res.ok) onDeleted?.();
+      else flashActionError(t('reels.actionFailed'));
     } catch {
-      /* ignore */
+      flashActionError(t('reels.actionFailed'));
     }
   };
 
@@ -463,6 +601,25 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
       <div className="reel-slide__viewport">
 
+        {actionError && (
+          <p
+            className="reel-comments-sheet__empty"
+            style={{
+              position: 'absolute',
+              top: 12,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              zIndex: 40,
+              background: 'rgba(0,0,0,0.7)',
+              color: '#f87171',
+              padding: '6px 14px',
+              borderRadius: 999,
+            }}
+          >
+            {actionError}
+          </p>
+        )}
+
         <div className="reel-slide__frame">
 
           <div className="reel-slide__warp" aria-hidden />
@@ -486,24 +643,21 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
 
           <video
-
             ref={videoRef}
-
             className="reel-slide__video"
-
             src={mediaUrl(reel.video) || reel.video}
-
             style={{ filter: filterMeta.css || undefined }}
-
             loop
-
             playsInline
-
             muted
-
             onClick={onVideoTap}
-
+            onPointerDown={onHoldStart}
+            onPointerUp={onHoldEnd}
+            onPointerLeave={onHoldEnd}
+            onPointerCancel={onHoldEnd}
           />
+
+          <ReelOverlays reel={reel} currentTime={currentTime} />
 
           {musicUrl && <audio ref={audioRef} src={musicUrl} loop playsInline />}
 
@@ -556,7 +710,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
               >
 
-                <HeartSolid className="h-24 w-24 text-pink-400 drop-shadow-lg" />
+                <span className="reel-slide__like-burst-emoji">{burstEmoji}</span>
 
               </motion.div>
 
@@ -626,31 +780,20 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
 
 
-        <button
-
-          type="button"
-
-          className={`reel-slide__action${liked ? ' reel-slide__action--liked' : ''}`}
-
-          onClick={toggleLike}
-
-          aria-pressed={liked}
-
-        >
-
-          {liked ? (
-
-            <HeartSolid className="h-7 w-7 text-pink-400" />
-
-          ) : (
-
-            <HeartIcon className="h-7 w-7" />
-
+        <div className="reel-slide__action reel-slide__action--react">
+          <PostReactions
+            variant="reel"
+            compact
+            contentType="reel"
+            contentId={reel.id}
+            selectedReaction={selectedEmoji}
+            reactionCounts={reactionCounts}
+            onReaction={(emoji) => void handleReelReaction(emoji)}
+          />
+          {!Object.keys(reactionCounts).length && (
+            <span className="reel-slide__react-count">{formatCount(likes)}</span>
           )}
-
-          <span>{formatCount(likes)}</span>
-
-        </button>
+        </div>
 
 
 
@@ -676,10 +819,43 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
         <button type="button" className="reel-slide__action" onClick={() => setShareOpen(true)}>
           <ShareIcon className="h-7 w-7" />
-          <span>{t('reels.share')}</span>
+          <span>{shares > 0 ? formatCount(shares) : t('reels.share')}</span>
         </button>
 
+        {(reel.allow_remix !== false) && (
+          <Link
+            href={`/reels/create?remix_of=${reel.id}`}
+            className="reel-slide__action"
+            aria-label={t('reels.remix')}
+          >
+            <ArrowPathRoundedSquareIcon className="h-7 w-7" />
+            <span>{t('reels.remix')}</span>
+          </Link>
+        )}
 
+        {(reel.allow_weave !== false) && (
+          <Link
+            href={`/reels/create?stitch_of=${reel.id}`}
+            className="reel-slide__action"
+            aria-label={t('reels.weave')}
+          >
+            <ScissorsIcon className="h-7 w-7" />
+            <span>{t('reels.weave')}</span>
+          </Link>
+        )}
+
+        {me && (
+          <button
+            type="button"
+            className="reel-slide__action"
+            onClick={() => void handleShareToFeed()}
+            disabled={crosspostBusy || crossposted}
+            aria-label={t('reels.shareToFeed')}
+          >
+            <RectangleStackIcon className="h-7 w-7" />
+            <span>{crossposted ? t('reels.sharedToFeed') : t('reels.shareToFeed')}</span>
+          </button>
+        )}
 
         <button
           type="button"
@@ -703,6 +879,24 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
             </button>
             <button
               type="button"
+              className="reel-slide__action"
+              onClick={() => {
+                void (async () => {
+                  const res = await apiFetchJson(`reels/${reel.id}/generate-captions/`, {
+                    method: 'POST',
+                    json: { force: true, language: reel.captions_language || 'en' },
+                  });
+                  if (res.ok) window.alert('Captions refreshed — reload the feed to see them.');
+                  else flashActionError(t('reels.actionFailed'));
+                })();
+              }}
+              aria-label="Generate captions"
+            >
+              <span style={{ fontSize: 22 }}>CC</span>
+              <span>Captions</span>
+            </button>
+            <button
+              type="button"
               className="reel-slide__action reel-slide__action--danger"
               onClick={deleteReel}
               aria-label={t('reels.deleteReel')}
@@ -712,15 +906,26 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
             </button>
           </>
         ) : (
-          <button
-            type="button"
-            className="reel-slide__action"
-            onClick={reportReel}
-            aria-label={t('reels.reportReel')}
-          >
-            <FlagIcon className="h-7 w-7" />
-            <span>{t('reels.reportReel')}</span>
-          </button>
+          <>
+            <button
+              type="button"
+              className="reel-slide__action"
+              onClick={() => void dimSignal()}
+              aria-label={t('reels.dimSignal')}
+            >
+              <EyeSlashIcon className="h-7 w-7" />
+              <span>{t('reels.dimSignal')}</span>
+            </button>
+            <button
+              type="button"
+              className="reel-slide__action"
+              onClick={reportReel}
+              aria-label={t('reels.reportReel')}
+            >
+              <FlagIcon className="h-7 w-7" />
+              <span>{t('reels.reportReel')}</span>
+            </button>
+          </>
         )}
       </div>
 
@@ -729,6 +934,23 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
       <div className="reel-slide__meta">
 
         <div className="reel-slide__chips">
+
+          {reel.remix_of != null && (
+            <ReelRemixBadge remixOfId={reel.remix_of} />
+          )}
+          {reel.stitch_of != null && (
+            <ReelRemixBadge remixOfId={reel.stitch_of} labelKey="reels.weaveOf" />
+          )}
+          {reel.inspiration_attribution?.type === 'question' && (
+            <Link href={`/inspiration?q=${reel.inspiration_attribution.id}`} className="reel-slide__remix-chip">
+              ✦ {reel.inspiration_attribution.label}
+            </Link>
+          )}
+          {reel.inspiration_attribution?.type === 'idea' && (
+            <Link href={`/bazaar/${reel.inspiration_attribution.id}`} className="reel-slide__remix-chip">
+              💡 {reel.inspiration_attribution.label}
+            </Link>
+          )}
 
           <span className="reel-slide__mood-chip">
 
@@ -756,7 +978,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
         </Link>
 
-        {reel.caption && <p className="reel-slide__caption">{reel.caption}</p>}
+        {reel.caption && <MentionText text={reel.caption} className="reel-slide__caption" />}
 
         {reel.tags && reel.tags.length > 0 && (
 
@@ -784,17 +1006,21 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
         )}
 
-        <div className="reel-slide__sound">
-
-          <span className="reel-slide__sound-wave" aria-hidden />
-
-          <span className="reel-slide__sound-marquee">
-
-            <span>{soundLabel}</span>
-
-          </span>
-
-        </div>
+        {reel.music_track_detail ? (
+          <Link href={`/reels/sound/${reel.music_track_detail.id}`} className="reel-slide__sound reel-slide__sound-link">
+            <span className="reel-slide__sound-wave" aria-hidden />
+            <span className="reel-slide__sound-marquee">
+              <span>{soundLabel}</span>
+            </span>
+          </Link>
+        ) : (
+          <div className="reel-slide__sound">
+            <span className="reel-slide__sound-wave" aria-hidden />
+            <span className="reel-slide__sound-marquee">
+              <span>{soundLabel}</span>
+            </span>
+          </div>
+        )}
 
         <RelativeTime date={reel.created_at} className="reel-slide__time block" />
 
@@ -810,6 +1036,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
       <ReelCommentsSheet
         reelId={reel.id}
+        reelOwnerId={reel.user.id}
         open={commentsOpen}
         onClose={() => setCommentsOpen(false)}
         onCountChange={setCommentsCount}
@@ -820,6 +1047,17 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
           <ShareCosmicPanel
             postUrl={reelPageUrl(reel.id)}
             postTitle={reel.caption?.slice(0, 80) || t('reels.shareSignalTitle')}
+            dmMessage={reel.caption?.slice(0, 80) || t('reels.shareSignalTitle')}
+            shareCount={shares}
+            contentType="reel"
+            authorName={reelAuthorName(reel.user)}
+            storyMediaUrl={mediaUrl(reel.video) || reel.video}
+            onShareToStory={async () => {
+              const video = mediaUrl(reel.video) || reel.video;
+              if (!video) return false;
+              return shareReelToStory(reel.id, video, reel.caption || undefined);
+            }}
+            onRecordShare={recordShare}
             onClose={() => setShareOpen(false)}
           />
         )}

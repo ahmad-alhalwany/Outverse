@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   LuArrowLeft as ArrowLeft,
@@ -14,10 +13,26 @@ import {
   LuStar as Star,
   LuVault as Vault,
 } from 'react-icons/lu';
-import { authFetch, getUser, setAuth } from '@/lib/auth';
+import { authFetch, setAuth } from '@/lib/auth';
 import { apiFetch, apiUrl, mediaUrl } from '@/lib/api';
+import { useLocale } from '@/components/LocaleProvider';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
 
 const WORLDS_FALLBACK = ['The Lab', 'The Bazaar', 'The Vault'];
+
+// Real interest tags grouped by question category. These map cleanly to
+// backend personalization in questions/interests.py — selecting any of
+// them makes the Inspiration Engine bias prompts toward that category.
+const INTEREST_GROUPS: { category: string; label: string; tags: string[] }[] = [
+  { category: 'scifi', label: 'Science & Future', tags: ['space', 'astronomy', 'physics', 'ai', 'technology', 'future'] },
+  { category: 'historical', label: 'History', tags: ['history', 'ancient', 'archaeology', 'civilizations', 'egypt', 'rome'] },
+  { category: 'fantasy', label: 'Fantasy', tags: ['fantasy', 'magic', 'mythology', 'dragons', 'wizards', 'worldbuilding'] },
+  { category: 'philosophical', label: 'Philosophy & Mind', tags: ['philosophy', 'ethics', 'psychology', 'meditation', 'spirituality'] },
+  { category: 'mystery', label: 'Mystery', tags: ['mystery', 'detective', 'secrets', 'puzzles', 'conspiracy'] },
+  { category: 'surreal', label: 'Surreal & Dreams', tags: ['surreal', 'dreams', 'absurd', 'strange'] },
+  { category: 'everyday', label: 'Everyday', tags: ['nature', 'travel', 'coffee', 'food', 'photography', 'music'] },
+  { category: 'emotional', label: 'Emotional & Art', tags: ['poetry', 'writing', 'art', 'painting', 'feelings', 'memory'] },
+];
 
 type Suggestion = {
   id: number;
@@ -29,29 +44,29 @@ type Suggestion = {
 };
 
 const COLORS = {
-  page: '#FFF8F4',
+  page: '#F3F0FC',
   panel: '#FFFFFF',
-  panelSoft: '#FFD9CC',
-  panelMuted: '#F8E7E0',
-  border: '#F2D7CC',
-  text: '#2E2320',
-  muted: '#6F5A53',
-  accent: '#9E5A43',
-  accentDark: '#7F4634',
-  darkPanel: '#2B201D',
-  peach: '#FFB8A3',
-  olive: '#7A6A2F',
+  panelSoft: '#DCC9FA',
+  panelMuted: '#F5F1FE',
+  border: '#E3D9F7',
+  text: '#211B3D',
+  muted: '#79709E',
+  accent: '#7C3AED',
+  accentDark: '#5B21B6',
+  darkPanel: '#1E1740',
+  peach: '#C4B5FD',
+  olive: '#A855F7',
 };
 
 const GUIDE_OPTIONS = [
-  { id: 'explorer', label: 'The Explorer', icon: Rocket },
-  { id: 'creator', label: 'The Creator', icon: Palette },
+  { id: 'explorer', labelKey: 'onboarding.explorer', icon: Rocket },
+  { id: 'creator', labelKey: 'onboarding.creator', icon: Palette },
 ];
 
 const MOOD_STARS = [
-  { id: 'joy', label: 'Joy', left: '18%', top: '28%' },
-  { id: 'focus', label: 'Focus', left: '48%', top: '52%' },
-  { id: 'creativity', label: 'Creativity', left: '76%', top: '70%' },
+  { id: 'joy', labelKey: 'onboarding.moodJoy', left: '18%', top: '28%' },
+  { id: 'focus', labelKey: 'onboarding.moodFocus', left: '48%', top: '52%' },
+  { id: 'creativity', labelKey: 'onboarding.moodCreativity', left: '76%', top: '70%' },
 ];
 
 function initials(value: string) {
@@ -60,17 +75,27 @@ function initials(value: string) {
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { t } = useLocale();
   const [worlds, setWorlds] = useState<string[]>(WORLDS_FALLBACK);
   const [selectedWorlds, setSelectedWorlds] = useState<string[]>(WORLDS_FALLBACK);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [selectedGuide, setSelectedGuide] = useState('explorer');
-  const user = useMemo(() => getUser(), []);
+  const [selectedMood, setSelectedMood] = useState('');
+  const [step, setStep] = useState(0);
+  const user = useAuthUser();
+  const [userChecked, setUserChecked] = useState(false);
 
   useEffect(() => {
+    setUserChecked(true);
+  }, []);
+
+  useEffect(() => {
+    if (!userChecked) return;
     if (!user) {
       router.replace('/login');
       return;
@@ -97,6 +122,25 @@ export default function OnboardingPage() {
     return () => URL.revokeObjectURL(url);
   }, [avatarFile]);
 
+  async function skipOnboarding() {
+    if (!user) return;
+    setSaving(true);
+    setError('');
+    try {
+      const form = new FormData();
+      form.append('onboarding_completed', 'true');
+      const res = await authFetch(apiUrl(`users/${user.id}/update/`), { method: 'PATCH', body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || t('onboarding.saveFailed'));
+      setAuth(null, { ...user, onboarding_completed: true });
+      router.push('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('onboarding.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function saveProfile() {
     if (!user) return;
     setSaving(true);
@@ -104,23 +148,30 @@ export default function OnboardingPage() {
     try {
       const form = new FormData();
       if (avatarFile) form.append('avatar', avatarFile);
-      form.append('interests', JSON.stringify(selectedWorlds));
+      form.append('interests', JSON.stringify([
+        ...new Set([
+          `guide:${selectedGuide}`,
+          ...(selectedMood ? [`mood:${selectedMood}`] : []),
+          ...selectedWorlds,
+          ...selectedTags,
+        ]),
+      ]));
       form.append('onboarding_completed', 'true');
       const res = await authFetch(apiUrl(`users/${user.id}/update/`), {
         method: 'PATCH',
         body: form,
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Unable to save onboarding progress.');
+      if (!res.ok) throw new Error(data.error || t('onboarding.saveFailed'));
       setAuth(null, {
         ...user,
         avatar: data.avatar,
-        interests: Array.isArray(data.interests) ? data.interests : selectedWorlds,
+        interests: Array.isArray(data.interests) ? data.interests : [...selectedWorlds, ...selectedTags],
         onboarding_completed: Boolean(data.onboarding_completed),
       });
       router.push('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to save onboarding progress.');
+      setError(err instanceof Error ? err.message : t('onboarding.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -148,9 +199,9 @@ export default function OnboardingPage() {
   }
 
   const worldCards = [
-    { label: worlds[0] ?? 'The Lab', icon: FlaskConical, subtitle: 'Where innovation happens', tone: COLORS.accent },
-    { label: worlds[1] ?? 'The Bazaar', icon: ShoppingBag, subtitle: 'Exchange ideas and resources', tone: '#8A6A5B' },
-    { label: worlds[2] ?? 'The Vault', icon: Vault, subtitle: 'Store your achievements', tone: COLORS.olive },
+    { label: worlds[0] ?? t('onboarding.worldLabLabel'), icon: FlaskConical, subtitle: t('onboarding.worldLabSubtitle'), tone: COLORS.accent },
+    { label: worlds[1] ?? t('onboarding.worldBazaarLabel'), icon: ShoppingBag, subtitle: t('onboarding.worldBazaarSubtitle'), tone: '#0EA5E9' },
+    { label: worlds[2] ?? t('onboarding.worldVaultLabel'), icon: Vault, subtitle: t('onboarding.worldVaultSubtitle'), tone: COLORS.olive },
   ];
 
   return (
@@ -160,17 +211,18 @@ export default function OnboardingPage() {
           <button type="button" onClick={() => router.back()} className="inline-flex items-center gap-2 text-sm font-medium" style={{ color: COLORS.text }}>
             <ArrowLeft size={18} />
           </button>
-          <h1 className="text-2xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Space Journey</h1>
-          <p className="text-lg font-semibold" style={{ color: COLORS.text }}>1/3</p>
+          <h1 className="text-2xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>{t('onboarding.header')}</h1>
+          <p className="text-lg font-semibold" style={{ color: COLORS.text }}>{step + 1}/3</p>
         </div>
       </header>
 
       <main className="mx-auto max-w-[1320px] px-5 py-10 md:px-8 md:py-14">
+        {step === 0 && (
         <section className="mx-auto max-w-[760px] text-center">
-          <h2 className="text-4xl font-bold tracking-[-0.04em] md:text-6xl" style={{ color: COLORS.text }}>Choose Your Space Identity</h2>
+          <h2 className="text-4xl font-bold tracking-[-0.04em] md:text-6xl" style={{ color: COLORS.text }}>{t('onboarding.stepIdentity')}</h2>
           <div className="mt-8 rounded-[28px] border p-8 md:p-12" style={{ background: COLORS.panel, borderColor: COLORS.border }}>
             <div className="flex items-center justify-center gap-8 md:gap-16">
-              {GUIDE_OPTIONS.map(({ id, label, icon: Icon }) => {
+              {GUIDE_OPTIONS.map(({ id, labelKey, icon: Icon }) => {
                 const active = selectedGuide === id;
                 return (
                   <button key={id} type="button" onClick={() => setSelectedGuide(id)} className="text-center">
@@ -180,15 +232,15 @@ export default function OnboardingPage() {
                     >
                       <Icon size={52} style={{ color: active ? COLORS.accent : COLORS.text }} />
                     </div>
-                    <p className="mt-4 text-2xl font-semibold" style={{ color: COLORS.text }}>{label}</p>
+                    <p className="mt-4 text-2xl font-semibold" style={{ color: COLORS.text }}>{t(labelKey)}</p>
                   </button>
                 );
               })}
             </div>
-            <h3 className="mt-10 text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Which represents you better?</h3>
-            <p className="mt-3 text-xl" style={{ color: COLORS.muted }}>Choose your spirit guide for this journey</p>
+            <h3 className="mt-10 text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>{t('onboarding.whichRepresents')}</h3>
+            <p className="mt-3 text-xl" style={{ color: COLORS.muted }}>{t('onboarding.chooseGuide')}</p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-              {GUIDE_OPTIONS.map(({ id, label }) => (
+              {GUIDE_OPTIONS.map(({ id }) => (
                 <button
                   key={id}
                   type="button"
@@ -196,24 +248,54 @@ export default function OnboardingPage() {
                   className="rounded-xl px-5 py-3 text-lg font-semibold text-white"
                   style={{ background: selectedGuide === id ? COLORS.text : COLORS.accent }}
                 >
-                  {id === 'explorer' ? "I'm an Explorer" : "I'm a Creator"}
+                  {id === 'explorer' ? t('onboarding.imExplorer') : t('onboarding.imCreator')}
                 </button>
               ))}
             </div>
           </div>
           <div className="mt-6 flex items-center justify-center gap-3">
-            {[0, 1, 2, 3].map((index) => (
+            {[0, 1, 2].map((index) => (
               <span
                 key={index}
                 className="h-3 w-3 rounded-full"
-                style={{ background: index === 0 ? COLORS.text : '#ECE7E5' }}
+                style={{ background: index === step ? COLORS.text : '#ECE7E5' }}
               />
             ))}
           </div>
         </section>
+        )}
 
+        {step === 0 && (
         <section className="mt-16">
-          <h2 className="text-center text-4xl font-bold tracking-[-0.04em] md:text-5xl" style={{ color: COLORS.text }}>Discover Your Universe</h2>
+          <h2 className="text-center text-4xl font-bold tracking-[-0.04em] md:text-5xl" style={{ color: COLORS.text }}>{t('onboarding.moodConstellation')}</h2>
+          <div className="mx-auto mt-8 max-w-[760px] rounded-[28px] border p-6 md:p-10" style={{ background: COLORS.panel, borderColor: COLORS.border }}>
+            <div className="relative h-[320px] overflow-hidden rounded-[24px]" style={{ background: COLORS.panelMuted }}>
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.7),_transparent_55%)]" />
+              {MOOD_STARS.map((star) => (
+                <button
+                  key={star.id}
+                  type="button"
+                  onClick={() => setSelectedMood(star.id)}
+                  className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
+                  style={{ left: star.left, top: star.top }}
+                >
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: selectedMood === star.id ? COLORS.accent : '#FFFFFF' }}>
+                    <Star size={24} style={{ color: selectedMood === star.id ? '#fff' : COLORS.text }} />
+                  </div>
+                  <p className="mt-3 text-lg font-medium" style={{ color: COLORS.text }}>{t(star.labelKey)}</p>
+                </button>
+              ))}
+            </div>
+            <p className="mt-8 text-center text-xl" style={{ color: COLORS.muted }}>
+              {t('onboarding.placeStars')}
+            </p>
+          </div>
+        </section>
+        )}
+
+        {step === 1 && (
+        <section className="mt-16">
+          <h2 className="text-center text-4xl font-bold tracking-[-0.04em] md:text-5xl" style={{ color: COLORS.text }}>{t('onboarding.discoverUniverse')}</h2>
           <div className="mt-8 rounded-[28px] px-6 py-10 md:px-10" style={{ background: '#F5F3F3' }}>
             <div className="grid gap-8 md:grid-cols-3">
               {worldCards.map(({ label, icon: Icon, subtitle, tone }) => (
@@ -224,7 +306,7 @@ export default function OnboardingPage() {
                   className="flex flex-col items-center rounded-[24px] px-6 py-8 text-center transition"
                   style={{
                     background: selectedWorlds.includes(label) ? '#FFFFFF' : 'transparent',
-                    boxShadow: selectedWorlds.includes(label) ? '0 12px 30px rgba(92, 53, 39, 0.08)' : 'none',
+                    boxShadow: selectedWorlds.includes(label) ? '0 12px 30px rgba(33, 27, 61, 0.10)' : 'none',
                   }}
                 >
                   <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: '#FFFFFF' }}>
@@ -237,33 +319,59 @@ export default function OnboardingPage() {
             </div>
           </div>
         </section>
+        )}
 
+        {step === 1 && (
         <section className="mt-16">
-          <h2 className="text-center text-4xl font-bold tracking-[-0.04em] md:text-5xl" style={{ color: COLORS.text }}>Create Your Mood Constellation</h2>
-          <div className="mx-auto mt-8 max-w-[760px] rounded-[28px] border p-6 md:p-10" style={{ background: COLORS.panel, borderColor: COLORS.border }}>
-            <div className="relative h-[320px] overflow-hidden rounded-[24px]" style={{ background: COLORS.panelMuted }}>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.7),_transparent_55%)]" />
-              {MOOD_STARS.map((star) => (
-                <div key={star.id} className="absolute -translate-x-1/2 -translate-y-1/2 text-center" style={{ left: star.left, top: star.top }}>
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: '#FFFFFF' }}>
-                    <Star size={24} style={{ color: COLORS.text }} />
+          <h2 className="text-center text-4xl font-bold tracking-[-0.04em] md:text-5xl" style={{ color: COLORS.text }}>{t('onboarding.whatSparksYou')}</h2>
+          <p className="mt-3 text-center text-lg" style={{ color: COLORS.muted }}>
+            {t('onboarding.sparksSubtitle')}
+          </p>
+          <div className="mt-8 rounded-[28px] border p-6 md:p-10" style={{ background: COLORS.panel, borderColor: COLORS.border }}>
+            <div className="grid gap-6 md:grid-cols-2">
+              {INTEREST_GROUPS.map((group) => (
+                <div key={group.category}>
+                  <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: COLORS.muted }}>
+                    {group.label}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {group.tags.map((tag) => {
+                      const active = selectedTags.includes(tag);
+                      return (
+                        <button
+                          key={tag}
+                          type="button"
+                          onClick={() => setSelectedTags((current) =>
+                            current.includes(tag)
+                              ? current.filter((item) => item !== tag)
+                              : [...current, tag],
+                          )}
+                          className="rounded-full px-4 py-2 text-sm font-medium transition"
+                          style={{
+                            background: active ? COLORS.accent : '#F7F5F5',
+                            color: active ? '#fff' : COLORS.text,
+                            border: `1px solid ${active ? COLORS.accent : 'transparent'}`,
+                          }}
+                        >
+                          {tag}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <p className="mt-3 text-lg font-medium" style={{ color: COLORS.text }}>{star.label}</p>
                 </div>
               ))}
             </div>
-            <p className="mt-8 text-center text-xl" style={{ color: COLORS.muted }}>
-              Place three stars to represent your current emotional state
-            </p>
           </div>
         </section>
+        )}
 
+        {step === 2 && (
         <section className="mt-16 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           <div className="rounded-[28px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border }}>
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Suggested creators</h2>
-                <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>Start your feed with a few voices from across the Outverse.</p>
+                <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>{t('onboarding.suggestedCreators')}</h2>
+                <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>{t('onboarding.suggestedCreatorsSubtitle')}</p>
               </div>
               <Sparkles size={28} style={{ color: COLORS.accent }} />
             </div>
@@ -280,7 +388,7 @@ export default function OnboardingPage() {
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-lg font-semibold" style={{ color: COLORS.text }}>@{creator.username}</p>
-                    <p className="text-sm" style={{ color: COLORS.muted }}>{creator.followers_count} followers</p>
+                    <p className="text-sm" style={{ color: COLORS.muted }}>{t('onboarding.followers', { count: creator.followers_count })}</p>
                     {creator.bio && <p className="mt-1 truncate text-sm" style={{ color: COLORS.muted }}>{creator.bio}</p>}
                   </div>
                   <button
@@ -289,7 +397,7 @@ export default function OnboardingPage() {
                     className="rounded-xl px-4 py-2 text-sm font-semibold text-white"
                     style={{ background: creator.is_following ? COLORS.text : COLORS.accent }}
                   >
-                    {creator.is_following ? 'Following' : 'Follow'}
+                    {creator.is_following ? t('onboarding.following') : t('onboarding.follow')}
                   </button>
                 </div>
               ))}
@@ -297,7 +405,7 @@ export default function OnboardingPage() {
           </div>
 
           <div className="rounded-[28px] border p-6 md:p-8" style={{ background: COLORS.panelSoft, borderColor: COLORS.border }}>
-            <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.accentDark }}>Finalize your avatar</h2>
+            <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.accentDark }}>{t('onboarding.finalizeAvatar')}</h2>
             <label
               className="mt-6 flex cursor-pointer flex-col items-center justify-center rounded-[24px] border-2 border-dashed px-6 py-10 text-center"
               style={{ borderColor: '#B58F82', background: COLORS.panel }}
@@ -312,12 +420,13 @@ export default function OnboardingPage() {
                 </div>
               )}
               <p className="mt-5 text-lg font-semibold" style={{ color: COLORS.accentDark }}>
-                {avatarFile ? avatarFile.name : 'Upload your profile image'}
+                {avatarFile ? avatarFile.name : t('onboarding.uploadAvatar')}
               </p>
-              <p className="mt-2 text-sm" style={{ color: COLORS.muted }}>PNG or JPG recommended</p>
+              <p className="mt-2 text-sm" style={{ color: COLORS.muted }}>{t('onboarding.avatarHint')}</p>
             </label>
           </div>
         </section>
+        )}
 
         {error && (
           <div className="mx-auto mt-8 max-w-[760px] rounded-2xl border px-4 py-3 text-sm font-medium" style={{ borderColor: '#E8B7A8', background: '#FFF1EC', color: '#A24F39' }}>
@@ -328,20 +437,33 @@ export default function OnboardingPage() {
 
       <footer className="border-t px-5 py-5 md:px-12" style={{ borderColor: '#EFE4DE' }}>
         <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-4">
-          <Link href="/register" className="text-lg font-medium" style={{ color: COLORS.text }}>
-            Back
-          </Link>
+          <button
+            type="button"
+            onClick={() => (step > 0 ? setStep((current) => current - 1) : router.back())}
+            className="text-lg font-medium"
+            style={{ color: COLORS.text }}
+          >
+            {t('onboarding.back')}
+          </button>
+          <button
+            type="button"
+            onClick={() => void skipOnboarding()}
+            className="text-sm font-medium underline"
+            style={{ color: COLORS.muted }}
+          >
+            Skip for now
+          </button>
           <div className="h-4 w-56 overflow-hidden rounded-full" style={{ background: '#EFE9E6' }}>
-            <div className="h-full rounded-full" style={{ width: '33.333%', background: COLORS.text }} />
+            <div className="h-full rounded-full" style={{ width: `${((step + 1) / 3) * 100}%`, background: COLORS.text }} />
           </div>
           <button
             type="button"
-            onClick={saveProfile}
+            onClick={() => (step < 2 ? setStep((current) => current + 1) : void saveProfile())}
             disabled={saving}
             className="inline-flex items-center gap-3 rounded-2xl px-7 py-4 text-lg font-semibold text-white disabled:opacity-60"
             style={{ background: COLORS.text }}
           >
-            {saving ? 'Saving...' : 'Next Step'}
+            {saving ? t('onboarding.saving') : step < 2 ? t('onboarding.nextStep') : t('onboarding.finish')}
             <ArrowRight size={20} />
           </button>
         </div>

@@ -9,6 +9,7 @@ import {
   ChevronRightIcon,
   Cog6ToothIcon,
   EyeIcon,
+  MagnifyingGlassIcon,
   SparklesIcon,
   StarIcon,
   XMarkIcon,
@@ -25,6 +26,8 @@ interface AppNotification {
   type: string;
   post: number | null;
   reel: number | null;
+  story: number | null;
+  idea: number | null;
   text: string;
   is_read: boolean;
   created_at: string;
@@ -38,12 +41,20 @@ interface NotificationResponse {
   results: AppNotification[];
 }
 
-type FilterKey = 'all' | 'reaction' | 'challenge_complete';
+type FilterKey = 'all' | 'reaction' | 'comment' | 'chat_message' | 'story' | 'challenge_complete' | 'ideas';
 
-const FILTERS: Array<{ key: FilterKey; label: string; matches?: string[] }> = [
+const FILTERS: Array<{ key: FilterKey; label: string; matches?: string[]; storyOnly?: boolean }> = [
   { key: 'all', label: 'All' },
-  { key: 'reaction', label: 'Reactions', matches: ['reaction', 'comment', 'follow'] },
+  { key: 'reaction', label: 'Reactions', matches: ['reaction', 'follow', 'share'] },
+  { key: 'comment', label: 'Comments', matches: ['comment', 'mention'] },
+  { key: 'story', label: 'Stories', storyOnly: true },
+  { key: 'chat_message', label: 'Messages', matches: ['chat_message'] },
   { key: 'challenge_complete', label: 'Challenges', matches: ['challenge_complete'] },
+  {
+    key: 'ideas',
+    label: 'Ideas',
+    matches: ['idea_pledge', 'idea_comment', 'idea_apply', 'idea_accepted', 'idea_rejected'],
+  },
 ];
 
 function startOfDay(date: Date) {
@@ -65,12 +76,21 @@ function groupLabel(iso: string, t: (key: string) => string) {
 function getNotificationKind(notification: AppNotification) {
   const kind = notification.type || notification.verb;
   if (kind === 'challenge_complete') return 'challenge';
+  if (kind === 'achievement' || kind === 'achievement_unlocked') return 'achievement';
   if (kind === 'reaction' || kind === 'comment' || kind === 'follow') return 'reaction';
   return 'other';
 }
 
+function getAchievementProgress(notification: AppNotification): { current: number; goal: number } | null {
+  const match = notification.text.match(/(\d+)\s*\/\s*(\d+)/);
+  if (!match) return null;
+  const goal = Number(match[2]);
+  if (!goal) return null;
+  return { current: Number(match[1]), goal };
+}
+
 function getNotificationTitle(notification: AppNotification) {
-  const actorName = notification.actor?.username || 'Outverse';
+  const actorName = notification.actor?.username || 'Cosmory';
   const kind = notification.type || notification.verb;
 
   if (kind === 'challenge_complete') {
@@ -81,8 +101,12 @@ function getNotificationTitle(notification: AppNotification) {
   }
 
   if (kind === 'reaction') return 'New Reaction';
-  if (kind === 'comment') return 'Idea Reaction';
+  if (kind === 'share') return 'Signal shared';
+  if (kind === 'comment') return 'New Comment';
+  if (kind === 'mention') return 'Mention';
+  if (kind === 'chat_message') return 'New Message';
   if (kind === 'follow') return `${actorName} followed you`;
+  if (kind.startsWith('idea_')) return 'Idea Bazaar';
   if (/achievement|completed \d+/i.test(notification.text)) return 'Achievement Unlocked';
   return actorName;
 }
@@ -92,8 +116,14 @@ function getNotificationDescription(notification: AppNotification) {
   const kind = notification.type || notification.verb;
 
   if (kind === 'reaction') return `${actorName} ${notification.text}`;
+  if (kind === 'share') return `${actorName} ${notification.text || 'transmitted your signal'}`;
   if (kind === 'comment') return `${actorName} ${notification.text}`;
+  if (kind === 'mention') return `${actorName} ${notification.text}`;
+  if (kind === 'chat_message') return `${actorName}: ${notification.text}`;
   if (kind === 'follow') return `${actorName} started following you`;
+  if (kind.startsWith('idea_')) {
+    return `${actorName} ${notification.text}`;
+  }
   return notification.text;
 }
 
@@ -102,20 +132,20 @@ function getNotificationIcon(notification: AppNotification) {
 
   if (kind === 'challenge_complete') {
     return {
-      shell: 'bg-[#ffd9cf] text-[#a45a3f]',
+      shell: 'bg-[#E9E1FA] text-[#7C3AED]',
       icon: <FlagIcon className="h-5 w-5" />,
     };
   }
 
-  if (kind === 'reaction' || kind === 'comment') {
+  if (kind === 'reaction' || kind === 'comment' || kind === 'share') {
     return {
-      shell: 'bg-[#ffd9cf] text-[#a45a3f]',
+      shell: 'bg-[#E9E1FA] text-[#7C3AED]',
       icon: <BellIcon className="h-5 w-5" />,
     };
   }
 
   return {
-    shell: 'bg-[#ffd9cf] text-[#a45a3f]',
+    shell: 'bg-[#E9E1FA] text-[#7C3AED]',
     icon: <StarIcon className="h-5 w-5" />,
   };
 }
@@ -123,9 +153,24 @@ function getNotificationIcon(notification: AppNotification) {
 function getActionType(notification: AppNotification) {
   const kind = notification.type || notification.verb;
   if (kind === 'challenge_complete' && /invite/i.test(notification.text)) return 'decision';
-  if (/achievement|completed \d+/i.test(notification.text)) return 'link';
+  if (getNotificationKind(notification) === 'achievement' || /achievement|completed \d+/i.test(notification.text)) return 'link';
   if (kind === 'challenge_complete') return 'details';
   return 'view';
+}
+
+function notificationHref(notification: AppNotification): string | null {
+  const kind = notification.type || notification.verb;
+  if (kind === 'follow' && notification.actor?.id) return `/profile/${notification.actor.id}`;
+  if (notification.reel) return `/reels/${notification.reel}`;
+  if (notification.story) return `/?story=${notification.story}`;
+  if (notification.post) return `/post/${notification.post}`;
+  if (notification.idea || kind.startsWith('idea_')) {
+    return notification.idea ? `/bazaar/${notification.idea}` : '/bazaar';
+  }
+  if (kind === 'chat_message') return '/chat';
+  if (kind === 'going_live') return '/live';
+  if (kind.includes('video')) return '/videos';
+  return null;
 }
 
 export default function NotificationsPage() {
@@ -137,6 +182,8 @@ export default function NotificationsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextUrl, setNextUrl] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [actionError, setActionError] = useState('');
 
   const load = useCallback(async (filterKey: string, append = false, url?: string | null) => {
     if (append) {
@@ -155,8 +202,11 @@ export default function NotificationsPage() {
         setNotifications((prev) => (append ? [...prev, ...rows] : rows));
         setUnreadCount(data.unread_count || 0);
         setNextUrl(data.next || null);
+      } else if (append) {
+        setActionError('Could not load more notifications.');
       }
     } catch {
+      if (append) setActionError('Could not load more notifications.');
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -167,13 +217,32 @@ export default function NotificationsPage() {
     void load(activeFilter);
   }, [activeFilter, load]);
 
+  useEffect(() => {
+    if (!actionError) return;
+    const timer = setTimeout(() => setActionError(''), 3500);
+    return () => clearTimeout(timer);
+  }, [actionError]);
+
   const filteredNotifications = useMemo(() => {
     const filter = FILTERS.find((item) => item.key === activeFilter);
-    if (!filter || filter.key === 'all' || !filter.matches) return notifications;
-    return notifications.filter((notification) =>
-      filter.matches?.includes(notification.type || notification.verb),
-    );
-  }, [activeFilter, notifications]);
+    let rows = notifications;
+    if (filter && filter.key !== 'all') {
+      if (filter.storyOnly) {
+        rows = rows.filter((notification) => notification.story != null);
+      } else if (filter.matches) {
+        rows = rows.filter((notification) => filter.matches?.includes(notification.type || notification.verb));
+      }
+    }
+    const query = searchQuery.trim().toLowerCase();
+    if (query) {
+      rows = rows.filter((notification) =>
+        `${getNotificationTitle(notification)} ${getNotificationDescription(notification)}`
+          .toLowerCase()
+          .includes(query),
+      );
+    }
+    return rows;
+  }, [activeFilter, notifications, searchQuery]);
 
   const groupedNotifications = useMemo(() => {
     return filteredNotifications.reduce<Record<string, AppNotification[]>>((acc, notification) => {
@@ -191,12 +260,24 @@ export default function NotificationsPage() {
           acc[filter.key] = notifications.length;
           return acc;
         }
-        acc[filter.key] = notifications.filter((notification) =>
-          filter.matches?.includes(notification.type || notification.verb),
-        ).length;
+        if (filter.storyOnly) {
+          acc[filter.key] = notifications.filter((n) => n.story != null).length;
+        } else {
+          acc[filter.key] = notifications.filter((notification) =>
+            filter.matches?.includes(notification.type || notification.verb),
+          ).length;
+        }
         return acc;
       },
-      { all: notifications.length, reaction: 0, challenge_complete: 0 },
+      {
+        all: notifications.length,
+        reaction: 0,
+        comment: 0,
+        chat_message: 0,
+        story: 0,
+        challenge_complete: 0,
+        ideas: 0,
+      },
     );
   }, [notifications]);
 
@@ -213,8 +294,11 @@ export default function NotificationsPage() {
           ),
         );
         setUnreadCount(data.unread_count ?? 0);
+      } else {
+        setActionError('Could not update notification.');
       }
     } catch {
+      setActionError('Could not update notification.');
     }
   }
 
@@ -224,20 +308,18 @@ export default function NotificationsPage() {
       if (res.ok) {
         setNotifications((prev) => prev.map((notification) => ({ ...notification, is_read: true })));
         setUnreadCount(0);
+      } else {
+        setActionError('Could not mark all as read.');
       }
     } catch {
+      setActionError('Could not mark all as read.');
     }
   }
 
   async function handleClick(notification: AppNotification) {
     await markRead(notification.id);
-    if (notification.verb === 'follow' && notification.actor?.id) {
-      router.push(`/profile/${notification.actor.id}`);
-    } else if (notification.reel) {
-      router.push(`/reels/${notification.reel}`);
-    } else if (notification.post) {
-      router.push(`/post/${notification.post}`);
-    }
+    const href = notificationHref(notification);
+    if (href) router.push(href);
   }
 
   async function handleDecision(notification: AppNotification) {
@@ -245,30 +327,30 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#fff8f5] text-[#2f211d]">
-      <header className="border-b border-[#ead7d0] bg-[#fff8f5]">
+    <div className="min-h-screen bg-[#F3F0FC] text-[#211B3D]">
+      <header className="border-b border-[#E3D9F7] bg-[#F3F0FC]">
         <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-6 sm:px-8">
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#241815] sm:text-[2.2rem]">
+            <h1 className="text-3xl font-semibold tracking-[-0.03em] text-[#211B3D] sm:text-[2.2rem]">
               {t('notifications.title')}
             </h1>
             {unreadCount > 0 && (
-              <span className="rounded-full bg-[#f4e7e1] px-3 py-1 text-sm font-medium text-[#5f4a43]">
+              <span className="rounded-full bg-[#E9E1FA] px-3 py-1 text-sm font-medium text-[#5B21B6]">
                 {unreadCount} New
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-[#5f4a43]">
+          <div className="flex items-center gap-3 text-[#5B21B6]">
             <Link
               href="/settings"
-              className="rounded-full p-2 transition hover:bg-[#f4e7e1]"
+              className="rounded-full p-2 transition hover:bg-[#E9E1FA]"
               aria-label={t('nav.settings')}
             >
               <Cog6ToothIcon className="h-6 w-6" />
             </Link>
             <Link
               href="/profile"
-              className="rounded-full p-2 transition hover:bg-[#f4e7e1]"
+              className="rounded-full p-2 transition hover:bg-[#E9E1FA]"
               aria-label="Profile"
             >
               <BellIcon className="h-5 w-5" />
@@ -278,7 +360,22 @@ export default function NotificationsPage() {
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-col px-4 py-4 sm:px-8 sm:py-6">
-        <div className="mb-4 overflow-x-auto rounded-2xl bg-[#f3efef] p-1">
+        {actionError && (
+          <div className="mb-4 rounded-xl bg-red-100 px-4 py-3 text-sm font-medium text-red-700" role="alert">
+            {actionError}
+          </div>
+        )}
+        <div className="relative mb-4">
+          <MagnifyingGlassIcon className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#9691B8]" />
+          <input
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={t('notifications.searchPlaceholder')}
+            className="w-full rounded-2xl border border-[#E3D9F7] bg-white py-3 pl-11 pr-4 text-base text-[#211B3D] outline-none placeholder:text-[#9691B8]"
+          />
+        </div>
+
+        <div className="mb-4 overflow-x-auto rounded-2xl bg-[#F5F1FE] p-1">
           <div className="flex min-w-max items-center gap-2">
             {FILTERS.map((filter) => {
               const isActive = activeFilter === filter.key;
@@ -288,13 +385,13 @@ export default function NotificationsPage() {
                   type="button"
                   onClick={() => setActiveFilter(filter.key)}
                   className={`flex items-center gap-3 rounded-xl px-4 py-2 text-base font-medium transition ${
-                    isActive ? 'bg-white text-[#241815] shadow-sm' : 'text-[#6f625d]'
+                    isActive ? 'bg-white text-[#211B3D] shadow-sm' : 'text-[#79709E]'
                   }`}
                 >
                   <span>{filter.label}</span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-sm ${
-                      isActive ? 'bg-[#f4f1f1] text-[#241815]' : 'text-[#241815]'
+                      isActive ? 'bg-[#FFFFFF] text-[#211B3D]' : 'text-[#211B3D]'
                     }`}
                   >
                     {filterCounts[filter.key]}
@@ -305,33 +402,37 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        <div className="border-t border-[#ead7d0] pt-6">
+        <div className="border-t border-[#E3D9F7] pt-6">
           {loading ? (
-            <div className="py-20 text-center text-[#7f6f69]">{t('notifications.loading')}</div>
+            <div className="py-20 text-center text-[#79709E]">{t('notifications.loading')}</div>
           ) : filteredNotifications.length === 0 ? (
-            <div className="py-20 text-center text-[#7f6f69]">
-              <SparklesIcon className="mx-auto mb-3 h-12 w-12 text-[#c98f7a]" />
+            <div className="py-20 text-center text-[#79709E]">
+              <SparklesIcon className="mx-auto mb-3 h-12 w-12 text-[#C4B5FD]" />
               <p>{t('notifications.empty')}</p>
             </div>
           ) : (
             <div className="space-y-8">
               {Object.entries(groupedNotifications).map(([label, items]) => (
                 <section key={label} className="space-y-4">
-                  <h2 className="text-2xl font-medium text-[#6f5148] sm:text-xl">{label}</h2>
+                  <h2 className="text-2xl font-medium text-[#79709E] sm:text-xl">{label}</h2>
                   <ul className="space-y-4">
                     {items.map((notification) => {
                       const icon = getNotificationIcon(notification);
                       const actionType = getActionType(notification);
                       const isUnread = !notification.is_read;
                       const isChallenge = getNotificationKind(notification) === 'challenge';
+                      const achievementProgress =
+                        getNotificationKind(notification) === 'achievement'
+                          ? getAchievementProgress(notification)
+                          : null;
 
                       return (
                         <li
                           key={notification.id}
-                          className={`rounded-[22px] border px-4 py-4 shadow-[0_8px_24px_rgba(164,90,63,0.06)] transition sm:px-6 ${
+                          className={`rounded-[22px] border px-4 py-4 shadow-[0_8px_24px_rgba(124,58,237,0.08)] transition sm:px-6 ${
                             isUnread
-                              ? 'border-[#f3d8cf] bg-white'
-                              : 'border-[#f1e3dd] bg-white/92'
+                              ? 'border-[#DCC9FA] bg-white'
+                              : 'border-[#E3D9F7] bg-white/92'
                           }`}
                         >
                           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -346,15 +447,30 @@ export default function NotificationsPage() {
                                 {icon.icon}
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block text-[1.05rem] font-semibold text-[#241815]">
+                                <span className="block text-[1.05rem] font-semibold text-[#211B3D]">
                                   {getNotificationTitle(notification)}
                                 </span>
-                                <span className="mt-1 block max-w-2xl text-lg leading-8 text-[#6f625d] sm:text-[1.05rem] sm:leading-7">
+                                <span className="mt-1 block max-w-2xl text-lg leading-8 text-[#79709E] sm:text-[1.05rem] sm:leading-7">
                                   {getNotificationDescription(notification)}
                                 </span>
+                                {achievementProgress && (
+                                  <span className="mt-3 block max-w-xs">
+                                    <span className="block h-2 overflow-hidden rounded-full bg-[#E9E1FA]">
+                                      <span
+                                        className="block h-full rounded-full bg-[#7C3AED]"
+                                        style={{
+                                          width: `${Math.min(100, Math.round((achievementProgress.current / achievementProgress.goal) * 100))}%`,
+                                        }}
+                                      />
+                                    </span>
+                                    <span className="mt-1 block text-xs text-[#79709E]">
+                                      {achievementProgress.current}/{achievementProgress.goal}
+                                    </span>
+                                  </span>
+                                )}
                                 <RelativeTime
                                   date={notification.created_at}
-                                  className="mt-3 block text-sm text-[#8f7f79]"
+                                  className="mt-3 block text-sm text-[#79709E]"
                                 />
                               </span>
                             </button>
@@ -365,7 +481,7 @@ export default function NotificationsPage() {
                                   <button
                                     type="button"
                                     onClick={() => void handleDecision(notification)}
-                                    className="inline-flex items-center gap-2 rounded-xl bg-[#9f5a3f] px-5 py-3 text-base font-semibold text-white transition hover:bg-[#8f4f37]"
+                                    className="inline-flex items-center gap-2 rounded-xl bg-[#7C3AED] px-5 py-3 text-base font-semibold text-white transition hover:bg-[#5B21B6]"
                                   >
                                     <CheckIcon className="h-5 w-5" />
                                     Accept
@@ -373,7 +489,7 @@ export default function NotificationsPage() {
                                   <button
                                     type="button"
                                     onClick={() => void markRead(notification.id)}
-                                    className="inline-flex items-center gap-2 rounded-xl bg-[#f4dfd8] px-5 py-3 text-base font-semibold text-[#5f4a43] transition hover:bg-[#efd4cb]"
+                                    className="inline-flex items-center gap-2 rounded-xl bg-[#EDE4FB] px-5 py-3 text-base font-semibold text-[#5B21B6] transition hover:bg-[#DCC9FA]"
                                   >
                                     <XMarkIcon className="h-5 w-5" />
                                     Decline
@@ -383,7 +499,7 @@ export default function NotificationsPage() {
                                 <button
                                   type="button"
                                   onClick={() => void handleClick(notification)}
-                                  className="inline-flex items-center gap-2 rounded-xl bg-[#fff4ef] px-5 py-3 text-base font-medium text-[#5f4a43] transition hover:bg-[#f9e7df]"
+                                  className="inline-flex items-center gap-2 rounded-xl bg-[#F5F1FE] px-5 py-3 text-base font-medium text-[#5B21B6] transition hover:bg-[#EDE4FB]"
                                 >
                                   <SparklesIcon className="h-5 w-5" />
                                   View Badge
@@ -392,7 +508,7 @@ export default function NotificationsPage() {
                                 <button
                                   type="button"
                                   onClick={() => void handleClick(notification)}
-                                  className="inline-flex items-center gap-2 rounded-xl bg-[#f7f3f2] px-5 py-3 text-base font-medium text-[#2f211d] transition hover:bg-[#efe8e6]"
+                                  className="inline-flex items-center gap-2 rounded-xl bg-[#F5F1FE] px-5 py-3 text-base font-medium text-[#211B3D] transition hover:bg-[#EDE4FB]"
                                 >
                                   <EyeIcon className="h-5 w-5" />
                                   View Details
@@ -401,14 +517,14 @@ export default function NotificationsPage() {
                                 <button
                                   type="button"
                                   onClick={() => void handleClick(notification)}
-                                  className="inline-flex items-center gap-2 rounded-xl bg-[#f7f3f2] px-5 py-3 text-base font-medium text-[#2f211d] transition hover:bg-[#efe8e6]"
+                                  className="inline-flex items-center gap-2 rounded-xl bg-[#F5F1FE] px-5 py-3 text-base font-medium text-[#211B3D] transition hover:bg-[#EDE4FB]"
                                 >
                                   <EyeIcon className="h-5 w-5" />
                                   View
                                 </button>
                               )}
                               {!isChallenge && actionType !== 'decision' && (
-                                <ChevronRightIcon className="hidden h-5 w-5 text-[#9b857d] sm:block" />
+                                <ChevronRightIcon className="hidden h-5 w-5 text-[#9691B8] sm:block" />
                               )}
                             </div>
                           </div>
@@ -424,13 +540,13 @@ export default function NotificationsPage() {
                   type="button"
                   onClick={() => void load(activeFilter, true, nextUrl)}
                   disabled={loadingMore}
-                  className="w-full rounded-2xl border border-[#ead7d0] bg-white px-4 py-3 text-sm font-semibold text-[#5f4a43] transition hover:bg-[#fdf4f0] disabled:opacity-60"
+                  className="w-full rounded-2xl border border-[#E3D9F7] bg-white px-4 py-3 text-sm font-semibold text-[#5B21B6] transition hover:bg-[#F5F1FE] disabled:opacity-60"
                 >
                   {loadingMore ? 'Loading…' : 'Load more'}
                 </button>
               )}
 
-              <div className="border-t border-[#ead7d0] pt-6 text-center text-lg text-[#8f7f79]">
+              <div className="border-t border-[#E3D9F7] pt-6 text-center text-lg text-[#79709E]">
                 {filteredNotifications.length > 0
                   ? "You're all caught up! Check back later for new notifications."
                   : t('notifications.empty')}
@@ -444,7 +560,7 @@ export default function NotificationsPage() {
             <button
               type="button"
               onClick={() => void markAllRead()}
-              className="rounded-xl px-4 py-2 text-sm font-semibold text-[#9f5a3f] transition hover:bg-[#f7e8e1]"
+              className="rounded-xl px-4 py-2 text-sm font-semibold text-[#7C3AED] transition hover:bg-[#EDE4FB]"
             >
               {t('notifications.markAll')}
             </button>

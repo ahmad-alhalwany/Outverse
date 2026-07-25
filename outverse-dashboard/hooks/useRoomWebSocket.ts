@@ -14,29 +14,40 @@ export type WsRoomMessage = {
   message_type?: string;
   attachment_url?: string | null;
   created_at: string;
+  edited_at?: string | null;
+  is_deleted?: boolean;
+  expires_at?: string | null;
 };
 
 type Options = {
   roomId: number | null;
   onMessage: (msg: WsRoomMessage) => void;
   onTyping?: (userId: number, isTyping: boolean) => void;
+  onEdited?: (msg: WsRoomMessage) => void;
+  onDeleted?: (messageId: number) => void;
 };
 
 export function useRoomWebSocket({
   roomId,
   onMessage,
   onTyping,
+  onEdited,
+  onDeleted,
 }: Options) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const generationRef = useRef(0);
   const onMessageRef = useRef(onMessage);
   const onTypingRef = useRef(onTyping);
+  const onEditedRef = useRef(onEdited);
+  const onDeletedRef = useRef(onDeleted);
 
   useEffect(() => {
     onMessageRef.current = onMessage;
     onTypingRef.current = onTyping;
-  }, [onMessage, onTyping]);
+    onEditedRef.current = onEdited;
+    onDeletedRef.current = onDeleted;
+  }, [onMessage, onTyping, onEdited, onDeleted]);
 
   useEffect(() => {
     if (!roomId) {
@@ -73,6 +84,10 @@ export function useRoomWebSocket({
           const data = JSON.parse(ev.data);
           if (data.type === 'room.message') {
             onMessageRef.current(data as WsRoomMessage);
+          } else if (data.type === 'room.message_edited') {
+            onEditedRef.current?.(data as WsRoomMessage);
+          } else if (data.type === 'room.message_deleted') {
+            onDeletedRef.current?.(data.id);
           } else if (data.type === 'room.typing') {
             onTypingRef.current?.(data.user_id, data.is_typing);
           }
@@ -91,10 +106,10 @@ export function useRoomWebSocket({
     };
   }, [roomId]);
 
-  const sendMessage = useCallback((text: string) => {
+  const sendMessage = useCallback((text: string, expiresInSeconds?: number | null) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return false;
-    ws.send(JSON.stringify({ type: 'room.send', text }));
+    ws.send(JSON.stringify({ type: 'room.send', text, expires_in_seconds: expiresInSeconds || undefined }));
     return true;
   }, []);
 

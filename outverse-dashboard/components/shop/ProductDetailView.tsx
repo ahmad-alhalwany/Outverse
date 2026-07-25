@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import { StarIcon } from '@heroicons/react/24/solid';
@@ -10,28 +11,28 @@ import { shopCreatorName, type ShopItem } from '@/lib/shopTypes';
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#854330',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
-    btnShadow: '0 6px 18px rgba(160,86,59,0.3)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
+    btnShadow: '0 6px 18px rgba(124,58,237,0.3)',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
-    white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
-    btnShadow: '0 6px 20px rgba(106,0,255,0.25)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
+    btnShadow: '0 6px 20px rgba(167,139,250,0.3)',
   },
 };
 
@@ -40,7 +41,7 @@ type Props = {
   owned: boolean;
   canAfford: boolean;
   balance: number | null;
-  onBuy: () => void;
+  onBuy: (shippingAddress?: string) => void;
   accessUrl?: string | null;
 };
 
@@ -55,6 +56,9 @@ export default function ProductDetailView({
   const { theme } = useTheme();
   const { t } = useLocale();
   const C = PALETTES[theme];
+  const [shippingAddress, setShippingAddress] = useState('');
+  const isPhysical = item.type === 'physical';
+  const shippingMissing = isPhysical && !owned && !shippingAddress.trim();
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -141,10 +145,24 @@ export default function ProductDetailView({
               </p>
             )}
           </div>
+          {isPhysical && !owned && (
+            <label className="block mt-4">
+              <span className="text-xs font-semibold" style={{ color: C.text2 }}>
+                {t('shop.shippingAddress')}
+              </span>
+              <textarea
+                value={shippingAddress}
+                onChange={(e) => setShippingAddress(e.target.value)}
+                rows={3}
+                className="mt-2 w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+                style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+              />
+            </label>
+          )}
           <button
             type="button"
-            onClick={onBuy}
-            disabled={owned || !canAfford}
+            onClick={() => onBuy(shippingAddress.trim())}
+            disabled={owned || !canAfford || shippingMissing}
             className="mt-4 w-full py-3 rounded-xl font-semibold text-white disabled:opacity-70"
             style={{
               background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`,
@@ -155,13 +173,15 @@ export default function ProductDetailView({
               ? t('common.owned')
               : !canAfford
                 ? t('shop.notEnoughCoins')
-                : `${t('shop.unlockFor')} ${item.price} ✨`}
+                : shippingMissing
+                  ? t('shop.shippingAddressRequired')
+                  : `${t('shop.unlockFor')} ${item.price} ✨`}
           </button>
           {owned && item.type === 'digital' && accessUrl && (
             <a
               href={accessUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="mt-3 block w-full py-3 rounded-xl font-semibold text-center"
               style={{ background: C.card2, color: C.brownDk, border: `1px solid ${C.line}` }}
             >

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
-import { fetchAdminProfiles, patchProfile, promoteProfileToStaff } from '@/lib/adminApi';
+import { fetchAdminProfiles, patchProfile, promoteProfileToStaff, toggleShadowBan } from '@/lib/adminApi';
 import type { AdminProfile } from '@/lib/adminTypes';
 
 export default function AdminUsersPage() {
@@ -48,6 +48,19 @@ export default function AdminUsersPage() {
       load();
     } else {
       setMsg('Promotion failed.');
+    }
+  };
+
+  const shadowBan = async (profile: AdminProfile) => {
+    const result = await toggleShadowBan(profile.user.id);
+    if (result.ok) {
+      setMsg(
+        result.is_shadow_banned
+          ? `@${profile.user.username} is now shadow-banned — their content is hidden from public feeds, but they aren't notified.`
+          : `Shadow-ban lifted for @${profile.user.username}.`,
+      );
+    } else {
+      setMsg('Shadow-ban toggle failed.');
     }
   };
 
@@ -101,6 +114,9 @@ export default function AdminUsersPage() {
                         Promote
                       </button>
                     ) : null}
+                    <button type="button" className="admin-btn admin-btn--ghost" onClick={() => void shadowBan(p)} style={{ marginRight: 6 }}>
+                      Toggle shadow-ban
+                    </button>
                     {p.status === 'active' ? (
                       <button type="button" className="admin-btn admin-btn--danger" onClick={() => setModal({ profile: p, action: 'suspend' })}>
                         Suspend
@@ -125,6 +141,7 @@ export default function AdminUsersPage() {
               <div className="admin-mobile-card__row"><span className="admin-mobile-card__label">Role</span><span className="admin-mobile-card__value">{p.is_staff ? 'Staff' : 'Member'}</span></div>
               <div className="admin-actions-wrap">
                 {!p.is_staff ? <button type="button" className="admin-btn admin-btn--ghost" onClick={() => void promote(p)}>Promote</button> : null}
+                <button type="button" className="admin-btn admin-btn--ghost" onClick={() => void shadowBan(p)}>Toggle shadow-ban</button>
                 {p.status === 'active' ? (
                   <button type="button" className="admin-btn admin-btn--danger" onClick={() => setModal({ profile: p, action: 'suspend' })}>Suspend</button>
                 ) : (

@@ -1,6 +1,6 @@
 export type VaultMapStyle = 'street' | 'cosmic';
 
-const STORAGE_KEY = 'outverse-vault-map-style';
+const STORAGE_KEY = 'cosmory-vault-map-style';
 
 export function readVaultMapStyle(): VaultMapStyle {
   if (typeof window === 'undefined') return 'street';

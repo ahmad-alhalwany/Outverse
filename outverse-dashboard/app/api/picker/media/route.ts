@@ -41,7 +41,7 @@ async function fetchTenor(
   if (!TENOR_KEY) return null;
   const params = new URLSearchParams({
     key: TENOR_KEY,
-    client_key: 'outverse',
+    client_key: 'cosmory',
     limit: '30',
   });
   if (type === 'sticker') params.set('searchfilter', 'sticker');

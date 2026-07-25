@@ -8,6 +8,7 @@ import { apiFetch, apiFetchJson } from '@/lib/api';
 import { getUser } from '@/lib/auth';
 import { reelPagePath } from '@/lib/fetchReel';
 import type { ReelItem } from '@/lib/reelTypes';
+import type { ReactionType } from '@/lib/reactions';
 import { useLocale } from '../LocaleProvider';
 import ReelSlide from './ReelSlide';
 
@@ -21,6 +22,7 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
   const [reel, setReel] = useState<ReelItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
+  const [reactionError, setReactionError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,13 +48,20 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
     load();
   }, [load]);
 
-  const handleLike = async (id: number) => {
+  const handleLike = async (id: number, reaction: ReactionType = 'spark') => {
     if (!getUser()) return null;
     try {
-      const res = await apiFetchJson(`reels/${id}/react/`, { method: 'POST' });
-      if (res.ok) return res.json();
+      const res = await apiFetchJson(`reels/${id}/react/`, {
+        method: 'POST',
+        json: { reaction },
+      });
+      if (res.ok) {
+        setReactionError('');
+        return res.json();
+      }
+      setReactionError(t('reels.reactionError'));
     } catch {
-      /* ignore */
+      setReactionError(t('reels.reactionError'));
     }
     return null;
   };
@@ -68,6 +77,12 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
   const handleDeleted = () => {
     router.push('/reels');
   };
+
+  useEffect(() => {
+    if (!reactionError) return;
+    const timer = setTimeout(() => setReactionError(''), 3000);
+    return () => clearTimeout(timer);
+  }, [reactionError]);
 
   if (loading) {
     return (
@@ -93,7 +108,7 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
   }
 
   return (
-    <div className="reels-app reels-app--single">
+    <div className="reels-app reels-app--single relative">
       <header className="reels-chrome__top reels-chrome__top--single">
         <Link href="/reels" className="reels-chrome__btn" aria-label={t('reels.back')}>
           <ArrowLeftIcon className="h-5 w-5" />
@@ -101,6 +116,11 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
         <span className="reels-chrome__brand text-sm">{t('reels.singleTitle')}</span>
         <span className="w-10" />
       </header>
+      {reactionError && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 rounded-full bg-black/80 px-4 py-2 text-xs font-medium text-white">
+          {reactionError}
+        </div>
+      )}
       <div className="reels-feed__snap reels-feed__snap--single">
         <ReelSlide
           reel={reel}

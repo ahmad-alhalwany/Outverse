@@ -28,6 +28,11 @@ export default function FeedHero() {
   const user = useAuthUser();
   const profileHref = useProfileHref();
   const greeting = user?.first_name || user?.username || 'Creator';
+  const heroStats = [
+    { value: '24/7', label: 'Fresh inspiration' },
+    { value: '6', label: 'Creative worlds' },
+    { value: 'Live', label: 'Community pulse' },
+  ];
 
   return (
     <motion.section
@@ -40,7 +45,7 @@ export default function FeedHero() {
           <div className="space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-text-secondary/80 mb-1 flex items-center gap-1">
               <SparklesIcon className="h-4 w-4 text-vault" />
-              Outverse Feed
+              Cosmory Feed
             </p>
             <h1 className="text-[1.75rem] sm:text-[2.1rem] leading-tight font-bold text-text">
               Hey,{' '}
@@ -51,6 +56,14 @@ export default function FeedHero() {
             <p className="text-sm text-text-secondary max-w-xl">
               Stories, sparks, and creativity from across the cosmos — all in one place.
             </p>
+            <div className="feed-hero__stats">
+              {heroStats.map((stat) => (
+                <div key={stat.label} className="feed-hero__stat">
+                  <span className="feed-hero__stat-value">{stat.value}</span>
+                  <span className="feed-hero__stat-label">{stat.label}</span>
+                </div>
+              ))}
+            </div>
             <div className="hidden md:flex items-center gap-2 text-xs text-text-secondary">
               <span className="home-hero-pill">
                 <BellIcon className="h-3.5 w-3.5" />
@@ -64,14 +77,20 @@ export default function FeedHero() {
           </div>
           <div className="flex gap-2 shrink-0">
             <Link
+              href="#create-post"
+              className="feed-hero__cta-primary text-xs font-semibold px-4 py-2.5 rounded-full"
+            >
+              Share a spark
+            </Link>
+            <Link
               href={profileHref}
-              className="text-xs font-semibold px-3.5 py-2 rounded-full border border-vault/20 bg-white/70 dark:bg-white/5 hover:bg-surface transition"
+              className="feed-hero__cta-secondary text-xs font-semibold px-3.5 py-2.5 rounded-full"
             >
               My profile
             </Link>
             <Link
               href="/settings"
-              className="p-2.5 rounded-full border border-vault/20 bg-white/70 dark:bg-white/5 hover:bg-surface transition"
+              className="feed-hero__cta-secondary p-2.5 rounded-full"
               aria-label="Settings"
             >
               <Cog6ToothIcon className="h-5 w-5 text-text-secondary" />

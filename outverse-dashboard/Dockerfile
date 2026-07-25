@@ -1,45 +1,31 @@
-# syntax=docker/dockerfile:1
-
-# --- deps stage ---
+# Next.js frontend image for Outverse — standalone output.
 FROM node:20-alpine AS deps
-RUN apk add --no-cache libc6-compat
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --ignore-scripts
+RUN npm ci --omit=dev || npm install --omit=dev
 
-# --- builder stage ---
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG NEXT_PUBLIC_API_URL=http://127.0.0.1:8000
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-ARG NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
-# --- runtime stage ---
-FROM node:20-alpine AS runtime
+FROM node:20-alpine AS runner
 WORKDIR /app
-
 ENV NODE_ENV=production \
-    PORT=3000 \
-    HOSTNAME=0.0.0.0
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000
 
-# Copy only the standalone output and static assets
-COPY --from=builder /app/.next/standalone ./
-COPY --from=builder /app/.next/static ./.next/static
+RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
+
 COPY --from=builder /app/public ./public
-
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs && \
-    chown -R nextjs:nodejs /app
+COPY --from=builder --chown=nextjs:nextjs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nextjs /app/.next/static ./.next/static
 
 USER nextjs
-
 EXPOSE 3000
-
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:3000/', (r) => process.exit(r.statusCode >= 400 ? 1 : 0)).on('error', () => process.exit(1))"
 
 CMD ["node", "server.js"]

@@ -12,9 +12,10 @@ export type AuthUser = {
   onboarding_completed?: boolean;
   interests?: string[];
 };
-const USER_KEY = 'outverse_user';
+const USER_KEY = 'cosmory_user';
+const TOKEN_KEY = 'cosmory_token';
 const CSRF_COOKIE_KEY = 'csrftoken';
-const SESSION_COOKIE_KEYS = ['sessionid', 'outverse_session', 'authjs.session-token', '__Secure-authjs.session-token'];
+const SESSION_COOKIE_KEYS = ['sessionid', 'cosmory_session', 'authjs.session-token', '__Secure-authjs.session-token'];
 
 function readCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
@@ -27,7 +28,8 @@ function hasSessionCookie(): boolean {
 }
 
 export function getToken(): string | null {
-  return null;
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(TOKEN_KEY);
 }
 
 export function getUser(): AuthUser | null {
@@ -50,23 +52,32 @@ export function isAuthenticated(): boolean {
   return hasSessionCookie() || !!getUser();
 }
 
-export function setAuth(_token: string | null, user: AuthUser | null) {
+export function setAuth(token: string | null, user: AuthUser | null) {
   if (typeof window === 'undefined') return;
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  }
   if (user) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
   } else {
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem(TOKEN_KEY);
   }
 }
 
 export function clearAuth() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
 }
 
 export function authHeaders(): Record<string, string> {
   const csrfToken = readCookie(CSRF_COOKIE_KEY);
-  return csrfToken ? { 'X-CSRFToken': csrfToken } : {};
+  const token = getToken();
+  return {
+    ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}),
+    ...(token ? { Authorization: `Token ${token}` } : {}),
+  };
 }
 
 /** fetch wrapper that injects the auth token automatically. */
@@ -78,7 +89,10 @@ export async function authFetch(input: string, init: RequestInit = {}) {
   return fetch(input, { ...init, headers, credentials: 'include' });
 }
 
-export async function login(username: string, password: string): Promise<AuthUser> {
+export async function login(
+  username: string,
+  password: string,
+): Promise<AuthUser | { requires_2fa: true; pending_token: string }> {
   const res = await fetch(apiUrl('users/login/'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -91,7 +105,10 @@ export async function login(username: string, password: string): Promise<AuthUse
     if (data.code) error.code = data.code;
     throw error;
   }
-  setAuth(null, data.user);
+  if (data.requires_2fa && data.pending_token) {
+    return { requires_2fa: true, pending_token: data.pending_token };
+  }
+  setAuth(data.token ?? null, data.user);
   return data.user as AuthUser;
 }
 
@@ -120,7 +137,7 @@ export async function register(payload: RegisterPayload): Promise<AuthUser> {
       'Registration failed.';
     throw new Error(firstError);
   }
-  setAuth(null, data.user);
+  setAuth(data.token ?? null, data.user);
   return data.user as AuthUser;
 }
 

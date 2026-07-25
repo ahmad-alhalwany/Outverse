@@ -15,7 +15,7 @@ type AppShellProps = {
 };
 
 /**
- * Standard Outverse layout: Header + optional Sidebar (lg+) + content.
+ * Standard Cosmory layout: Header + optional Sidebar (lg+) + content.
  * No fixed marginLeft — on mobile the sidebar is hidden and content is full width.
  */
 export default function AppShell({
@@ -26,9 +26,9 @@ export default function AppShell({
   style,
 }: AppShellProps) {
   return (
-    <main className={className} style={style}>
+    <main id="main-content" className={className} style={style}>
       <Header />
-      <div className={`app-shell pt-20 ${maxWidth} mx-auto flex w-full min-w-0`}>
+      <div className={`app-shell pt-24 ${maxWidth} mx-auto flex w-full min-w-0`}>
         <Sidebar />
         <div className={contentClassName}>{children}</div>
       </div>

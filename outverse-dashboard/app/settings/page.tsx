@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -18,12 +19,21 @@ import {
   UserCircleIcon,
   UserIcon,
   ChatBubbleLeftRightIcon,
+  UserGroupIcon,
+  SignalIcon,
 } from '@heroicons/react/24/outline';
+import AccountSecuritySettings from '@/components/settings/AccountSecuritySettings';
+import ContentAppealsSettings from '@/components/settings/ContentAppealsSettings';
+import BlockedAccountsSettings from '@/components/settings/BlockedAccountsSettings';
+import CloseFriendsSettings from '@/components/settings/CloseFriendsSettings';
+import InspirationTasteSettings from '@/components/settings/InspirationTasteSettings';
+import PrivacyInteractionSettings from '@/components/settings/PrivacyInteractionSettings';
 import AppShell from '@/components/AppShell';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   readSettingsPrefs,
   persistSettingsPrefs,
+  DEFAULT_SETTINGS_PREFS,
   type SettingsPrefs,
 } from '@/lib/settingsPrefs';
 import { useLocale } from '@/components/LocaleProvider';
@@ -33,32 +43,32 @@ import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
 
 const PALETTES = {
   light: {
-    page: '#FCF7F3',
-    section: '#F8E8E1',
-    card: '#F9D8CC',
-    cardStrong: '#A0583D',
-    cardSoft: '#F7D2C6',
-    text: '#2F241F',
-    textMuted: '#7E5E52',
-    textSoft: '#A67B6A',
+    page: '#F3F0FC',
+    section: '#E9E1FA',
+    card: '#F5F1FE',
+    cardStrong: '#7C3AED',
+    cardSoft: '#EDE4FB',
+    text: '#211B3D',
+    textMuted: '#79709E',
+    textSoft: '#9691B8',
     white: '#FFFFFF',
-    border: 'rgba(160,88,61,0.12)',
-    track: '#EFD7CF',
-    icon: '#A0583D',
+    border: 'rgba(124,58,237,0.14)',
+    track: '#E3D9F7',
+    icon: '#7C3AED',
   },
   dark: {
-    page: '#17131A',
-    section: '#241C28',
-    card: '#342633',
-    cardStrong: '#C07A5D',
-    cardSoft: '#43303D',
-    text: '#F7EFEA',
-    textMuted: '#D1B8AC',
-    textSoft: '#B88F7D',
-    white: '#2B2230',
-    border: 'rgba(255,255,255,0.06)',
-    track: '#5A4452',
-    icon: '#D89A7E',
+    page: '#14102A',
+    section: '#1E1740',
+    card: '#251B4D',
+    cardStrong: '#C4B5FD',
+    cardSoft: '#2A2154',
+    text: '#F5F3FF',
+    textMuted: '#B0A6D9',
+    textSoft: '#9587C4',
+    white: '#2A2154',
+    border: 'rgba(255,255,255,0.08)',
+    track: '#3A2E66',
+    icon: '#C4B5FD',
   },
 } as const;
 
@@ -153,10 +163,10 @@ function ToggleRow({
 export default function SettingsPage() {
   const router = useRouter();
   const { theme } = useTheme();
-  const { locale, setLocale } = useLocale();
+  const { t, locale, setLocale } = useLocale();
   const palette = PALETTES[theme];
   const user = useAuthUser();
-  const [prefs, setPrefs] = useState<SettingsPrefs>(readSettingsPrefs());
+  const [prefs, setPrefs] = useState<SettingsPrefs>(DEFAULT_SETTINGS_PREFS);
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
 
@@ -181,6 +191,13 @@ export default function SettingsPage() {
           profileVisibility: data.profile_visibility ?? localPrefs.profileVisibility,
           bottlePrivacy: data.bottle_privacy ?? localPrefs.bottlePrivacy,
           onlineStatusVisible: data.online_status_visible ?? localPrefs.onlineStatusVisible,
+          readReceiptsEnabled: data.read_receipts_enabled ?? localPrefs.readReceiptsEnabled,
+          weirdnessLevel: data.weirdness_level ?? localPrefs.weirdnessLevel,
+          messageFrequency: data.message_frequency ?? localPrefs.messageFrequency,
+          defaultAllowRemix: data.default_allow_remix ?? localPrefs.defaultAllowRemix ?? true,
+          defaultAllowWeave: data.default_allow_weave ?? localPrefs.defaultAllowWeave ?? true,
+          defaultAllowDownload: data.default_allow_download ?? localPrefs.defaultAllowDownload ?? false,
+          defaultReplyControl: data.default_reply_control ?? localPrefs.defaultReplyControl ?? 'everyone',
           showOwnMessageOnMap: (data.bottle_privacy ?? localPrefs.bottlePrivacy) !== 'private',
           hideOthersInRecent: (data.bottle_privacy ?? localPrefs.bottlePrivacy) !== 'catch_only',
         };
@@ -207,6 +224,13 @@ export default function SettingsPage() {
           profile_visibility: next.profileVisibility,
           bottle_privacy: next.bottlePrivacy,
           online_status_visible: next.onlineStatusVisible,
+          read_receipts_enabled: next.readReceiptsEnabled,
+          weirdness_level: next.weirdnessLevel,
+          message_frequency: next.messageFrequency,
+          default_allow_remix: next.defaultAllowRemix,
+          default_allow_weave: next.defaultAllowWeave,
+          default_allow_download: next.defaultAllowDownload,
+          default_reply_control: next.defaultReplyControl,
         },
       });
       if (!res.ok) throw new Error('save failed');
@@ -239,8 +263,13 @@ export default function SettingsPage() {
     [prefs.theme],
   );
 
-  const weirdnessValue = prefs.theme === 'dark' ? 42 : 28;
+  const weirdnessValue = prefs.weirdnessLevel;
   const weirdnessPercent = `${weirdnessValue}%`;
+  const frequencyOptions: Array<{ id: SettingsPrefs['messageFrequency']; label: string }> = [
+    { id: 'hourly', label: 'Frequent' },
+    { id: 'daily', label: 'Balanced' },
+    { id: 'weekly', label: 'Rare' },
+  ];
   const notificationRows: Array<{
     key: NotificationKey;
     label: string;
@@ -290,7 +319,7 @@ export default function SettingsPage() {
                   style={{ background: palette.card }}
                 >
                   {avatarSrc ? (
-                    <img src={avatarSrc} alt={displayName} className="h-full w-full object-cover" />
+                    <Image src={avatarSrc} alt={displayName} width={64} height={64} className="h-full w-full object-cover" unoptimized />
                   ) : (
                     <UserCircleIcon className="h-12 w-12" style={{ color: palette.icon }} />
                   )}
@@ -352,7 +381,7 @@ export default function SettingsPage() {
                   min={0}
                   max={100}
                   value={weirdnessValue}
-                  onChange={() => {}}
+                  onChange={(event) => updatePrefs({ weirdnessLevel: Number(event.target.value) })}
                   className="h-2 w-full appearance-none rounded-full"
                   style={{
                     background: `linear-gradient(to right, ${palette.cardStrong} 0%, ${palette.cardStrong} ${weirdnessPercent}, ${palette.track} ${weirdnessPercent}, ${palette.track} 100%)`,
@@ -364,6 +393,30 @@ export default function SettingsPage() {
                     {weirdnessValue}
                   </span>
                   <span>Wild</span>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <InspirationTasteSettings palette={palette} />
+              </div>
+
+              <div className="mb-2">
+                <p className="mb-3 text-[1.05rem] font-semibold">Bottle & Message Frequency</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {frequencyOptions.map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => updatePrefs({ messageFrequency: option.id })}
+                      className="rounded-2xl px-3 py-3 text-center text-sm font-semibold"
+                      style={{
+                        background: prefs.messageFrequency === option.id ? palette.cardStrong : palette.card,
+                        color: prefs.messageFrequency === option.id ? '#FFFFFF' : palette.icon,
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -389,6 +442,30 @@ export default function SettingsPage() {
                   palette={palette}
                 />
               ))}
+              <button
+                type="button"
+                className="mt-3 w-full rounded-xl px-4 py-3 text-sm font-semibold text-white"
+                style={{ background: palette.cardStrong }}
+                onClick={() => {
+                  void (async () => {
+                    try {
+                      const res = await apiFetch('notifications/push-vapid-key/');
+                      const data = res.ok ? await res.json() : { public_key: '' };
+                      if (!data.public_key) {
+                        setStatus(t('settings.pushNotConfigured'));
+                        return;
+                      }
+                      const mod = await import('@/lib/pushNotifications');
+                      const ok = await mod.subscribeToPush(data.public_key);
+                      setStatus(ok ? t('settings.pushEnabled') : t('settings.pushUnavailable'));
+                    } catch {
+                      setStatus(t('settings.pushUnavailable'));
+                    }
+                  })();
+                }}
+              >
+                {t('settings.enableBrowserPush')}
+              </button>
               <p className="mt-3 text-sm" style={{ color: palette.textMuted }}>
                 {saving ? 'Saving…' : status || 'Preferences sync to your account when available.'}
               </p>
@@ -396,9 +473,129 @@ export default function SettingsPage() {
           </section>
 
           <section className="mb-6">
+            <SectionTitle icon={UserGroupIcon} title="Inner Orbit" color={palette.icon} />
+            <div className="px-5 pb-2">
+              <CloseFriendsSettings />
+            </div>
+          </section>
+
+          <section className="mb-6">
+            <SectionTitle icon={SignalIcon} title={t('signal.publishTitle')} color={palette.icon} />
+            <div className="px-5 pb-4 space-y-3">
+              <p className="text-sm" style={{ color: palette.textMuted }}>
+                {t('signal.publishHint')}
+              </p>
+              <p className="text-[1.05rem] font-semibold">{t('compose.replyControl')}</p>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    { id: 'everyone' as const, label: t('compose.replyEveryone') },
+                    { id: 'followers' as const, label: t('compose.replyFollowers') },
+                    { id: 'nobody' as const, label: t('compose.replyNobody') },
+                  ]
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => updatePrefs({ defaultReplyControl: opt.id })}
+                    className="rounded-full px-3.5 py-1.5 text-sm font-medium transition"
+                    style={{
+                      background: prefs.defaultReplyControl === opt.id ? palette.icon : palette.white,
+                      color: prefs.defaultReplyControl === opt.id ? '#fff' : palette.text,
+                      border: `1px solid ${palette.border}`,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <Link
+                href="/orbit-lists"
+                className="inline-flex text-sm font-semibold mt-2"
+                style={{ color: palette.icon }}
+              >
+                {t('nav.orbitLists')} →
+              </Link>
+            </div>
+          </section>
+
+          <section className="mb-6">
+            <SectionTitle icon={SignalIcon} title={t('reels.pulseCreator')} color={palette.icon} />
+            <div className="px-5 pb-4 space-y-1">
+              <p className="text-sm mb-3" style={{ color: palette.textMuted }}>
+                {t('reels.pulseCreatorHint')}
+              </p>
+              <ToggleRow
+                icon={SignalIcon}
+                label={t('reels.allowRemix')}
+                checked={prefs.defaultAllowRemix}
+                onChange={(next) => updatePrefs({ defaultAllowRemix: next })}
+                palette={palette}
+              />
+              <ToggleRow
+                icon={SignalIcon}
+                label={t('reels.allowWeave')}
+                checked={prefs.defaultAllowWeave}
+                onChange={(next) => updatePrefs({ defaultAllowWeave: next })}
+                palette={palette}
+              />
+              <ToggleRow
+                icon={SignalIcon}
+                label={t('reels.allowExport')}
+                checked={prefs.defaultAllowDownload}
+                onChange={(next) => updatePrefs({ defaultAllowDownload: next })}
+                palette={palette}
+              />
+              <Link
+                href="/reels/discover"
+                className="inline-flex text-sm font-semibold mt-3"
+                style={{ color: palette.icon }}
+              >
+                {t('reels.creatorStats')} →
+              </Link>
+            </div>
+          </section>
+
+          <section className="-mx-5 mb-6" style={{ background: palette.section }}>
+            <SectionTitle icon={ChatBubbleLeftRightIcon} title="Messaging" color={palette.icon} />
+            <div className="px-5 pb-5">
+              <ToggleRow
+                icon={ChatBubbleLeftRightIcon}
+                label="Read receipts"
+                checked={prefs.readReceiptsEnabled}
+                onChange={(next) => updatePrefs({ readReceiptsEnabled: next })}
+                palette={palette}
+              />
+              <p className="text-sm" style={{ color: palette.icon }}>
+                When off, others won&apos;t see when you&apos;ve read their messages.
+              </p>
+            </div>
+          </section>
+
+          <section className="mb-6">
+            <SectionTitle icon={LockClosedIcon} title={t('security.title')} color={palette.icon} />
+            <div className="space-y-4">
+              <ContentAppealsSettings palette={palette} />
+              <AccountSecuritySettings palette={palette} />
+            </div>
+          </section>
+
+          <section className="mb-6">
+            <SectionTitle icon={ShieldCheckIcon} title={t('social.privacyTitle')} color={palette.icon} />
+            <PrivacyInteractionSettings palette={palette} />
+          </section>
+
+          <section className="mb-6">
+            <SectionTitle icon={UserGroupIcon} title={t('social.blockedAccountsTitle')} color={palette.icon} />
+            <BlockedAccountsSettings />
+          </section>
+
+          <section className="mb-6">
             <SectionTitle icon={ShieldCheckIcon} title="Privacy & Security" color={palette.icon} />
             <div className="space-y-3 px-5 pb-2">
               <RowLink href="/profile/privacy" icon={UserIcon} label="Account Privacy" palette={palette} />
+              <RowLink href="/privacy" icon={LockClosedIcon} label={t('legal.privacyTitle')} palette={palette} />
+              <RowLink href="/terms" icon={InformationCircleIcon} label={t('legal.termsTitle')} palette={palette} />
               <RowLink href="/settings/data-usage" icon={EnvelopeIcon} label="Data Usage" palette={palette} />
               <RowLink href="/settings/security" icon={LockClosedIcon} label="Security Settings" palette={palette} />
               <RowLink href="/chat" icon={ChatBubbleLeftRightIcon} label="Message Settings" palette={palette} />
@@ -412,7 +609,7 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {isAuthenticated() ? (
+          {user ? (
             <button
               type="button"
               onClick={handleLogout}

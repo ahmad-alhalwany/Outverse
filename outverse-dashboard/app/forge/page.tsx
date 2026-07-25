@@ -1,6 +1,7 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import WorldShell from '@/components/world/WorldShell';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -20,66 +21,89 @@ import {
 } from '@heroicons/react/24/outline';
 
 import { apiUrl } from '@/lib/api';
-import { getUser } from '@/lib/auth';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
 
 const BASE = apiUrl('forge/stories');
 
 const PALETTES = {
   light: {
-    cream: '#FBF3EE',
-    card: '#F5E4DB',
-    card2: '#F9ECE4',
+    cream: '#F3F0FC',
+    card: '#E9E1FA',
+    card2: '#F5F1FE',
     white: '#FFFFFF',
-    brown: '#A0563B',
-    brownDk: '#854330',
-    text: '#3D2B22',
-    text2: '#9A8278',
-    line: 'rgba(160,86,59,0.14)',
-    headerBg: 'rgba(251,243,238,0.85)',
-    overlay: 'rgba(61,43,34,0.45)',
-    shadowSm: '0 2px 12px rgba(160,86,59,0.06)',
-    shadowLg: '0 18px 48px rgba(160,86,59,0.12)',
-    btnShadow: '0 6px 20px rgba(160,86,59,0.3)',
-    modalShadow: '0 20px 60px rgba(61,43,34,0.3)',
+    brown: '#7C3AED',
+    brownDk: '#5B21B6',
+    text: '#211B3D',
+    text2: '#79709E',
+    line: 'rgba(124,58,237,0.16)',
+    headerBg: 'rgba(243,240,252,0.85)',
+    overlay: 'rgba(33,27,61,0.45)',
+    shadowSm: '0 2px 12px rgba(124,58,237,0.08)',
+    shadowLg: '0 18px 48px rgba(124,58,237,0.14)',
+    btnShadow: '0 6px 20px rgba(124,58,237,0.3)',
+    modalShadow: '0 20px 60px rgba(33,27,61,0.3)',
     progressBg: 'rgba(0,0,0,0.06)',
     fundedBg: '#e8f3ee',
     fundedText: '#2f8f6b',
-    fabShadow: '0 4px 16px rgba(160,86,59,0.5)',
-    hero: 'linear-gradient(135deg, #fff7f2 0%, #fde7dc 52%, #f8d8ca 100%)',
-    accentSoft: '#F7D7CC',
-    accentStrong: '#FF5A43',
+    fabShadow: '0 4px 16px rgba(124,58,237,0.5)',
+    hero: 'linear-gradient(135deg, #F8F5FE 0%, #ECE3FB 52%, #DFD0F7 100%)',
+    accentSoft: '#DCC9FA',
+    accentStrong: '#7C3AED',
     panel: 'rgba(255,255,255,0.82)',
   },
   dark: {
-    cream: '#1a1a2e',
-    card: '#23234a',
-    card2: '#2d1b4a',
-    white: '#2a2a45',
-    brown: '#c49a6c',
-    brownDk: '#a0563b',
-    text: '#F5F6FA',
-    text2: '#B3B3B3',
-    line: 'rgba(106,0,255,0.18)',
-    headerBg: 'rgba(26,26,46,0.9)',
-    overlay: 'rgba(10,10,34,0.65)',
-    shadowSm: '0 2px 12px rgba(106,0,255,0.12)',
+    cream: '#14102A',
+    card: '#1E1740',
+    card2: '#251B4D',
+    white: '#2A2154',
+    brown: '#C4B5FD',
+    brownDk: '#A78BFA',
+    text: '#F5F3FF',
+    text2: '#B0A6D9',
+    line: 'rgba(167,139,250,0.20)',
+    headerBg: 'rgba(20,16,42,0.9)',
+    overlay: 'rgba(10,8,24,0.65)',
+    shadowSm: '0 2px 12px rgba(167,139,250,0.14)',
     shadowLg: '0 18px 48px rgba(0,0,0,0.28)',
-    btnShadow: '0 6px 20px rgba(106,0,255,0.25)',
+    btnShadow: '0 6px 20px rgba(167,139,250,0.3)',
     modalShadow: '0 20px 60px rgba(0,0,0,0.45)',
     progressBg: 'rgba(255,255,255,0.08)',
     fundedBg: 'rgba(74,222,128,0.15)',
     fundedText: '#4ade80',
-    fabShadow: '0 4px 16px rgba(106,0,255,0.35)',
-    hero: 'linear-gradient(135deg, #1f1738 0%, #2d1b4a 52%, #3a245f 100%)',
-    accentSoft: '#3A2A5A',
-    accentStrong: '#c49a6c',
-    panel: 'rgba(42,42,69,0.82)',
+    fabShadow: '0 4px 16px rgba(167,139,250,0.35)',
+    hero: 'linear-gradient(135deg, #191140 0%, #251B4D 52%, #32215F 100%)',
+    accentSoft: '#3A2A6B',
+    accentStrong: '#C4B5FD',
+    panel: 'rgba(30,23,64,0.82)',
   },
 };
 
 function useForgeColors() {
   const { theme } = useTheme();
   return PALETTES[theme];
+}
+
+/** Renders the lightweight **bold** / *italic* / ~underline~ markup inserted by the segment toolbar. */
+function renderFormattedText(content: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|~[^~]+~)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = regex.exec(content)) !== null) {
+    if (match.index > lastIndex) parts.push(content.slice(lastIndex, match.index));
+    const token = match[0];
+    if (token.startsWith('**')) {
+      parts.push(<strong key={key++}>{token.slice(2, -2)}</strong>);
+    } else if (token.startsWith('~')) {
+      parts.push(<u key={key++}>{token.slice(1, -1)}</u>);
+    } else {
+      parts.push(<em key={key++}>{token.slice(1, -1)}</em>);
+    }
+    lastIndex = match.index + token.length;
+  }
+  if (lastIndex < content.length) parts.push(content.slice(lastIndex));
+  return parts;
 }
 
 const GENRES = [
@@ -177,7 +201,10 @@ function StoryForgeContent() {
       const ordering = tab === 'new' ? 'new' : 'trending';
       const status = tab === 'completed' ? 'completed' : 'all';
       const res = await fetch(`${BASE}/?ordering=${ordering}&genre=${genre}&status=${status}`);
-      if (res.ok) setStories(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setStories(Array.isArray(data) ? data : data.results || []);
+      }
       else {
         setStories([]);
         setLoadError(true);
@@ -497,7 +524,7 @@ function StoryCard({
   onDelete: () => void;
 }) {
   const C = useForgeColors();
-  const me = getUser();
+  const me = useAuthUser();
   const canManage = !!(me && story.owner?.id && me.id === story.owner.id);
   const pct = Math.min(100, Math.round((story.segment_count / story.max_segments) * 100));
   return (
@@ -668,6 +695,24 @@ function ReadStoryModal({ id, onClose, onContributed }: { id: number; onClose: (
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [shareState, setShareState] = useState<'idle' | 'done'>('idle');
+  const [saved, setSaved] = useState(false);
+  const [actionMsg, setActionMsg] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function wrapSelection(marker: string) {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? text.length;
+    const end = el.selectionEnd ?? text.length;
+    const selected = text.slice(start, end);
+    const inner = selected || 'text';
+    const next = `${text.slice(0, start)}${marker}${inner}${marker}${text.slice(end)}`;
+    setText(next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + marker.length, start + marker.length + inner.length);
+    });
+  }
 
   const fetchStory = useCallback(async () => {
     setLoading(true);
@@ -711,7 +756,7 @@ function ReadStoryModal({ id, onClose, onContributed }: { id: number; onClose: (
   }
 
   async function shareStory() {
-    const url = typeof window !== 'undefined' ? window.location.href : `/forge?story=${id}`;
+    const url = typeof window !== 'undefined' ? `${window.location.origin}/forge?story=${id}` : `/forge?story=${id}`;
     try {
       if (navigator.share && story) {
         await navigator.share({ title: story.title, text: story.premise, url });
@@ -720,9 +765,44 @@ function ReadStoryModal({ id, onClose, onContributed }: { id: number; onClose: (
       }
       setShareState('done');
       window.setTimeout(() => setShareState('idle'), 2200);
-    } catch {
+    } catch (e) {
       setShareState('idle');
+      if (e instanceof DOMException && e.name === 'AbortError') return;
+      setActionMsg('Could not share the link.');
+      window.setTimeout(() => setActionMsg(''), 2500);
     }
+  }
+
+  async function toggleSaveStory() {
+    try {
+      const res = await apiFetchJson(`forge/stories/${id}/toggle_save/`, { method: 'POST' });
+      if (!res.ok) throw new Error('failed');
+      const data = await res.json();
+      setSaved(Boolean(data.saved));
+      setActionMsg(data.saved ? 'Story saved' : 'Removed from saved');
+      window.setTimeout(() => setActionMsg(''), 2000);
+    } catch {
+      setActionMsg('Could not update saved status.');
+      window.setTimeout(() => setActionMsg(''), 2500);
+    }
+  }
+
+  async function publishStory() {
+    try {
+      const res = await apiFetchJson(`forge/stories/${id}/publish/`, { method: 'POST' });
+      if (!res.ok) throw new Error('failed');
+      await fetchStory();
+      setActionMsg('Story published');
+      window.setTimeout(() => setActionMsg(''), 2000);
+    } catch {
+      setActionMsg('Could not publish the story.');
+      window.setTimeout(() => setActionMsg(''), 2500);
+    }
+  }
+
+  function focusWrite() {
+    textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    textareaRef.current?.focus();
   }
 
   const full = story && story.segment_count >= story.max_segments;
@@ -810,7 +890,7 @@ function ReadStoryModal({ id, onClose, onContributed }: { id: number; onClose: (
                         <div className="space-y-4">
                           {story.segments.map((seg, index) => (
                             <div key={seg.id} className={index === story.segments.length - 1 ? 'rounded-2xl bg-white/60 p-4' : ''}>
-                              <p className="text-base leading-8" style={{ color: C.text }}>{seg.content}</p>
+                              <p className="text-base leading-8" style={{ color: C.text }}>{renderFormattedText(seg.content)}</p>
                               <span className="mt-2 inline-block text-xs" style={{ color: C.text2 }}>
                                 — {seg.author ? (seg.author.first_name || seg.author.username) : 'Anonymous'}
                               </span>
@@ -834,11 +914,12 @@ function ReadStoryModal({ id, onClose, onContributed }: { id: number; onClose: (
                   {!full && story.status !== 'completed' && (
                     <div className="mt-5 rounded-[24px] border p-4 md:p-5" style={{ borderColor: C.line, background: C.white }}>
                       <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <button type="button" className="rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: C.line, color: C.text }}>B</button>
-                        <button type="button" className="rounded-xl border px-3 py-2 text-sm italic" style={{ borderColor: C.line, color: C.text }}>I</button>
-                        <button type="button" className="rounded-xl border px-3 py-2 text-sm underline" style={{ borderColor: C.line, color: C.text }}>U</button>
+                        <button type="button" onClick={() => wrapSelection('**')} className="rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: C.line, color: C.text }}>B</button>
+                        <button type="button" onClick={() => wrapSelection('*')} className="rounded-xl border px-3 py-2 text-sm italic" style={{ borderColor: C.line, color: C.text }}>I</button>
+                        <button type="button" onClick={() => wrapSelection('~')} className="rounded-xl border px-3 py-2 text-sm underline" style={{ borderColor: C.line, color: C.text }}>U</button>
                       </div>
                       <textarea
+                        ref={textareaRef}
                         value={text}
                         onChange={(e) => setText(e.target.value)}
                         rows={5}
@@ -872,7 +953,7 @@ function ReadStoryModal({ id, onClose, onContributed }: { id: number; onClose: (
                             {seg.author ? (seg.author.first_name || seg.author.username) : 'Anonymous'}
                           </p>
                           <p className="text-xs" style={{ color: C.text2 }}>
-                            Contributor
+                            {seg.order === 0 ? 'Author' : seg.order === story.segments.length - 1 ? 'Narrator' : 'Editor'}
                           </p>
                         </div>
                         <UsersIcon className="h-4 w-4 shrink-0" style={{ color: C.brown }} />
@@ -908,14 +989,17 @@ function ReadStoryModal({ id, onClose, onContributed }: { id: number; onClose: (
                 </div>
 
                 <div className="rounded-[24px] border p-4" style={{ borderColor: C.line, background: C.cream }}>
+                  {actionMsg ? (
+                    <p className="mb-2 text-xs font-semibold" style={{ color: C.brownDk }}>{actionMsg}</p>
+                  ) : null}
                   <div className="grid grid-cols-3 gap-2">
-                    <button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: C.card2, color: C.brownDk }}>
+                    <button type="button" onClick={focusWrite} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: C.card2, color: C.brownDk }}>
                       <PencilSquareIcon className="h-4 w-4" /> Write
                     </button>
-                    <button type="button" className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: C.card2, color: C.brownDk }}>
-                      <BookmarkIcon className="h-4 w-4" /> Save
+                    <button type="button" onClick={() => void toggleSaveStory()} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: saved ? C.brownDk : C.card2, color: saved ? '#fff' : C.brownDk }}>
+                      <BookmarkIcon className="h-4 w-4" /> {saved ? 'Saved' : 'Save'}
                     </button>
-                    <button type="button" onClick={() => void shareStory()} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: C.card2, color: C.brownDk }}>
+                    <button type="button" onClick={() => void publishStory()} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: C.card2, color: C.brownDk }}>
                       <ArrowUpTrayIcon className="h-4 w-4" /> Publish
                     </button>
                   </div>

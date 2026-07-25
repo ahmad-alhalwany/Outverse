@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { getUser } from '@/lib/auth';
 import { apiFetch, apiFetchJson } from '@/lib/api';
@@ -36,6 +37,7 @@ function initials(name: string) {
 export default function RightSidebar() {
   const [trendingPosts, setTrendingPosts] = useState<TrendingPost[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
+  const [followError, setFollowError] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -61,6 +63,7 @@ export default function RightSidebar() {
   }, []);
 
   const toggleFollow = async (creator: Creator) => {
+    setFollowError('');
     try {
       const res = await apiFetchJson('users/follow/', {
         method: 'POST',
@@ -79,8 +82,14 @@ export default function RightSidebar() {
               : current,
           ),
         );
+      } else {
+        setFollowError('Could not update follow status.');
+        window.setTimeout(() => setFollowError(''), 3000);
       }
-    } catch {}
+    } catch {
+      setFollowError('Could not update follow status.');
+      window.setTimeout(() => setFollowError(''), 3000);
+    }
   };
 
   const trendingTopics = useMemo(() => {
@@ -98,9 +107,9 @@ export default function RightSidebar() {
   }, [trendingPosts]);
 
   return (
-    <aside className="home-right-rail w-[320px] pt-20 px-4 hidden xl:block shrink-0">
+    <aside className="home-right-rail sticky top-24 hidden h-fit w-[320px] shrink-0 px-4 xl:block">
       <div className="home-rail-card p-5 mb-5">
-        <h3 className="text-[0.95rem] font-semibold text-text mb-3">Global Emotion Map</h3>
+        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-text-secondary">Global Emotion Map</h3>
         <EmotionMap />
         <Link
           href="/bottles"
@@ -111,7 +120,7 @@ export default function RightSidebar() {
       </div>
 
       <div className="home-rail-card p-5 mb-5">
-        <h3 className="text-[0.95rem] font-semibold text-text mb-4 flex items-center gap-1">
+        <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-text-secondary">
           <span>Active Friends</span>
           <span className="text-bazaar text-base">✨</span>
         </h3>
@@ -123,10 +132,13 @@ export default function RightSidebar() {
               <li key={creator.id} className="flex items-center justify-between">
                 <Link href={`/profile/${creator.id}`} className="flex items-center gap-2 min-w-0 group">
                   {creator.avatar ? (
-                    <img
+                    <Image
                       src={creator.avatar}
                       alt={creator.username}
+                      width={32}
+                      height={32}
                       className="w-8 h-8 rounded-full border-2 border-vault/40 object-cover"
+                      unoptimized
                     />
                   ) : (
                     <span className="w-8 h-8 rounded-full bg-gradient-to-tr from-vault to-bazaar text-white flex items-center justify-center text-[10px] font-bold">
@@ -156,10 +168,15 @@ export default function RightSidebar() {
             ))}
           </ul>
         )}
+        {followError && (
+          <p className="mt-2 text-[10px]" style={{ color: '#E24B4A' }}>
+            {followError}
+          </p>
+        )}
       </div>
 
       <div className="home-rail-card p-5 mb-5">
-        <h3 className="text-[0.95rem] font-semibold text-text mb-4 flex items-center gap-1">
+        <h3 className="mb-4 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-text-secondary">
           <span>Trending Posts</span>
           <span className="text-yellow-400 text-base">🌠</span>
         </h3>
@@ -190,7 +207,7 @@ export default function RightSidebar() {
 
       {trendingTopics.length > 0 && (
         <div className="home-rail-card p-5">
-          <h3 className="text-[0.95rem] font-semibold text-text mb-3">Trending Topics</h3>
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-[0.22em] text-text-secondary">Trending Topics</h3>
           <ul className="text-xs text-text space-y-1">
             {trendingTopics.map((topic) => (
               <li key={topic.topic}>

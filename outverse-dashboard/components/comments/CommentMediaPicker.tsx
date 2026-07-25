@@ -15,9 +15,9 @@ import {
   FaceSmileIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
+  SparklesIcon,
+  DocumentDuplicateIcon,
 } from '@heroicons/react/24/outline';
-import { MdGif } from 'react-icons/md';
-import { FaSpinner } from 'react-icons/fa';
 import { useLocale } from '../LocaleProvider';
 import type { PickerMediaItem } from '@/lib/pickerFallback';
 
@@ -55,7 +55,7 @@ const EmojiPicker = dynamic(
     ssr: false,
     loading: () => (
       <div className="comment-picker__loading">
-        <FaSpinner className="animate-spin h-6 w-6" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
       </div>
     ),
   },
@@ -138,10 +138,11 @@ export default function CommentMediaPicker({
       setHint(data.hint);
     } catch {
       setItems([]);
+      setHint(t('picker.loadError'));
     } finally {
       setLoading(false);
     }
-  }, [tab, mediaType]);
+  }, [tab, mediaType, t]);
 
   useEffect(() => {
     setEmojiTheme(
@@ -205,8 +206,8 @@ export default function CommentMediaPicker({
 
   const tabs: { id: PickerTab; label: string; icon: React.ReactNode }[] = [
     { id: 'emoji', label: t('picker.emoji'), icon: <FaceSmileIcon className="h-4 w-4" /> },
-    { id: 'gif', label: t('picker.gif'), icon: <MdGif className="h-4 w-4" /> },
-    { id: 'sticker', label: t('picker.sticker'), icon: <span className="text-sm">🌟</span> },
+    { id: 'gif', label: t('picker.gif'), icon: <SparklesIcon className="h-4 w-4" /> },
+    { id: 'sticker', label: t('picker.sticker'), icon: <DocumentDuplicateIcon className="h-4 w-4" /> },
   ];
 
   const panel =
@@ -229,104 +230,104 @@ export default function CommentMediaPicker({
         role="dialog"
         aria-label={t('picker.title')}
       >
-          <div className="comment-picker__header">
-            <div className="comment-picker__tabs" role="tablist">
-              {tabs.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === item.id}
-                  className={`comment-picker__tab${tab === item.id ? ' comment-picker__tab--active' : ''}`}
-                  onClick={() => onTabChange(item.id)}
-                >
-                  {item.icon}
-                  <span>{item.label}</span>
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              className="comment-picker__close"
-              onClick={() => onTabChange(null)}
-              aria-label={t('picker.close')}
-            >
-              <XMarkIcon className="h-5 w-5" />
-            </button>
+        <div className="comment-picker__header">
+          <div className="comment-picker__tabs" role="tablist">
+            {tabs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === item.id}
+                className={`comment-picker__tab${tab === item.id ? ' comment-picker__tab--active' : ''}`}
+                onClick={() => onTabChange(item.id)}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            ))}
           </div>
+          <button
+            type="button"
+            className="comment-picker__close"
+            onClick={() => onTabChange(null)}
+            aria-label={t('picker.close')}
+          >
+            <XMarkIcon className="h-5 w-5" />
+          </button>
+        </div>
 
-          {(tab === 'gif' || tab === 'sticker') && (
-            <div className="comment-picker__search">
-              <MagnifyingGlassIcon className="h-4 w-4 shrink-0 opacity-60" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder={
-                  tab === 'sticker'
-                    ? t('picker.searchStickers')
-                    : t('picker.searchGifs')
-                }
-                className="comment-picker__search-input"
-                autoFocus
+        {(tab === 'gif' || tab === 'sticker') && (
+          <div className="comment-picker__search">
+            <MagnifyingGlassIcon className="h-4 w-4 shrink-0 opacity-60" />
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={
+                tab === 'sticker'
+                  ? t('picker.searchStickers')
+                  : t('picker.searchGifs')
+              }
+              className="comment-picker__search-input"
+              autoFocus
+            />
+          </div>
+        )}
+
+        <div className="comment-picker__body">
+          {tab === 'emoji' && (
+            <div className="comment-picker__emoji-wrap" key={locale}>
+              <EmojiPicker
+                theme={emojiTheme}
+                onSelect={(native) => {
+                  onEmoji(native);
+                  onTabChange(null);
+                }}
               />
             </div>
           )}
 
-          <div className="comment-picker__body">
-            {tab === 'emoji' && (
-              <div className="comment-picker__emoji-wrap" key={locale}>
-                <EmojiPicker
-                  theme={emojiTheme}
-                  onSelect={(native) => {
-                    onEmoji(native);
-                    onTabChange(null);
-                  }}
-                />
-              </div>
-            )}
-
-            {(tab === 'gif' || tab === 'sticker') && (
-              <>
-                {loading && (
-                  <div className="comment-picker__loading">
-                    <FaSpinner className="animate-spin h-6 w-6" />
-                    <span>{t('picker.loading')}</span>
-                  </div>
-                )}
-                {!loading && items.length === 0 && (
-                  <p className="comment-picker__empty">{t('picker.noResults')}</p>
-                )}
-                {!loading && items.length > 0 && (
-                  <div className="comment-picker__grid">
-                    {items.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className="comment-picker__tile"
-                        onClick={() => {
-                          if (tab === 'gif') onGif(item.url);
-                          else onSticker(item.url);
-                          onTabChange(null);
-                        }}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={item.preview}
-                          alt=""
-                          loading="lazy"
-                          className="comment-picker__tile-img"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {hint && !loading && (
-                  <p className="comment-picker__hint">{hint}</p>
-                )}
-              </>
-            )}
-          </div>
+          {(tab === 'gif' || tab === 'sticker') && (
+            <>
+              {loading && (
+                <div className="comment-picker__loading">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <span>{t('picker.loading')}</span>
+                </div>
+              )}
+              {!loading && items.length === 0 && (
+                <p className="comment-picker__empty">{t('picker.noResults')}</p>
+              )}
+              {!loading && items.length > 0 && (
+                <div className="comment-picker__grid">
+                  {items.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="comment-picker__tile"
+                      onClick={() => {
+                        if (tab === 'gif') onGif(item.url);
+                        else onSticker(item.url);
+                        onTabChange(null);
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={item.preview}
+                        alt=""
+                        loading="lazy"
+                        className="comment-picker__tile-img"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {hint && !loading && (
+                <p className="comment-picker__hint">{hint}</p>
+              )}
+            </>
+          )}
+        </div>
       </motion.div>
     ) : null;
 

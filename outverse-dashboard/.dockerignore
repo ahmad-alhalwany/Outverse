@@ -1,0 +1,17 @@
+.next
+.next.bak
+node_modules
+out
+build
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+e2e-report
+playwright-report
+test-results
+coverage
+.git
+.gitignore
+README.md

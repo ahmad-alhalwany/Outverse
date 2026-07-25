@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
 
-const STORAGE_KEY = 'outverse-theme';
+const STORAGE_KEY = 'cosmory-theme';
 
 interface ThemeContextValue {
   theme: Theme;

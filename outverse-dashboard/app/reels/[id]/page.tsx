@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const reel = await fetchReelPublic(id);
   if (!reel) {
     return {
-      title: 'Signal not found | Outverse',
+      title: 'Signal not found | Cosmory',
       description: 'This cosmic signal is no longer in orbit.',
     };
   }

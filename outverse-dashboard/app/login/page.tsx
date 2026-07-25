@@ -1,28 +1,54 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { login, verifyEmail } from '@/lib/auth';
+import { loginWith2fa, loginWithGoogle, loginWithApple } from '@/lib/accountSecurityApi';
 import { useLocale } from '@/components/LocaleProvider';
 import { FiEye, FiEyeOff, FiLock, FiMail } from 'react-icons/fi';
 
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential?: string }) => void;
+          }) => void;
+          renderButton: (
+            parent: HTMLElement,
+            options: Record<string, string | number>,
+          ) => void;
+        };
+      };
+    };
+    AppleID?: {
+      auth: {
+        init: (config: Record<string, string | boolean>) => void;
+        signIn: () => Promise<{ authorization?: { id_token?: string } }>;
+      };
+    };
+  }
+}
+
 const COLORS = {
-  page: '#FFF8F5',
-  panel: '#FCEBE5',
+  page: '#F3F0FC',
+  panel: '#EDE4FB',
   card: 'rgba(255,255,255,0.72)',
-  cardBorder: 'rgba(160,86,59,0.18)',
+  cardBorder: 'rgba(124,58,237,0.18)',
   input: '#FFFFFF',
-  inputBorder: 'rgba(160,86,59,0.28)',
-  primary: '#A0563B',
-  primaryDark: '#8B472F',
-  text: '#2F211B',
-  muted: '#7E6A61',
-  line: 'rgba(160,86,59,0.18)',
+  inputBorder: 'rgba(124,58,237,0.28)',
+  primary: '#7C3AED',
+  primaryDark: '#5B21B6',
+  text: '#211B3D',
+  muted: '#79709E',
+  line: 'rgba(124,58,237,0.18)',
   success: '#2e7d32',
   error: '#c0392b',
-  shadow: '0 28px 80px rgba(160,86,59,0.12)',
+  shadow: '0 28px 80px rgba(124,58,237,0.14)',
 };
 
 function LoginForm() {
@@ -36,8 +62,17 @@ function LoginForm() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [pending2fa, setPending2fa] = useState<string | null>(null);
+  const [totpCode, setTotpCode] = useState('');
+  const [googleReady, setGoogleReady] = useState(false);
+  const googleBtnRef = useRef<HTMLDivElement | null>(null);
 
   const initials = useMemo(() => username.trim().charAt(0).toUpperCase() || 'M', [username]);
+  const googleClientId =
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
+    process.env.NEXT_PUBLIC_GOOGLE_OAUTH_CLIENT_ID ||
+    '';
+  const appleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID || '';
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -51,12 +86,124 @@ function LoginForm() {
     }
   }, [searchParams, t]);
 
+  useEffect(() => {
+    if (!appleClientId || pending2fa) return;
+    const existing = document.getElementById('apple-signin-script');
+    if (existing) return;
+    const script = document.createElement('script');
+    script.id = 'apple-signin-script';
+    script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
+    script.async = true;
+    script.onload = () => {
+      try {
+        window.AppleID?.auth.init({
+          clientId: appleClientId,
+          scope: 'name email',
+          redirectURI: window.location.origin + '/login',
+          usePopup: true,
+        });
+      } catch {
+        /* Apple SDK optional until client id is valid */
+      }
+    };
+    document.body.appendChild(script);
+  }, [appleClientId, pending2fa]);
+
+  async function handleAppleSignIn() {
+    if (!window.AppleID?.auth) {
+      setError(t('auth.appleFailed'));
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      const response = await window.AppleID.auth.signIn();
+      const identityToken = response?.authorization?.id_token;
+      if (!identityToken) throw new Error(t('auth.appleFailed'));
+      const result = await loginWithApple(identityToken);
+      if ('requires_2fa' in result) {
+        setPending2fa(result.pending_token);
+        setNotice(t('security.enter2fa'));
+        return;
+      }
+      router.push(nextPath.startsWith('/') ? nextPath : '/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('auth.appleFailed'));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!googleClientId || pending2fa) return;
+
+    const handleCredential = async (response: { credential?: string }) => {
+      const idToken = response.credential;
+      if (!idToken) return;
+      setError('');
+      setLoading(true);
+      try {
+        const result = await loginWithGoogle(idToken);
+        if ('requires_2fa' in result) {
+          setPending2fa(result.pending_token);
+          setNotice(t('security.enter2fa'));
+          return;
+        }
+        router.push(nextPath.startsWith('/') ? nextPath : '/');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : t('auth.googleFailed'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const renderGoogle = () => {
+      if (!window.google?.accounts?.id || !googleBtnRef.current) return;
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: handleCredential,
+      });
+      googleBtnRef.current.innerHTML = '';
+      window.google.accounts.id.renderButton(googleBtnRef.current, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'pill',
+        width: 360,
+      });
+      setGoogleReady(true);
+    };
+
+    const existing = document.getElementById('google-gis-script');
+    if (existing) {
+      renderGoogle();
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'google-gis-script';
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.onload = renderGoogle;
+    document.body.appendChild(script);
+  }, [googleClientId, pending2fa, nextPath, router, t]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await login(username.trim(), password);
+      if (pending2fa) {
+        await loginWith2fa(pending2fa, totpCode);
+        router.push(nextPath.startsWith('/') ? nextPath : '/');
+        return;
+      }
+      const result = await login(username.trim(), password);
+      if ('requires_2fa' in result) {
+        setPending2fa(result.pending_token);
+        setNotice(t('security.enter2fa'));
+        return;
+      }
       router.push(nextPath.startsWith('/') ? nextPath : '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('auth.loginFailed'));
@@ -81,7 +228,7 @@ function LoginForm() {
         <section className="mx-auto flex w-full max-w-xl flex-col items-center text-center lg:mx-0 lg:items-start lg:text-left">
           <div
             className="mb-8 flex h-20 w-20 items-center justify-center rounded-[24px] p-3"
-            style={{ background: COLORS.panel, boxShadow: '0 18px 40px rgba(160,86,59,0.12)' }}
+            style={{ background: COLORS.panel, boxShadow: '0 18px 40px rgba(124,58,237,0.14)' }}
           >
             <div
               className="flex h-full w-full items-center justify-center rounded-[18px] text-4xl font-bold text-white"
@@ -135,11 +282,11 @@ function LoginForm() {
 
           <form onSubmit={submit} className="space-y-5">
             <div>
-              <label className="mb-2 block text-base font-semibold" style={{ color: COLORS.text }}>
+              <label htmlFor="login-username" className="mb-2 block text-base font-semibold" style={{ color: COLORS.text }}>
                 {t('auth.email')}
               </label>
               <div
-                className="flex items-center gap-3 rounded-2xl border px-4 py-4 transition focus-within:ring-2"
+                className="cosmic-input-group flex items-center gap-3 rounded-2xl border px-4 py-4 transition focus-within:ring-2"
                 style={{
                   background: COLORS.input,
                   borderColor: COLORS.inputBorder,
@@ -149,9 +296,10 @@ function LoginForm() {
               >
                 <FiMail className="h-5 w-5 shrink-0" style={{ color: COLORS.muted }} />
                 <input
+                  id="login-username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-transparent text-base outline-none placeholder:text-[#B4A39B]"
+                  className="w-full bg-transparent text-base outline-none placeholder:text-[#9691B8]"
                   style={{ color: COLORS.text }}
                   placeholder="Enter your email"
                   autoComplete="username"
@@ -160,11 +308,11 @@ function LoginForm() {
             </div>
 
             <div>
-              <label className="mb-2 block text-base font-semibold" style={{ color: COLORS.text }}>
+              <label htmlFor="login-password" className="mb-2 block text-base font-semibold" style={{ color: COLORS.text }}>
                 {t('auth.password')}
               </label>
               <div
-                className="flex items-center gap-3 rounded-2xl border px-4 py-4"
+                className="cosmic-input-group flex items-center gap-3 rounded-2xl border px-4 py-4"
                 style={{
                   background: COLORS.input,
                   borderColor: COLORS.inputBorder,
@@ -174,10 +322,11 @@ function LoginForm() {
               >
                 <FiLock className="h-5 w-5 shrink-0" style={{ color: COLORS.muted }} />
                 <input
+                  id="login-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-transparent text-base outline-none placeholder:text-[#B4A39B]"
+                  className="w-full bg-transparent text-base outline-none placeholder:text-[#9691B8]"
                   style={{ color: COLORS.text }}
                   placeholder="Enter your password"
                   autoComplete="current-password"
@@ -185,7 +334,7 @@ function LoginForm() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((current) => !current)}
-                  className="shrink-0"
+                  className="icon-only p-1.5 shrink-0"
                   aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? (
@@ -196,6 +345,24 @@ function LoginForm() {
                 </button>
               </div>
             </div>
+
+            {pending2fa && (
+              <div>
+                <label htmlFor="login-2fa" className="mb-2 block text-base font-semibold" style={{ color: COLORS.text }}>
+                  {t('security.enter2fa')}
+                </label>
+                <input
+                  id="login-2fa"
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value)}
+                  className="cosmic-input w-full rounded-2xl border px-4 py-4 text-base"
+                  style={{ background: COLORS.input, borderColor: COLORS.inputBorder, color: COLORS.text }}
+                  placeholder="000000"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                />
+              </div>
+            )}
 
             <div className="flex justify-end">
               <Link href="/forgot-password" className="text-base font-semibold" style={{ color: COLORS.primary }}>
@@ -212,29 +379,38 @@ function LoginForm() {
               className="w-full rounded-2xl py-4 text-lg font-semibold text-white transition hover:opacity-95 disabled:opacity-60"
               style={{ background: `linear-gradient(180deg, ${COLORS.primary}, ${COLORS.primaryDark})` }}
             >
-              {loading ? t('auth.signingIn') : t('auth.signIn')}
+              {loading ? t('auth.signingIn') : pending2fa ? t('security.verify2fa') : t('auth.signIn')}
             </button>
           </form>
 
-          <div className="my-7 flex items-center gap-4">
-            <div className="h-px flex-1" style={{ background: COLORS.line }} />
-            <span className="text-base" style={{ color: COLORS.muted }}>
-              Or continue with
-            </span>
-            <div className="h-px flex-1" style={{ background: COLORS.line }} />
-          </div>
-
-          <button
-            type="button"
-            className="flex w-full items-center justify-center gap-3 rounded-2xl border px-4 py-4 text-lg font-semibold"
-            style={{ background: COLORS.input, borderColor: COLORS.inputBorder, color: COLORS.text }}
-          >
-            <span className="text-xl">🌐</span>
-            <span>Sign in with Google</span>
-          </button>
+          {(googleClientId || appleClientId) && !pending2fa && (
+            <div className="mt-6 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1" style={{ background: COLORS.line }} />
+                <span className="text-sm" style={{ color: COLORS.muted }}>{t('auth.orContinueWith')}</span>
+                <div className="h-px flex-1" style={{ background: COLORS.line }} />
+              </div>
+              {googleClientId && (
+                <div className="flex justify-center">
+                  <div ref={googleBtnRef} className={googleReady ? '' : 'min-h-[44px] w-full max-w-[360px]'} />
+                </div>
+              )}
+              {appleClientId && (
+                <button
+                  type="button"
+                  onClick={handleAppleSignIn}
+                  disabled={loading}
+                  className="w-full rounded-2xl border py-3 text-base font-semibold transition hover:opacity-95 disabled:opacity-60"
+                  style={{ borderColor: COLORS.inputBorder, color: COLORS.text, background: COLORS.input }}
+                >
+                  {t('auth.continueWithApple')}
+                </button>
+              )}
+            </div>
+          )}
 
           <p className="mt-8 text-center text-lg" style={{ color: COLORS.muted }}>
-            {t('auth.newToOutverse')}{' '}
+            {t('auth.newToCosmory')}{' '}
             <Link href="/register" className="font-semibold" style={{ color: COLORS.primary }}>
               Sign up
             </Link>

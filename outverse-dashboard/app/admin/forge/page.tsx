@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { deleteStoryAdmin, fetchStoriesAdmin } from '@/lib/adminApi';
 import type { AdminStory } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 export default function AdminForgePage() {
+  const confirm = useConfirm();
   const [stories, setStories] = useState<AdminStory[]>([]);
   const [message, setMessage] = useState('');
 
@@ -18,7 +20,7 @@ export default function AdminForgePage() {
   }, [load]);
 
   const remove = async (story: AdminStory) => {
-    if (!window.confirm(`Delete "${story.title}"?`)) return;
+    if (!(await confirm(`Delete "${story.title}"?`, { danger: true, confirmLabel: 'Delete' }))) return;
     const res = await deleteStoryAdmin(story.id);
     if (res.ok) {
       setMessage('Story deleted.');

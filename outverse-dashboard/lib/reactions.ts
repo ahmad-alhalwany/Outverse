@@ -28,3 +28,25 @@ export function countsToEmojiMap(counts?: Record<string, number>) {
 export function totalReactions(counts?: Record<string, number>) {
   return Object.values(counts || {}).reduce((a, b) => a + b, 0);
 }
+
+/** Light haptic pulse on mobile when reacting (Instagram/TikTok-style). */
+export function hapticReaction(intensity: 'light' | 'medium' | 'heavy' = 'light') {
+  if (typeof navigator === 'undefined' || !navigator.vibrate) return;
+  const pattern = intensity === 'light' ? 10 : intensity === 'medium' ? [12, 40, 18] : [16, 50, 24];
+  try {
+    navigator.vibrate(pattern);
+  } catch {
+    /* unsupported */
+  }
+}
+
+export function reactionLabelKey(type: ReactionType): string {
+  const map: Record<ReactionType, string> = {
+    inspired: 'reactions.inspired',
+    cosmic: 'reactions.cosmic',
+    mindbending: 'reactions.mindbending',
+    growing: 'reactions.growing',
+    spark: 'reactions.spark',
+  };
+  return map[type];
+}

@@ -31,17 +31,23 @@ function displayName(u: UserRow) {
 export default function FollowListModal({ userId, mode, title, colors: C, onClose }: Props) {
   const [list, setList] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(false);
     try {
       const res = await apiFetch(
         `users/${userId}/${mode}/`,
       );
       if (res.ok) setList(await res.json());
-      else setList([]);
+      else {
+        setList([]);
+        setError(true);
+      }
     } catch {
       setList([]);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -79,7 +85,20 @@ export default function FollowListModal({ userId, mode, title, colors: C, onClos
               Loading…
             </p>
           )}
-          {!loading && list.length === 0 && (
+          {!loading && error && (
+            <div className="text-center text-sm py-8" style={{ color: C.text2 }}>
+              <p className="mb-3">Could not load. Please try again.</p>
+              <button
+                type="button"
+                onClick={() => load()}
+                className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
+                style={{ background: C.brown }}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+          {!loading && !error && list.length === 0 && (
             <p className="text-center text-sm py-8" style={{ color: C.text2 }}>
               No users yet.
             </p>

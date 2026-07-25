@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
 
 /**
- * Standalone web chat (responsive). Not a separate native app — links back to Outverse only.
+ * Standalone web chat (responsive). Not a separate native app — links back to Cosmory only.
  */
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -42,7 +42,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <Link href="/" className="font-semibold hover:underline" style={{ color: 'var(--cc-text, #f5ebe0)' }}>
-          ← Back to Outverse
+          ← Back to Cosmory
         </Link>
         <span>Standalone chat</span>
       </div>

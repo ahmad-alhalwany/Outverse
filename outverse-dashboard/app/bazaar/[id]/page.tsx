@@ -1,24 +1,29 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import WorldShell from '@/components/world/WorldShell';
 import IdeaDetailView from '@/components/bazaar/IdeaDetailView';
+import PledgeModal from '@/components/bazaar/PledgeModal';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 import { apiFetchJson, apiUrl } from '@/lib/api';
+import { toggleIdeaSave } from '@/lib/bazaarApi';
+import { fetchIdeaConstellation, fetchIdeaCrew } from '@/lib/differentiatorApi';
+import type { IdeaConstellation, IdeaCrew } from '@/lib/differentiatorApi';
 import type {
   BazaarCollaborationRequest,
   BazaarIdea,
   BazaarIdeaComment,
 } from '@/lib/bazaarTypes';
-import { getUser } from '@/lib/auth';
+import { useAuthUser } from '@/lib/hooks/useAuthUser';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 const BASE = apiUrl('ideas');
 
 const PALETTES = {
-  light: { cream: '#FBF3EE', text: '#3D2B22', text2: '#9A8278', brownDk: '#854330' },
-  dark: { cream: '#1a1a2e', text: '#F5F6FA', text2: '#B3B3B3', brownDk: '#a0563b' },
+  light: { cream: '#F3F0FC', text: '#211B3D', text2: '#79709E', brownDk: '#5B21B6' },
+  dark: { cream: '#14102A', text: '#F5F3FF', text2: '#B0A6D9', brownDk: '#A78BFA' },
 };
 
 export default function BazaarIdeaPage() {
@@ -26,6 +31,7 @@ export default function BazaarIdeaPage() {
   const router = useRouter();
   const { theme } = useTheme();
   const { t } = useLocale();
+  const confirm = useConfirm();
   const C = PALETTES[theme];
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
@@ -37,18 +43,33 @@ export default function BazaarIdeaPage() {
   const [applicantsLoading, setApplicantsLoading] = useState(false);
   const [notFound, setNotFound] = useState(false);
   const [voted, setVoted] = useState(false);
+  const [pledgeOpen, setPledgeOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [launchCollabBusy, setLaunchCollabBusy] = useState(false);
   const [error, setError] = useState('');
+  const [constellation, setConstellation] = useState<IdeaConstellation | null>(null);
+  const [crew, setCrew] = useState<IdeaCrew | null>(null);
   const [form, setForm] = useState({
     title: '',
     description: '',
     category: 'technology',
     roles_needed: '',
     tags: '',
+    target_date: '',
   });
 
-  const me = getUser();
+  const me = useAuthUser();
+  const ideaRef = useRef<BazaarIdea | null>(null);
+  useEffect(() => {
+    ideaRef.current = idea;
+  }, [idea]);
+
+  useEffect(() => {
+    if (!error) return;
+    const handle = window.setTimeout(() => setError(''), 3200);
+    return () => window.clearTimeout(handle);
+  }, [error]);
 
   const loadIdea = useCallback(async () => {
     if (!id) return null;
@@ -64,12 +85,14 @@ export default function BazaarIdeaPage() {
     }
     const data = (await res.json()) as BazaarIdea;
     setIdea(data);
+    setVoted(!!data.is_voted);
     setForm({
       title: data.title || '',
       description: data.description || '',
       category: data.category || 'technology',
       roles_needed: Array.isArray(data.roles_needed) ? data.roles_needed.join(', ') : '',
       tags: Array.isArray(data.tags) ? data.tags.join(', ') : '',
+      target_date: data.target_date || '',
     });
     return data;
   }, [id]);
@@ -90,7 +113,7 @@ export default function BazaarIdeaPage() {
 
   const loadApplicants = useCallback(
     async (ideaData?: BazaarIdea | null) => {
-      const currentIdea = ideaData ?? idea;
+      const currentIdea = ideaData ?? ideaRef.current;
       if (!id || !currentIdea || !me || currentIdea.owner?.id !== me.id) {
         setApplicants([]);
         setApplicantsLoading(false);
@@ -107,7 +130,12 @@ export default function BazaarIdeaPage() {
         setApplicantsLoading(false);
       }
     },
-    [id, idea, me],
+    // Intentionally excludes `idea` — reads it via ideaRef instead, so this
+    // callback's identity (and therefore `load`'s) stays stable across idea
+    // updates. Depending on `idea` directly caused an infinite refetch loop:
+    // load() -> setIdea() -> loadApplicants identity changes -> load identity
+    // changes -> the mount effect (keyed on [load]) re-fires -> load() again.
+    [id, me],
   );
 
   const load = useCallback(async () => {
@@ -116,6 +144,12 @@ export default function BazaarIdeaPage() {
     setNotFound(false);
     try {
       const ideaData = await loadIdea();
+      const [constellationData, crewData] = await Promise.all([
+        fetchIdeaConstellation(Number(id)),
+        fetchIdeaCrew(Number(id)),
+      ]);
+      setConstellation(constellationData);
+      setCrew(crewData);
       await Promise.all([loadComments(), loadApplicants(ideaData)]);
     } catch {
       setIdea(null);
@@ -136,14 +170,50 @@ export default function BazaarIdeaPage() {
       const data = await res.json();
       setVoted(!!data.voted);
       setIdea((prev) =>
-        prev ? { ...prev, supporters: data.supporters ?? prev.supporters } : prev,
+        prev ? { ...prev, supporters: data.supporters ?? prev.supporters, is_voted: data.voted } : prev,
       );
     } catch {
+      setError(t('bazaar.voteFailed'));
       void load();
     }
   }
 
+  async function handleToggleSave() {
+    if (!idea) return;
+    setError('');
+    const result = await toggleIdeaSave(idea.id);
+    if (!result) {
+      setError(t('bazaar.saveFailed'));
+      return;
+    }
+    setIdea((prev) => (prev ? { ...prev, is_saved: result.saved } : prev));
+  }
+
   const canManage = !!(me && idea?.owner?.id && me.id === idea.owner.id);
+
+  async function handleLaunchCollab() {
+    if (!idea) return;
+    setLaunchCollabBusy(true);
+    try {
+      const res = await apiFetchJson(`ideas/${idea.id}/launch-collab/`, { method: 'POST' });
+      if (!res.ok) throw new Error('failed');
+      const data = await res.json();
+      setIdea((prev) =>
+        prev
+          ? {
+              ...prev,
+              collab_project_id: data.collab_project_id,
+              status: data.status ?? prev.status,
+            }
+          : prev,
+      );
+      router.push(`/collab?project=${data.collab_project_id}`);
+    } catch {
+      setError(t('bazaar.launchCollabFailed'));
+    } finally {
+      setLaunchCollabBusy(false);
+    }
+  }
 
   async function handleSave() {
     if (!idea) return;
@@ -158,6 +228,7 @@ export default function BazaarIdeaPage() {
           category: form.category,
           roles_needed: form.roles_needed.split(',').map((value) => value.trim()).filter(Boolean),
           tags: form.tags.split(',').map((value) => value.trim()).filter(Boolean),
+          target_date: form.target_date || null,
         },
       });
       if (!res.ok) throw new Error('failed');
@@ -171,7 +242,7 @@ export default function BazaarIdeaPage() {
   }
 
   async function handleDelete() {
-    if (!idea || !window.confirm(t('bazaar.confirmDeleteIdea'))) return;
+    if (!idea || !(await confirm(t('bazaar.confirmDeleteIdea'), { danger: true, confirmLabel: 'Delete' }))) return;
     try {
       const res = await apiFetchJson(`ideas/${idea.id}/`, { method: 'DELETE' });
       if (!res.ok) throw new Error('failed');
@@ -183,6 +254,14 @@ export default function BazaarIdeaPage() {
 
   return (
     <WorldShell colors={PALETTES[theme]}>
+      {error && !editOpen ? (
+        <p
+          className="fixed left-1/2 top-4 z-[1100] -translate-x-1/2 rounded-xl px-4 py-2 text-sm font-medium text-white shadow-lg"
+          style={{ background: '#DC2626' }}
+        >
+          {error}
+        </p>
+      ) : null}
       {loading ? (
         <p className="text-center py-16 text-sm" style={{ color: C.text2 }}>
           {t('bazaar.loading')}
@@ -204,8 +283,11 @@ export default function BazaarIdeaPage() {
       ) : (
         <IdeaDetailView
           idea={idea}
-          voted={voted}
+          voted={!!idea.is_voted || voted}
+          saved={!!idea.is_saved}
           onVote={() => void handleVote()}
+          onToggleSave={() => void handleToggleSave()}
+          onPledge={() => setPledgeOpen(true)}
           canManage={canManage}
           onEdit={() => setEditOpen(true)}
           onDelete={() => void handleDelete()}
@@ -232,6 +314,33 @@ export default function BazaarIdeaPage() {
                   }
                 : prev,
             );
+          }}
+          onApplicantResponded={({ collab_project_id, idea_status }) => {
+            setIdea((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    collab_project_id: collab_project_id ?? prev.collab_project_id,
+                    status: idea_status ?? prev.status,
+                    collaborators_count: (prev.collaborators_count ?? 0) + 1,
+                  }
+                : prev,
+            );
+            void loadIdea();
+          }}
+          onLaunchCollab={() => void handleLaunchCollab()}
+          launchCollabBusy={launchCollabBusy}
+          constellation={constellation}
+          crew={crew}
+        />
+      )}
+      {pledgeOpen && idea && (
+        <PledgeModal
+          idea={idea}
+          onClose={() => setPledgeOpen(false)}
+          onPledged={(funding_raised) => {
+            setIdea((prev) => (prev ? { ...prev, funding_raised } : prev));
+            setPledgeOpen(false);
           }}
         />
       )}
@@ -280,6 +389,15 @@ export default function BazaarIdeaPage() {
                 onChange={(event) => setForm((prev) => ({ ...prev, tags: event.target.value }))}
                 className="w-full rounded-xl px-3 py-2.5"
                 placeholder={t('bazaar.tagsHint')}
+              />
+              <label className="text-sm font-medium block" style={{ color: C.text2 }}>
+                {t('bazaar.targetDateLabel')}
+              </label>
+              <input
+                type="date"
+                value={form.target_date}
+                onChange={(event) => setForm((prev) => ({ ...prev, target_date: event.target.value }))}
+                className="w-full rounded-xl px-3 py-2.5"
               />
             </div>
             {error ? <p className="text-sm mt-3 text-red-600">{error}</p> : null}
