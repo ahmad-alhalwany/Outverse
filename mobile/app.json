@@ -1,0 +1,68 @@
+{
+  "name": "Cosmory",
+  "slug": "cosmory-mobile",
+  "version": "1.0.0",
+  "orientation": "portrait",
+  "icon": "./assets/icon.png",
+  "userInterfaceStyle": "automatic",
+  "splash": {
+    "image": "./assets/splash.png",
+    "resizeMode": "contain",
+    "backgroundColor": "#0A0A0F"
+  },
+  "assetBundlePatterns": ["**/*"],
+  "ios": {
+    "supportsTablet": true,
+    "bundleIdentifier": "com.cosmory.mobile",
+    "infoPlist": {
+      "NSCameraUsageDescription": "This app uses camera for creating posts and stories",
+      "NSPhotoLibraryUsageDescription": "This app accesses photo library for media uploads",
+      "NSMicrophoneUsageDescription": "This app uses microphone for video recording"
+    }
+  },
+  "android": {
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/adaptive-icon.png",
+      "backgroundColor": "#0A0A0F"
+    },
+    "package": "com.cosmory.mobile",
+    "permissions": [
+      "CAMERA",
+      "READ_EXTERNAL_STORAGE",
+      "WRITE_EXTERNAL_STORAGE",
+      "RECORD_AUDIO",
+      "INTERNET"
+    ]
+  },
+  "web": {
+    "favicon": "./assets/favicon.png",
+    "bundler": "metro"
+  },
+  "plugins": [
+    "expo-secure-store",
+    "expo-image-picker",
+    [
+      "expo-splash-screen",
+      {
+        "image": "./assets/splash.png",
+        "backgroundColor": "#0A0A0F"
+      }
+    ],
+    [
+      "expo-font",
+      {
+        "fonts": [
+          "./assets/fonts/SpaceGrotesk-Regular.ttf",
+          "./assets/fonts/SpaceGrotesk-Medium.ttf",
+          "./assets/fonts/SpaceGrotesk-SemiBold.ttf",
+          "./assets/fonts/SpaceGrotesk-Bold.ttf"
+        ]
+      }
+    ]
+  ],
+  "extra": {
+    "eas": {
+      "projectId": "your-eas-project-id"
+    }
+  }
+}
