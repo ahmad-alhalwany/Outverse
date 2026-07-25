@@ -1,6 +1,16 @@
 from rest_framework import serializers
 
-from .models import Notification
+from .models import MarketingCampaign, Notification
+
+
+class MarketingCampaignSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MarketingCampaign
+        fields = [
+            'id', 'subject', 'body_html', 'segment', 'status',
+            'recipient_count', 'created_at', 'updated_at', 'sent_at',
+        ]
+        read_only_fields = ['status', 'recipient_count', 'created_at', 'updated_at', 'sent_at']
 
 
 class NotificationActorSerializer(serializers.Serializer):
@@ -23,7 +33,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'id', 'actor', 'verb', 'type', 'post', 'reel', 'text',
+            'id', 'actor', 'verb', 'type', 'post', 'reel', 'story', 'idea', 'text',
             'is_read', 'created_at',
         ]
 

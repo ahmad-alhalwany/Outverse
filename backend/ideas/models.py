@@ -47,6 +47,9 @@ class Idea(models.Model):
     roles_needed = models.JSONField(default=list, blank=True)
     funding_goal = models.PositiveIntegerField(null=True, blank=True)
     funding_raised = models.PositiveIntegerField(default=0)
+    tags = models.JSONField(default=list, blank=True)
+    target_date = models.DateField(null=True, blank=True)
+    milestones = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -82,6 +85,20 @@ class CollaborationRequest(models.Model):
         return f"{self.user} -> {self.idea} ({self.role})"
 
 
+class IdeaPledge(models.Model):
+    idea = models.ForeignKey(Idea, on_delete=models.CASCADE, related_name="pledges")
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="idea_pledges")
+    amount = models.PositiveIntegerField()
+    is_anonymous = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user} pledged {self.amount} to {self.idea}"
+
+
 class IdeaComment(models.Model):
     idea = models.ForeignKey(Idea, on_delete=models.CASCADE, related_name="idea_comments")
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="idea_comments")
@@ -94,3 +111,24 @@ class IdeaComment(models.Model):
 
     def __str__(self):
         return f"{self.user} on {self.idea}"
+
+
+class SavedIdea(models.Model):
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='saved_ideas',
+    )
+    idea = models.ForeignKey(
+        Idea,
+        on_delete=models.CASCADE,
+        related_name='saved_by',
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        unique_together = ('user', 'idea')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"user {self.user_id} saved idea {self.idea_id}"

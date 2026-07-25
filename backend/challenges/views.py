@@ -95,11 +95,33 @@ class ChallengeViewSet(viewsets.ModelViewSet):
             content = (request.data.get('content') or '').strip()
             if not content:
                 return Response({'error': 'Content is required.'}, status=400)
+            if Submission.objects.filter(challenge=challenge, user=user).exists():
+                return Response({'error': 'You already submitted to this challenge.'}, status=400)
             submission = Submission.objects.create(
                 challenge=challenge,
                 user=user,
                 content=content,
             )
             return Response(SubmissionSerializer(submission).data, status=201)
-        subs = challenge.submissions.select_related('challenge', 'user').all()[:20]
-        return Response(SubmissionSerializer(subs, many=True).data)
+        subs = challenge.submissions.select_related('challenge', 'user').all()
+        viewer = user_from_request(request)
+        if not (viewer and viewer.is_staff):
+            subs = subs.filter(is_approved=True)
+        return Response(SubmissionSerializer(subs[:20], many=True).data)
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        permission_classes=[IsAdminUser],
+        url_path=r'submissions/(?P<submission_id>[^/.]+)/approve',
+    )
+    def approve_submission(self, request, pk=None, submission_id=None):
+        challenge = self.get_object()
+        try:
+            submission = Submission.objects.get(pk=submission_id, challenge=challenge)
+        except Submission.DoesNotExist:
+            return Response({'error': 'Submission not found.'}, status=404)
+        approved = request.data.get('is_approved', True)
+        submission.is_approved = bool(approved)
+        submission.save(update_fields=['is_approved'])
+        return Response(SubmissionSerializer(submission).data)

@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from users.models import User
 
-from .models import ShopItem, Transaction
+from .models import CoinPack, ShopItem, Tip, Transaction
 
 
 class ShopCreatorSerializer(serializers.ModelSerializer):
@@ -32,7 +32,7 @@ class ShopItemSerializer(serializers.ModelSerializer):
         model = ShopItem
         fields = [
             'id', 'name', 'description', 'price', 'type', 'type_display',
-            'category', 'category_display', 'cover_url', 'cover', 'rating',
+            'category', 'category_display', 'cover_url', 'download_url', 'cover', 'rating',
             'sales_count', 'is_featured', 'is_available', 'creator',
             'creator_id', 'created_at',
         ]
@@ -50,7 +50,38 @@ class ShopItemSerializer(serializers.ModelSerializer):
 
 class TransactionSerializer(serializers.ModelSerializer):
     item = ShopItemSerializer(read_only=True)
+    fulfillment_status_display = serializers.CharField(
+        source='get_fulfillment_status_display', read_only=True
+    )
+    buyer_username = serializers.CharField(source='user.username', read_only=True)
 
     class Meta:
         model = Transaction
-        fields = ['id', 'user', 'item', 'amount', 'status', 'timestamp']
+        fields = [
+            'id', 'user', 'buyer_username', 'item', 'amount', 'status', 'timestamp',
+            'shipping_address', 'fulfillment_status', 'fulfillment_status_display',
+        ]
+
+
+class TipUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'first_name', 'last_name', 'avatar']
+
+
+class TipSerializer(serializers.ModelSerializer):
+    sender = TipUserSerializer(read_only=True)
+    recipient = TipUserSerializer(read_only=True)
+
+    class Meta:
+        model = Tip
+        fields = [
+            'id', 'sender', 'recipient', 'amount', 'post', 'reel', 'message', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class CoinPackSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CoinPack
+        fields = ['id', 'name', 'coins', 'price_usd_cents']

@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.db import transaction
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -120,3 +121,33 @@ class StoryViewSet(viewsets.ModelViewSet):
             segments, many=True, context=self.get_serializer_context()
         )
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def publish(self, request, pk=None):
+        story = self.get_object()
+        user, err = require_user(request)
+        if err:
+            return err
+        if story.owner_id != user.id and not user.is_staff:
+            return Response({'error': 'Not allowed.'}, status=403)
+        story.status = 'completed'
+        story.save(update_fields=['status', 'updated_at'])
+        serializer = StorySerializer(story, context=self.get_serializer_context())
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def toggle_save(self, request, pk=None):
+        user, err = require_user(request)
+        if err:
+            return err
+        story = self.get_object()
+        key = f'forge_saved:{user.id}'
+        saved_ids = set(cache.get(key) or [])
+        if story.id in saved_ids:
+            saved_ids.discard(story.id)
+            saved = False
+        else:
+            saved_ids.add(story.id)
+            saved = True
+        cache.set(key, list(saved_ids), 60 * 60 * 24 * 365)
+        return Response({'saved': saved})

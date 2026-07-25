@@ -21,6 +21,17 @@ class UserPreferences(models.Model):
         ('catch_only', 'Catch only'),
         ('private', 'Private'),
     ]
+    MESSAGE_FREQUENCY_CHOICES = [
+        ('hourly', 'Hourly'),
+        ('daily', 'Daily'),
+        ('weekly', 'Weekly'),
+    ]
+    INTERACTION_POLICY_CHOICES = [
+        ('everyone', 'Everyone'),
+        ('followers', 'Followers'),
+        ('following', 'People you follow'),
+        ('none', 'No one'),
+    ]
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -45,6 +56,51 @@ class UserPreferences(models.Model):
         default='map_only',
     )
     online_status_visible = models.BooleanField(default=True)
+    read_receipts_enabled = models.BooleanField(default=True)
+    weirdness_level = models.PositiveSmallIntegerField(default=30)
+    message_frequency = models.CharField(
+        max_length=16,
+        choices=MESSAGE_FREQUENCY_CHOICES,
+        default='daily',
+    )
+    dm_policy = models.CharField(
+        max_length=16,
+        choices=INTERACTION_POLICY_CHOICES,
+        default='everyone',
+    )
+    comment_policy = models.CharField(
+        max_length=16,
+        choices=INTERACTION_POLICY_CHOICES,
+        default='everyone',
+    )
+    mention_policy = models.CharField(
+        max_length=16,
+        choices=INTERACTION_POLICY_CHOICES,
+        default='everyone',
+    )
+    tag_policy = models.CharField(
+        max_length=16,
+        choices=INTERACTION_POLICY_CHOICES,
+        default='everyone',
+    )
+    hidden_words = models.JSONField(default=list, blank=True)
+    quiet_hours_start = models.TimeField(null=True, blank=True)
+    quiet_hours_end = models.TimeField(null=True, blank=True)
+    # Pulse creator defaults applied to new reels
+    default_allow_remix = models.BooleanField(default=True)
+    default_allow_weave = models.BooleanField(default=True)
+    default_allow_download = models.BooleanField(default=False)
+    # Signal publish default — who can echo back (reply) on new posts
+    REPLY_CONTROL_CHOICES = [
+        ('everyone', 'Everyone'),
+        ('followers', 'Followers'),
+        ('nobody', 'No one'),
+    ]
+    default_reply_control = models.CharField(
+        max_length=12,
+        choices=REPLY_CONTROL_CHOICES,
+        default='everyone',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

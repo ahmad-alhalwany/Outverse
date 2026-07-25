@@ -70,11 +70,25 @@ class PostsAuthAPITest(APITestCase):
 
     def test_share_increments(self):
         self._auth()
-        res = self.client.post(f'/api/posts/{self.post.id}/share/')
+        res = self.client.post(
+            f'/api/posts/{self.post.id}/share/',
+            {'channel': 'copy'},
+            format='json',
+        )
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.data['shares_count'], 1)
+        self.assertEqual(res.data['channel'], 'copy')
         self.post.refresh_from_db()
         self.assertEqual(self.post.shares_count, 1)
+
+    def test_share_allows_anonymous(self):
+        res = self.client.post(
+            f'/api/posts/{self.post.id}/share/',
+            {'channel': 'whatsapp'},
+            format='json',
+        )
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.data['shares_count'], 1)
 
     def test_create_comment_sets_user_from_token(self):
         self._auth()

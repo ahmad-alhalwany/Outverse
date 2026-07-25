@@ -51,7 +51,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             if not text:
                 return
             saved = await database_sync_to_async(create_chat_message)(
-                self.conversation_id, self.user_id, text
+                self.conversation_id, self.user_id, text,
+                expires_in_seconds=content.get('expires_in_seconds'),
             )
             payload = await database_sync_to_async(message_to_payload)(saved)
             await self.channel_layer.group_send(
@@ -112,9 +113,18 @@ class RoomChatConsumer(AsyncJsonWebsocketConsumer):
             text = (content.get('text') or '').strip()
             if not text:
                 return
-            saved = await database_sync_to_async(create_room_message)(
-                self.room_id, self.user_id, text
-            )
+            try:
+                saved = await database_sync_to_async(create_room_message)(
+                    self.room_id, self.user_id, text,
+                    expires_in_seconds=content.get('expires_in_seconds'),
+                )
+            except Exception as exc:
+                # Slowmode / permission
+                await self.send_json({
+                    'type': 'room.error',
+                    'error': 'slowmode' if 'slowmode' in str(exc).lower() else 'send_failed',
+                })
+                return
             payload = await database_sync_to_async(room_message_to_payload)(saved)
             await self.channel_layer.group_send(
                 self.group_name,

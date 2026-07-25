@@ -10,7 +10,7 @@ MAX_FILE_UPLOAD_BYTES = 25 * 1024 * 1024
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.webm', '.m4v'}
-AUDIO_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.m4a'}
+AUDIO_EXTENSIONS = {'.mp3', '.wav', '.ogg', '.m4a', '.webm'}
 DOCUMENT_EXTENSIONS = {'.pdf', '.txt', '.doc', '.docx'}
 
 IMAGE_CONTENT_TYPES = {
@@ -33,6 +33,8 @@ AUDIO_CONTENT_TYPES = {
     'audio/ogg',
     'audio/mp4',
     'audio/x-m4a',
+    'audio/webm',
+    'audio/x-webm',
 }
 DOCUMENT_CONTENT_TYPES = {
     'application/pdf',

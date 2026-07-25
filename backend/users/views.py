@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 
 from outverse.auth_utils import user_from_request
+from outverse.rate_limit import rate_limit_response
 from rest_framework import viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
@@ -22,9 +23,17 @@ from rest_framework.views import APIView
 from notifications.utils import create_notification
 from reels.models import Reel
 
-from .models import Follow, Profile, UserToken
+from .models import Experience, Follow, Profile, UserBlock, UserMute, UserRestrict, UserToken
+from .social import (
+    apply_block_side_effects,
+    blocked_user_ids,
+    feed_hidden_author_ids,
+    is_blocked_between,
+    social_status_for,
+)
 from .serializers import (
     ForgotPasswordSerializer,
+    ExperienceSerializer,
     ResetPasswordSerializer,
     UsernameAvailabilitySerializer,
     PrivateUserSerializer,
@@ -36,7 +45,7 @@ from .serializers import (
 
 User = get_user_model()
 TOKEN_TTL_HOURS = 24
-WORLD_OPTIONS = ['Nebula', 'Aether', 'Ember', 'Tidal', 'Verdant']
+WORLD_OPTIONS = ['The Lab', 'The Bazaar', 'The Vault', 'Story Forge', 'Madness Shop']
 
 
 def _avatar_url(user, request):
@@ -47,19 +56,31 @@ def _avatar_url(user, request):
     return None
 
 
-def _public_user_dict(user, request, is_following=False, posts_count=None):
+def _unlocked_achievement_titles(achievements):
+    titles = set()
+    for achievement in achievements or []:
+        progress = achievement.get('progress') or 0
+        goal = achievement.get('goal') or 0
+        if achievement.get('completed') or (goal and progress >= goal):
+            titles.add(achievement.get('title'))
+    return titles
+
+
+def _public_user_dict(user, request, is_following=False, posts_count=None, social=None):
     profile = getattr(user, 'profile', None)
     cover_photo = None
     points = 0
+    karma = 0
     achievements = []
     status = 'new'
     if profile:
         if getattr(profile, 'cover_photo', None):
             cover_photo = request.build_absolute_uri(profile.cover_photo.url) if request else profile.cover_photo.url
         points = profile.points
+        karma = getattr(profile, 'karma', 0) or 0
         achievements = profile.achievements or []
         status = profile.status
-    return {
+    result = {
         'id': user.id,
         'username': user.username,
         'first_name': user.first_name,
@@ -72,11 +93,17 @@ def _public_user_dict(user, request, is_following=False, posts_count=None):
         'followers_count': getattr(user, 'followers_count', 0),
         'following_count': getattr(user, 'following_count', 0),
         'is_following': is_following,
+        'badge_verified': getattr(user, 'badge_verified', False),
+        'spender_tier': getattr(user, 'spender_tier', 'none'),
         'cover_photo': cover_photo,
         'points': points,
+        'karma': karma,
         'achievements': achievements,
         'status': status,
     }
+    if social is not None:
+        result['social'] = social
+    return result
 
 
 def _with_public_counts(queryset):
@@ -160,6 +187,9 @@ class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        limited = rate_limit_response(request, 'register', limit=10, window=3600)
+        if limited:
+            return limited
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -172,10 +202,23 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        username = request.data.get('username')
+        limited = rate_limit_response(request, 'login', limit=30, window=300)
+        if limited:
+            return limited
+        # Accept username or email (mobile UI often collects email).
+        identifier = (
+            request.data.get('username')
+            or request.data.get('email')
+            or ''
+        ).strip()
         password = request.data.get('password')
+        login_username = identifier
+        if identifier and '@' in identifier:
+            matched = User.objects.filter(email__iexact=identifier).first()
+            if matched:
+                login_username = matched.username
         user = authenticate(
-            request, username=username, password=password
+            request, username=login_username, password=password
         )
         if not user:
             return Response({'error': 'Invalid credentials.'}, status=400)
@@ -184,6 +227,15 @@ class LoginView(APIView):
                 {'error': 'Please verify your email before logging in.', 'code': 'email_not_verified'},
                 status=403,
             )
+        from .models import UserTwoFactor
+        tf = UserTwoFactor.objects.filter(user=user, is_enabled=True).first()
+        if tf:
+            from .account_views import _issue_two_fa_pending
+            pending = _issue_two_fa_pending(user)
+            return Response({
+                'requires_2fa': True,
+                'pending_token': pending.token,
+            })
         return Response(_user_payload(user, request))
 
 
@@ -206,6 +258,9 @@ class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        limited = rate_limit_response(request, 'forgot_password', limit=5, window=3600)
+        if limited:
+            return limited
         serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         email = serializer.validated_data['email']
@@ -238,6 +293,31 @@ class ResetPasswordView(APIView):
         return Response({'reset': True})
 
 
+class UserByUsernameView(APIView):
+    """Resolves a @username to a full public profile (case-insensitive)."""
+    permission_classes = [AllowAny]
+
+    def get(self, request, username):
+        user = (
+            _with_public_counts(
+                User.objects.select_related('profile').filter(username__iexact=username)
+            ).first()
+        )
+        if not user:
+            return Response({'detail': 'Not found.'}, status=404)
+        viewer = user_from_request(request)
+        is_following = False
+        social = None
+        if viewer and viewer.id != user.id:
+            is_following = Follow.objects.filter(
+                follower_id=viewer.id, following_id=user.id
+            ).exists()
+            social = social_status_for(viewer.id, user.id)
+        return Response(
+            _public_user_dict(user, request, is_following=is_following, social=social)
+        )
+
+
 class UsernameAvailabilityView(APIView):
     permission_classes = [AllowAny]
 
@@ -255,6 +335,242 @@ class MeView(APIView):
     def get(self, request):
         serializer = PrivateUserSerializer(request.user, context={'request': request})
         return Response(serializer.data)
+
+
+
+def _passport_data_for_user(user):
+    """Compute passport stamps for any user."""
+    from bottles.models import MessageBottle
+    from capsules.models import TimeCapsule
+    from communities.models import CommunityMembership
+    from ideas.models import Idea
+    from reels.models import LiveSession
+
+    try:
+        from questions.ritual import current_streak
+    except Exception:
+        current_streak = lambda _u: 0  # noqa: E731
+
+    live_count = LiveSession.objects.filter(user=user, status='ended').count()
+    stamps = {
+        'lab_streak': current_streak(user),
+        'bottles_caught': MessageBottle.objects.filter(caught_by=user).count(),
+        'ideas_launched': Idea.objects.filter(owner=user).count(),
+        'capsules_opened': TimeCapsule.objects.filter(user=user, opened_at__isnull=False).count(),
+        'communities_joined': CommunityMembership.objects.filter(user=user, status='active').count(),
+        'lives_hosted': live_count,
+    }
+    worlds = [
+        {'world': 'The Lab', 'key': 'lab', 'count': stamps['lab_streak'], 'label': 'day streak'},
+        {'world': 'The Vault', 'key': 'bottles', 'count': stamps['bottles_caught'], 'label': 'bottles caught'},
+        {'world': 'The Bazaar', 'key': 'ideas', 'count': stamps['ideas_launched'], 'label': 'ideas launched'},
+        {'world': 'Time Capsules', 'key': 'capsules', 'count': stamps['capsules_opened'], 'label': 'capsules opened'},
+        {'world': 'Communities', 'key': 'communities', 'count': stamps['communities_joined'], 'label': 'joined'},
+        {'world': 'Live', 'key': 'live', 'count': stamps['lives_hosted'], 'label': 'lives hosted'},
+    ]
+    return {'stamps': stamps, 'worlds': worlds}
+
+
+class PassportsView(APIView):
+    """World passport stamps computed from existing activity tables."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(_passport_data_for_user(request.user))
+
+
+class ExperienceListCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        rows = Experience.objects.filter(user=request.user)
+        return Response(ExperienceSerializer(rows, many=True).data)
+
+    def post(self, request):
+        serializer = ExperienceSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        experience = serializer.save(user=request.user)
+        return Response(ExperienceSerializer(experience).data, status=201)
+
+
+class ExperienceDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_experience(self, request, experience_id):
+        return get_object_or_404(Experience, id=experience_id, user=request.user)
+
+    def patch(self, request, experience_id):
+        experience = self._get_experience(request, experience_id)
+        serializer = ExperienceSerializer(experience, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, experience_id):
+        experience = self._get_experience(request, experience_id)
+        experience.delete()
+        return Response(status=204)
+
+
+class PublicExperienceView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, user_id):
+        target_user = get_object_or_404(User, id=user_id)
+        viewer = user_from_request(request)
+        if viewer and is_blocked_between(viewer.id, target_user.id):
+            return Response({'error': 'Profile unavailable.'}, status=404)
+        rows = Experience.objects.filter(user=target_user)
+        return Response(ExperienceSerializer(rows, many=True).data)
+
+
+class PublicPassportsView(APIView):
+    """Public passport stamps for any user by ID."""
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, user_id):
+        target_user = get_object_or_404(User, id=user_id)
+        viewer = user_from_request(request)
+        if viewer and is_blocked_between(viewer.id, target_user.id):
+            return Response({'error': 'Profile unavailable.'}, status=404)
+        return Response(_passport_data_for_user(target_user))
+
+class YearInView(APIView):
+    """Annual emotional recap for the signed-in user — Outverse's "Wrapped".
+
+    ``GET /api/users/me/year/?year=2026``
+    Aggregates posts, capsules opened, rooms joined, ritual streak, top
+    categories and tags, first post of the year, total words written, and
+    voice notes. Returns a single JSON object shaped for a one-page
+    animated recap on the frontend.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            year = int(request.query_params.get('year', timezone.now().year))
+        except (TypeError, ValueError):
+            year = timezone.now().year
+        year_start = timezone.make_aware(
+            __import__('datetime').datetime(year, 1, 1)
+        )
+        year_end = timezone.make_aware(
+            __import__('datetime').datetime(year + 1, 1, 1)
+        )
+        user = request.user
+
+        from posts.models import Post, PostMedia
+        from capsules.models import TimeCapsule
+        from chat.models import ChatRoom
+        try:
+            from questions.models import RitualParticipation
+        except Exception:
+            RitualParticipation = None
+
+        posts_qs = Post.objects.filter(user=user, created_at__gte=year_start, created_at__lt=year_end)
+        posts_count = posts_qs.count()
+        words_written = 0
+        longest_post_chars = 0
+        first_post = None
+        for p in posts_qs.order_by('created_at'):
+            words_written += len(p.text.split())
+            longest_post_chars = max(longest_post_chars, len(p.text))
+            if first_post is None and p.text.strip():
+                first_post = {
+                    'id': p.id,
+                    'text': p.text[:160],
+                    'created_at': p.created_at.isoformat(),
+                }
+
+        # Top tags
+        tag_counts: dict[str, int] = {}
+        for tags in posts_qs.exclude(tags=[]).values_list('tags', flat=True):
+            for tag in tags:
+                if not tag:
+                    continue
+                key = str(tag).strip().lower()
+                if not key:
+                    continue
+                tag_counts[key] = tag_counts.get(key, 0) + 1
+        top_tags = sorted(tag_counts.items(), key=lambda kv: kv[1], reverse=True)[:5]
+
+        # Top categories — from posts that answer a question (inspired_posts link)
+        # and from ritual participations.
+        cat_counts: dict[str, int] = {}
+        if RitualParticipation is not None:
+            for rp in RitualParticipation.objects.filter(
+                user=user, date__gte=year_start.date(), date__lt=year_end.date()
+            ).select_related('question'):
+                if rp.question and rp.question.category:
+                    cat_counts[rp.question.category] = cat_counts.get(rp.question.category, 0) + 1
+        # Count posts whose linked question category (if any) — heuristic via tags is skipped.
+        top_categories = sorted(cat_counts.items(), key=lambda kv: kv[1], reverse=True)[:5]
+
+        # Capsules
+        capsules_created = TimeCapsule.objects.filter(
+            user=user, created_at__gte=year_start, created_at__lt=year_end
+        ).count()
+        capsules_opened = TimeCapsule.objects.filter(
+            user=user, opened_at__gte=year_start, opened_at__lt=year_end
+        ).count()
+
+        # Rooms joined — approximate via membership where room was created this year.
+        rooms_joined = (
+            ChatRoom.objects
+            .filter(members=user, created_at__gte=year_start, created_at__lt=year_end)
+            .distinct().count()
+        )
+
+        # Rituals
+        ritual_days = 0
+        ritual_max_streak = 0
+        if RitualParticipation is not None:
+            ritual_rows = list(
+                RitualParticipation.objects.filter(
+                    user=user, date__gte=year_start.date(), date__lt=year_end.date()
+                ).order_by('date')
+            )
+            ritual_days = len(ritual_rows)
+            # Compute max consecutive-day streak by date.
+            prev = None
+            run = 0
+            for rp in ritual_rows:
+                d = rp.date
+                if prev is not None and (d - prev).days == 1:
+                    run += 1
+                else:
+                    run = 1
+                ritual_max_streak = max(ritual_max_streak, run)
+                prev = d
+
+        # Voice notes
+        voice_notes = (
+            PostMedia.objects
+            .filter(media_type='audio', post__user=user,
+                    post__created_at__gte=year_start, post__created_at__lt=year_end)
+            .count()
+        )
+
+        return Response({
+            'year': year,
+            'posts_count': posts_count,
+            'words_written': words_written,
+            'longest_post_chars': longest_post_chars,
+            'first_post': first_post,
+            'top_tags': [{'tag': t, 'count': c} for t, c in top_tags],
+            'top_categories': [{'category': c, 'count': n} for c, n in top_categories],
+            'capsules_created': capsules_created,
+            'capsules_opened': capsules_opened,
+            'rooms_joined': rooms_joined,
+            'ritual_days': ritual_days,
+            'ritual_max_streak': ritual_max_streak,
+            'voice_notes': voice_notes,
+            'username': user.username,
+            'display_name': (f"{user.first_name or ''} {user.last_name or ''}".strip() or user.username),
+        })
 
 
 class LogoutView(APIView):
@@ -315,6 +631,12 @@ class CreatorSuggestionsView(APIView):
             qs = qs.exclude(id=exclude_id)
 
         following_ids = _following_ids_for_viewer(request)
+        if following_ids:
+            qs = qs.exclude(id__in=following_ids)
+        if viewer:
+            hidden_ids = feed_hidden_author_ids(viewer.id)
+            if hidden_ids:
+                qs = qs.exclude(id__in=hidden_ids)
 
         results = []
         for user in qs[:6]:
@@ -346,12 +668,16 @@ class UserProfileView(APIView):
     def get(self, request, user_id):
         user = get_object_or_404(_with_public_counts(User.objects.select_related('profile').all()), id=user_id)
         viewer = user_from_request(request)
+        if viewer and viewer.id != user_id and is_blocked_between(viewer.id, user_id):
+            return Response({'error': 'Profile unavailable.'}, status=404)
         is_following = False
+        social = None
         if viewer and viewer.id != user_id:
             is_following = Follow.objects.filter(
                 follower_id=viewer.id, following_id=user_id
             ).exists()
-        return Response(_public_user_dict(user, request, is_following=is_following))
+            social = social_status_for(viewer.id, user_id)
+        return Response(_public_user_dict(user, request, is_following=is_following, social=social))
 
 
 class UserProfileUpdateView(APIView):
@@ -438,6 +764,8 @@ class FollowView(APIView):
             )
         if not User.objects.filter(id=following_id).exists():
             return Response({'error': 'User not found.'}, status=404)
+        if is_blocked_between(follower_id, int(following_id)):
+            return Response({'error': 'Cannot follow this user.'}, status=403)
 
         with transaction.atomic():
             existing = Follow.objects.select_for_update().filter(
@@ -480,6 +808,24 @@ class ProfileViewSet(viewsets.ModelViewSet):
             return [AllowAny()]
         return [IsAdminUser()]
 
+    def perform_update(self, serializer):
+        previous_unlocked = _unlocked_achievement_titles(serializer.instance.achievements)
+        profile = serializer.save()
+        newly_unlocked = _unlocked_achievement_titles(profile.achievements) - previous_unlocked
+        for achievement in profile.achievements or []:
+            if achievement.get('title') in newly_unlocked:
+                create_notification(
+                    recipient_id=profile.user_id,
+                    actor_id=None,
+                    verb='achievement_unlocked',
+                    notification_type='achievement',
+                    text=(
+                        f"Unlocked \"{achievement.get('title', 'Achievement')}\"! "
+                        f"{achievement.get('progress', 0)}/{achievement.get('goal', 0)} "
+                        f"{achievement.get('category', '')} completed."
+                    ),
+                )
+
 
 class PromoteStaffView(APIView):
     permission_classes = [IsAdminUser]
@@ -491,3 +837,97 @@ class PromoteStaffView(APIView):
         user.is_staff = True
         user.save(update_fields=['is_staff'])
         return Response({'promoted': True, 'user_id': user.id})
+
+
+class ToggleShadowBanView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def post(self, request, user_id):
+        user = get_object_or_404(User, id=user_id)
+        user.is_shadow_banned = not user.is_shadow_banned
+        user.save(update_fields=['is_shadow_banned'])
+        return Response({'is_shadow_banned': user.is_shadow_banned, 'user_id': user.id})
+
+
+class UserSocialView(APIView):
+    """Block, mute, or restrict another user."""
+
+    permission_classes = [IsAuthenticated]
+
+    ACTIONS = {
+        'block': UserBlock,
+        'mute': UserMute,
+        'restrict': UserRestrict,
+    }
+    FIELD_MAP = {
+        'block': ('blocker', 'blocked'),
+        'mute': ('muter', 'muted'),
+        'restrict': ('restricter', 'restricted'),
+    }
+
+    def post(self, request):
+        action = (request.data.get('action') or '').lower()
+        target_id = request.data.get('user_id')
+        if action not in self.ACTIONS:
+            return Response({'error': 'Invalid action.'}, status=400)
+        if not target_id:
+            return Response({'error': 'user_id is required.'}, status=400)
+        try:
+            target_id = int(target_id)
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid user_id.'}, status=400)
+        if target_id == request.user.id:
+            return Response({'error': 'Invalid target.'}, status=400)
+        if not User.objects.filter(id=target_id).exists():
+            return Response({'error': 'User not found.'}, status=404)
+
+        model = self.ACTIONS[action]
+        a_field, b_field = self.FIELD_MAP[action]
+        lookup = {a_field: request.user, f'{b_field}_id': target_id}
+        if request.data.get('undo'):
+            model.objects.filter(**lookup).delete()
+            active = False
+        else:
+            _, created = model.objects.get_or_create(**lookup)
+            active = True
+            if action == 'block' and created:
+                apply_block_side_effects(request.user.id, target_id)
+
+        return Response({
+            'action': action,
+            'user_id': target_id,
+            'active': active,
+            'social': social_status_for(request.user.id, target_id),
+        })
+
+
+class UserSocialListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    LISTS = {
+        'blocked': (UserBlock, 'blocked', 'blocked_id'),
+        'muted': (UserMute, 'muted', 'muted_id'),
+        'restricted': (UserRestrict, 'restricted', 'restricted_id'),
+    }
+    FILTER_FIELDS = {
+        'blocked': 'blocker',
+        'muted': 'muter',
+        'restricted': 'restricter',
+    }
+
+    def get(self, request):
+        list_type = (request.query_params.get('type') or 'blocked').lower()
+        if list_type not in self.LISTS:
+            return Response({'error': 'Invalid type.'}, status=400)
+        model, rel, id_field = self.LISTS[list_type]
+        filter_field = self.FILTER_FIELDS[list_type]
+        ids = list(
+            model.objects.filter(**{filter_field: request.user}).values_list(id_field, flat=True)
+        )
+        users = _with_public_counts(
+            User.objects.filter(id__in=ids).select_related('profile')
+        )
+        return Response([
+            _public_user_dict(u, request, social=social_status_for(request.user.id, u.id))
+            for u in users
+        ])

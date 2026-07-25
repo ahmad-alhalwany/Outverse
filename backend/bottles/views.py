@@ -7,6 +7,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from outverse.throttles import AnonReadThrottle, ContentPostCreateThrottle, ThrottleMixin
 
 from outverse.auth_utils import require_user, user_from_request
 
@@ -28,7 +29,7 @@ def _bottle_is_drifting(bottle):
 
 
 def active_drifting_bottles():
-    return MessageBottle.objects.filter(
+    return MessageBottle.objects.select_related('sender').filter(
         location_lat__isnull=False,
         location_lng__isnull=False,
         expiry_time__gt=timezone.now(),
@@ -55,12 +56,44 @@ def _random_bottle(qs):
     return qs.filter(id__lt=pivot).order_by('id').first()
 
 
-class MessageBottleViewSet(viewsets.ModelViewSet):
+def _moderate_bottle(bottle, user):
+    try:
+        from moderation.hooks import enforce_moderation_result, soft_moderate_content
+
+        result = soft_moderate_content(
+            text=bottle.message or '',
+            content_type='bottle',
+            object_id=bottle.id,
+            user=user,
+        )
+        if result.get('hard_block'):
+            enforce_moderation_result(
+                result,
+                content_type='bottle',
+                object_id=bottle.id,
+            )
+    except Exception:
+        pass
+
+
+class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
     queryset = MessageBottle.objects.all()
+    throttle_scopes = {
+        'create': 'content.post_create',
+        'perform_create': 'content.post_create',
+        'update': 'content.draft_write',
+        'partial_update': 'content.draft_write',
+        'perform_update': 'content.draft_write',
+        'destroy': 'content.draft_write',
+        'perform_destroy': 'content.draft_write',
+        'list': 'anon.read',
+        'retrieve': 'anon.read',
+    }
+
     serializer_class = BottleThrowSerializer
 
     def get_permissions(self):
-        if self.action in ('throw', 'catch', 'create'):
+        if self.action in ('throw', 'catch', 'create', 'polish_tone'):
             return [IsAuthenticated()]
         if self.action in ('my_bottles', 'caught'):
             return [IsAuthenticated()]
@@ -85,14 +118,32 @@ class MessageBottleViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Not allowed.'}, status=403)
         return super().destroy(request, *args, **kwargs)
 
+    def perform_create(self, serializer):
+        bottle = serializer.save()
+        _moderate_bottle(bottle, self.request.user)
+
     @action(detail=False, methods=['post'])
     def throw(self, request):
         serializer = self.get_serializer(
             data=request.data, context=_viewer_context(request)
         )
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        bottle = serializer.save()
+        _moderate_bottle(bottle, request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['post'], url_path='polish-tone')
+    def polish_tone(self, request):
+        """Optional Vault tone polish before throwing a bottle."""
+        user, err = require_user(request)
+        if err:
+            return err
+        from outverse.ai_coaches import polish_tone as _polish
+        text = (request.data.get('text') or '').strip()
+        if len(text) < 2:
+            return Response({'detail': 'text required.'}, status=400)
+        lang = (request.data.get('lang') or 'en')[:2]
+        return Response(_polish(text=text, kind='bottle', language=lang if lang in ('en', 'ar') else 'en'))
 
     @action(detail=False, methods=['get', 'post'])
     def catch(self, request):

@@ -123,7 +123,7 @@ class BottleMapSerializer(serializers.ModelSerializer):
 
     is_mine = serializers.SerializerMethodField()
 
-    message = serializers.SerializerMethodField()
+    sender_username = serializers.CharField(source='sender.username', read_only=True)
 
 
 
@@ -137,7 +137,7 @@ class BottleMapSerializer(serializers.ModelSerializer):
 
             'location_lng', 'created_at', 'expires_at',
 
-            'is_mine', 'message',
+            'is_mine', 'message', 'sender_username',
 
         ]
 
@@ -151,16 +151,6 @@ class BottleMapSerializer(serializers.ModelSerializer):
 
 
 
-    def get_message(self, obj):
-
-        if not self.get_is_mine(obj):
-
-            return None
-
-        return obj.message
-
-
-
 
 
 class BottleRecentSerializer(serializers.ModelSerializer):
@@ -169,7 +159,7 @@ class BottleRecentSerializer(serializers.ModelSerializer):
 
     is_mine = serializers.SerializerMethodField()
 
-    message = serializers.SerializerMethodField()
+    sender_username = serializers.CharField(source='sender.username', read_only=True)
 
 
 
@@ -183,7 +173,7 @@ class BottleRecentSerializer(serializers.ModelSerializer):
 
             'location_lat', 'location_lng', 'created_at', 'expires_at',
 
-            'is_mine',
+            'is_mine', 'sender_username',
 
         ]
 
@@ -194,15 +184,5 @@ class BottleRecentSerializer(serializers.ModelSerializer):
         viewer = _viewer_from_context(self.context)
 
         return bool(viewer and str(obj.sender_id) == str(viewer))
-
-
-
-    def get_message(self, obj):
-
-        if not self.get_is_mine(obj):
-
-            return None
-
-        return obj.message
 
 

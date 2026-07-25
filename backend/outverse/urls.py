@@ -39,6 +39,16 @@ urlpatterns = [
     path('api/notifications/', include('notifications.urls')),
     path('api/chat/', include('chat.urls')),
     path('api/preferences/', include('preferences.urls')),
+    path('api/', include('questions.urls')),
+    path('api/', include('capsules.urls')),
+    path('api/resources/', include('resources.urls')),
+    path('api/collab/', include('collab.urls')),
+    path('api/subscriptions/', include('subscriptions.urls')),
+    path('api/speculative/', include('speculative.urls')),
+    path('api/', include('saved.urls')),
+    path('api/', include('notes.urls')),
+    path('api/communities/', include('communities.urls')),
+    path('api/ads/', include('ads.urls')),
 ]
 
 if settings.DEBUG:

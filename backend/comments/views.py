@@ -1,15 +1,32 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from outverse.throttles import AnonReadThrottle, ThrottleMixin, UserCommentThrottle
+from django.contrib.auth import get_user_model
 from django.db.models import F
+from moderation.ai_moderation import auto_moderate, moderate_text
 from .models import Comment, CommentReaction
 from .serializers import (
     CommentSerializer, CommentCreateSerializer, CommentUpdateSerializer,
     CommentReactionCreateSerializer, CommentReactionSerializer
 )
 
-class CommentViewSet(viewsets.ModelViewSet):
+User = get_user_model()
+
+class CommentViewSet(ThrottleMixin, viewsets.ModelViewSet):
     queryset = Comment.objects.all()
+    throttle_scopes = {
+        'create': 'content.post_create',
+        'perform_create': 'content.post_create',
+        'update': 'content.draft_write',
+        'partial_update': 'content.draft_write',
+        'perform_update': 'content.draft_write',
+        'destroy': 'content.draft_write',
+        'perform_destroy': 'content.draft_write',
+        'list': 'anon.read',
+        'retrieve': 'anon.read',
+    }
+
     serializer_class = CommentSerializer
 
     def get_serializer_class(self):
@@ -20,11 +37,37 @@ class CommentViewSet(viewsets.ModelViewSet):
         return CommentSerializer
 
     def get_queryset(self):
-        queryset = Comment.objects.all()
+        from django.db.models import Prefetch
+        queryset = Comment.objects.select_related('user').prefetch_related(
+            Prefetch('reactions', queryset=CommentReaction.objects.select_related('user')),
+            Prefetch('replies', queryset=Comment.objects.select_related('user').prefetch_related(
+                Prefetch('reactions', queryset=CommentReaction.objects.select_related('user'))
+            ).order_by('created_at'))
+        )
         post_id = self.request.query_params.get('post', None)
         if post_id is not None:
             queryset = queryset.filter(post_id=post_id, parent=None)  # فقط التعليقات الرئيسية
         return queryset
+
+    def create(self, request, *args, **kwargs):
+        text_content = request.data.get('text', '')
+        mod_result = moderate_text(text_content) if text_content else None
+        if mod_result and mod_result.get('flagged'):
+            reporter_user = User.objects.filter(pk=request.data.get('user_id')).first()
+            auto_moderate(text=text_content, content_type='comment', user=reporter_user, result=mod_result)
+            return Response({
+                'error': 'Comment flagged by AI moderation.',
+                'moderation': {'flagged': True, 'categories': mod_result.get('categories', {})},
+            }, status=403)
+
+        response = super().create(request, *args, **kwargs)
+        if mod_result and response.status_code == 201 and response.data.get('id'):
+            reporter_user = User.objects.filter(pk=request.data.get('user_id')).first()
+            auto_moderate(
+                text=text_content, content_type='comment', object_id=response.data['id'],
+                user=reporter_user, result=mod_result,
+            )
+        return response
 
     def perform_create(self, serializer):
         comment = serializer.save()
@@ -98,7 +141,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer = CommentReactionSerializer(reactions, many=True)
         return Response(serializer.data)
 
-class CommentReactionViewSet(viewsets.ModelViewSet):
+class CommentReactionViewSet(ThrottleMixin, viewsets.ModelViewSet):
     queryset = CommentReaction.objects.all()
     serializer_class = CommentReactionSerializer
 

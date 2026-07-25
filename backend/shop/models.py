@@ -27,6 +27,10 @@ class ShopItem(models.Model):
     )
     image = models.ImageField(upload_to='shop_items/', null=True, blank=True, validators=[validate_image_upload])
     cover_url = models.URLField(blank=True)
+    download_url = models.URLField(
+        blank=True,
+        help_text='Direct download/access URL for digital items',
+    )
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -53,16 +57,34 @@ class Transaction(models.Model):
         ('completed', 'Completed'),
         ('failed', 'Failed'),
     ]
+    FULFILLMENT_CHOICES = [
+        ('not_applicable', 'Not applicable'),
+        ('pending', 'Pending'),
+        ('shipped', 'Shipped'),
+        ('delivered', 'Delivered'),
+    ]
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name='transactions',
         db_index=True,
     )
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sales',
+        db_index=True,
+    )
     item = models.ForeignKey(ShopItem, on_delete=models.CASCADE)
     amount = models.IntegerField()
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default='pending', db_index=True
+    )
+    shipping_address = models.TextField(blank=True, default='')
+    fulfillment_status = models.CharField(
+        max_length=20, choices=FULFILLMENT_CHOICES, default='not_applicable', db_index=True
     )
     timestamp = models.DateTimeField(auto_now_add=True)
 
@@ -71,3 +93,77 @@ class Transaction(models.Model):
 
     def __str__(self):
         return f"{self.user.username} bought {self.item.name}"
+
+
+class Tip(models.Model):
+    """Direct Outverse-coin gift from one user to another, optionally
+    attached to a post or reel they're rewarding."""
+
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='tips_sent',
+        db_index=True,
+    )
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='tips_received',
+        db_index=True,
+    )
+    amount = models.PositiveIntegerField()
+    post = models.ForeignKey(
+        'posts.Post', on_delete=models.SET_NULL, null=True, blank=True, related_name='tips',
+    )
+    reel = models.ForeignKey(
+        'reels.Reel', on_delete=models.SET_NULL, null=True, blank=True, related_name='tips',
+    )
+    message = models.CharField(max_length=200, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.sender_id} tipped {self.recipient_id} {self.amount}"
+
+
+class CoinPack(models.Model):
+    """A purchasable bundle of Outverse coins (real-money top-up)."""
+
+    name = models.CharField(max_length=60)
+    coins = models.PositiveIntegerField(help_text='Outverse coins granted on purchase')
+    price_usd_cents = models.PositiveIntegerField(help_text='USD cents, e.g. 499 = $4.99')
+    stripe_price_id = models.CharField(
+        max_length=100, blank=True, help_text='Set once the price exists in the Stripe dashboard',
+    )
+    is_active = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['sort_order', 'price_usd_cents']
+
+    def __str__(self):
+        return f'{self.name} ({self.coins} coins)'
+
+
+class CoinPurchase(models.Model):
+    """Record of a completed real-money coin top-up."""
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='coin_purchases',
+        db_index=True,
+    )
+    pack = models.ForeignKey(CoinPack, on_delete=models.PROTECT, related_name='purchases')
+    coins = models.PositiveIntegerField()
+    price_usd_cents = models.PositiveIntegerField()
+    stripe_checkout_session_id = models.CharField(max_length=120, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.user_id} bought {self.coins} coins'

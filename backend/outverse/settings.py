@@ -17,6 +17,31 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+def _load_env_file() -> None:
+    """Load .env files: repo root first, then backend/ overrides for local dev."""
+    layers = (
+        (BASE_DIR.parent / '.env', False),
+        (BASE_DIR / '.env', True),
+    )
+    for env_path, override in layers:
+        if not env_path.is_file():
+            continue
+        for line in env_path.read_text(encoding='utf-8').splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            key, _, value = line.partition('=')
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if not key:
+                continue
+            if override or key not in os.environ:
+                os.environ[key] = value
+
+
+_load_env_file()
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
@@ -44,7 +69,7 @@ INSTALLED_APPS = [
     'rest_framework.authtoken',
     'django_filters',
     'corsheaders',
-    'users',
+    'users.apps.UsersConfig',
     'challenges',
     'ideas',
     'moods',
@@ -59,8 +84,18 @@ INSTALLED_APPS = [
     'posts',
     'notifications',
     'chat',
+    'capsules',
     'preferences',
     'channels',
+    'questions',
+    'resources',
+    'collab',
+    'subscriptions',
+    'speculative',
+    'saved',
+    'notes',
+    'communities',
+    'ads.apps.AdsConfig',
 ]
 
 ASGI_APPLICATION = 'outverse.asgi.application'
@@ -87,6 +122,7 @@ else:
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'outverse.middleware.SecurityHeadersMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -94,6 +130,28 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# ---- Sentry (env-gated; no-op without SENTRY_DSN) ----
+SENTRY_DSN = os.environ.get('SENTRY_DSN', '').strip()
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+        from sentry_sdk.integrations.redis import RedisIntegration
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            environment=os.environ.get('SENTRY_ENV', 'production'),
+            release=os.environ.get('SENTRY_RELEASE', None),
+            send_default_pii=False,
+            traces_sample_rate=float(os.environ.get('SENTRY_TRACES_SAMPLE_RATE', '0')),
+            integrations=[
+                DjangoIntegration(transaction_style='url'),
+                RedisIntegration(),
+            ],
+        )
+    except Exception:  # noqa: BLE001 — never let telemetry break boot.
+        pass
 
 ROOT_URLCONF = 'outverse.urls'
 
@@ -118,6 +176,23 @@ WSGI_APPLICATION = 'outverse.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+def _database_from_url(url: str) -> dict:
+    """Parse postgres://user:pass@host:port/dbname into a Django DATABASES entry."""
+    from urllib.parse import unquote, urlparse
+
+    parsed = urlparse(url.strip())
+    if parsed.scheme not in ('postgres', 'postgresql'):
+        raise ValueError(f'Unsupported database URL scheme: {parsed.scheme}')
+    return {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': parsed.path.lstrip('/'),
+        'USER': unquote(parsed.username or ''),
+        'PASSWORD': unquote(parsed.password or ''),
+        'HOST': parsed.hostname or 'localhost',
+        'PORT': str(parsed.port or 5432),
+    }
+
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
@@ -128,6 +203,11 @@ DATABASES = {
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
     }
 }
+
+_replica_url = os.environ.get('DATABASE_REPLICA_URL', '').strip()
+if _replica_url:
+    DATABASES['replica'] = _database_from_url(_replica_url)
+    DATABASE_ROUTERS = ['outverse.db_router.PrimaryReplicaRouter']
 
 
 # Password validation
@@ -181,6 +261,15 @@ if _cors_origins.strip():
 else:
     CORS_ALLOWED_ORIGINS = []
 
+# Allow the dashboard (served from a "public" origin like localhost) to reach
+# this server even when the browser classifies it as a private-network target
+# (Chrome's Private Network Access checks), so local/dev cross-origin API
+# calls aren't silently blocked after a successful preflight.
+CORS_ALLOW_PRIVATE_NETWORK = True
+# Frontend sends `credentials: 'include'` on every API call — without this
+# header browsers block the response and JS sees "Failed to fetch".
+CORS_ALLOW_CREDENTIALS = True
+
 # ربط النظام بنموذج المستخدم المخصص
 AUTH_USER_MODEL = 'users.User'
 
@@ -214,7 +303,39 @@ SECURE_PROXY_SSL_HEADER = (
     ('HTTP_X_FORWARDED_PROTO', 'https') if ENABLE_HTTPS_SECURITY else None
 )
 
-MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
+_CDN_URL = os.environ.get('CDN_URL', '').rstrip('/')
+if _CDN_URL:
+    MEDIA_URL = f'{_CDN_URL}/media/'
+    STATIC_URL = f'{_CDN_URL}/static/'
+else:
+    MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
+    # STATIC_URL already set above; preserve the env-driven value.
 MEDIA_ROOT = os.environ.get('DJANGO_MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
 EMAIL_BACKEND = os.environ.get('DJANGO_EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 DEFAULT_FROM_EMAIL = os.environ.get('DJANGO_DEFAULT_FROM_EMAIL', 'no-reply@outverse.local')
+
+# AI moderation (optional — soft-flag by default when keys present)
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+NVIDIA_API_KEY = os.environ.get('NVIDIA_API_KEY', '')
+AI_MODERATION_HARD_BLOCK = os.environ.get('AI_MODERATION_HARD_BLOCK', '0') == '1'
+
+# Cosmic Pass (Stripe). Empty by default — checkout is disabled until real keys are set.
+STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY', '')
+STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY', '')
+STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET', '')
+FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:3000').rstrip('/')
+
+# Optional — Cloudflare Stream Live Inputs (real RTMP/WHIP + HLS).
+CLOUDFLARE_STREAM_ACCOUNT_ID = os.environ.get('CLOUDFLARE_STREAM_ACCOUNT_ID', '')
+CLOUDFLARE_STREAM_API_TOKEN = os.environ.get('CLOUDFLARE_STREAM_API_TOKEN', '')
+CLOUDFLARE_STREAM_CUSTOMER_CODE = os.environ.get('CLOUDFLARE_STREAM_CUSTOMER_CODE', '')
+
+# Ads pricing (USD per 1000 impressions / per click)
+ADS_CPM_RATE = float(os.environ.get('ADS_CPM_RATE', '5.0'))
+ADS_CPC_RATE = float(os.environ.get('ADS_CPC_RATE', '0.50'))
+
+# Web Push (PWA). Generate VAPID keys with: python scripts/generate_vapid_env.py
+VAPID_PUBLIC_KEY = os.environ.get('VAPID_PUBLIC_KEY', '')
+_raw_vapid_private = os.environ.get('VAPID_PRIVATE_KEY', '')
+VAPID_PRIVATE_KEY = _raw_vapid_private.replace('\\n', '\n') if _raw_vapid_private else ''
+VAPID_ADMIN_EMAIL = os.environ.get('VAPID_ADMIN_EMAIL', 'mailto:admin@outverse.local')

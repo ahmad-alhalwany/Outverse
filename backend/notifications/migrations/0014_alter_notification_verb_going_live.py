@@ -1,0 +1,39 @@
+# Generated manually for going_live notification verb
+
+from django.db import migrations, models
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ('notifications', '0013_marketingcampaign'),
+    ]
+
+    operations = [
+        migrations.AlterField(
+            model_name='notification',
+            name='verb',
+            field=models.CharField(
+                choices=[
+                    ('reaction', 'Reaction'),
+                    ('comment', 'Comment'),
+                    ('follow', 'Follow'),
+                    ('shop_purchase', 'Shop Purchase'),
+                    ('challenge_complete', 'Challenge Complete'),
+                    ('moderation_action', 'Moderation Action'),
+                    ('chat_message', 'Chat Message'),
+                    ('achievement_unlocked', 'Achievement Unlocked'),
+                    ('mention', 'Mention'),
+                    ('share', 'Share'),
+                    ('idea_pledge', 'Idea Pledge'),
+                    ('idea_comment', 'Idea Comment'),
+                    ('idea_apply', 'Idea Apply'),
+                    ('idea_accepted', 'Idea Accepted'),
+                    ('idea_rejected', 'Idea Rejected'),
+                    ('tip', 'Tip'),
+                    ('going_live', 'Going Live'),
+                ],
+                max_length=20,
+            ),
+        ),
+    ]

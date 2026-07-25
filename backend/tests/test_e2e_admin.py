@@ -52,7 +52,7 @@ def test_audit_log_list_requires_staff(api_client, staff_user):
 
 @pytest.mark.django_db
 def test_health_ping_is_public(api_client):
-    res = api_client.get('/api/health/')
+    res = api_client.get('/api/health/system/')
     assert res.status_code == 200
 
 
