@@ -546,8 +546,13 @@ class ApiClient {
     return response.data;
   }
 
-  async getStoryMap() {
-    const response = await this.client.get('/stories/map/');
+  async getStoryMap(params?: {
+    min_lat?: number;
+    max_lat?: number;
+    min_lng?: number;
+    max_lng?: number;
+  }) {
+    const response = await this.client.get('/stories/map/', { params });
     const data = response.data;
     return Array.isArray(data) ? data : data?.results || [];
   }
@@ -639,13 +644,20 @@ class ApiClient {
   }
 
   // ── Reels ─────────────────────────────────────────────────────────
-  async getReels(params?: { limit?: number; offset?: number; feed?: 'all' | 'following'; music_track?: string | number }): Promise<FeedPage<Reel>> {
+  async getReels(params?: {
+    limit?: number;
+    offset?: number;
+    feed?: 'all' | 'following';
+    music_track?: string | number;
+    tag?: string;
+  }): Promise<FeedPage<Reel>> {
     const response = await this.client.get('/reels/', {
       params: {
         limit: params?.limit ?? 10,
         offset: params?.offset ?? 0,
         ...(params?.feed === 'following' ? { feed: 'following' } : {}),
         ...(params?.music_track != null ? { music_track: params.music_track } : {}),
+        ...(params?.tag ? { tag: params.tag } : {}),
       },
     });
     return toFeedPage(response.data);
@@ -912,6 +924,24 @@ class ApiClient {
     return response.data;
   }
 
+  // ── Unified saved items (GET/DELETE /api/saved/) ──────────────────
+  async getSavedItems(collection: 'all' | 'post' | 'reel' | 'idea' | 'story' = 'all') {
+    const response = await this.client.get('/saved/', {
+      params: { collection },
+    });
+    const data = response.data;
+    return (Array.isArray(data) ? data : []) as Array<
+      Record<string, unknown> & {
+        saved_id: string;
+        saved_type: 'post' | 'reel' | 'idea' | 'story';
+      }
+    >;
+  }
+
+  async unsaveItem(savedId: string) {
+    await this.client.delete(`/saved/${savedId}/`);
+  }
+
   // ── Search ────────────────────────────────────────────────────────
   async searchUsers(query: string): Promise<Array<{ id: number; username: string; name?: string; avatar?: string | null }>> {
     const response = await this.client.get('/users/mentions/', {
@@ -929,6 +959,58 @@ class ApiClient {
     if (data?.posts) return data.posts;
     if (data?.results) return data.results;
     return [];
+  }
+
+  async search(
+    query: string,
+    params?: { category?: string; limit?: number; offset?: number },
+  ): Promise<{
+    users: Array<{ id: number; username: string; name?: string; avatar?: string | null }>;
+    posts: Array<{ id: number; snippet?: string; author?: string; tags?: string[] }>;
+    reels: Array<{ id: number; caption?: string; author?: string; tags?: string[] }>;
+    ideas: Array<{ id: number; title?: string; description?: string; owner?: string }>;
+    stories: Array<{ id: number; title?: string; description?: string; owner?: string }>;
+    bottles: Array<{ id: number; message?: string; emotion_type?: string; sender?: string }>;
+    shop: Array<{ id: number; name?: string; description?: string; creator?: string; price?: number }>;
+    challenges: Array<{ id: number; title?: string; description?: string; type?: string }>;
+    results?: unknown[];
+    count?: number;
+    has_more?: boolean;
+  }> {
+    const response = await this.client.get('/search/', {
+      params: {
+        q: query,
+        ...(params?.category ? { category: params.category } : {}),
+        ...(params?.limit != null ? { limit: params.limit } : {}),
+        ...(params?.offset != null ? { offset: params.offset } : {}),
+      },
+    });
+    const data = response.data || {};
+    if (params?.category) {
+      return {
+        users: [],
+        posts: [],
+        reels: [],
+        ideas: [],
+        stories: [],
+        bottles: [],
+        shop: [],
+        challenges: [],
+        results: Array.isArray(data.results) ? data.results : [],
+        count: typeof data.count === 'number' ? data.count : undefined,
+        has_more: Boolean(data.has_more),
+      };
+    }
+    return {
+      users: Array.isArray(data.users) ? data.users : [],
+      posts: Array.isArray(data.posts) ? data.posts : [],
+      reels: Array.isArray(data.reels) ? data.reels : [],
+      ideas: Array.isArray(data.ideas) ? data.ideas : [],
+      stories: Array.isArray(data.stories) ? data.stories : [],
+      bottles: Array.isArray(data.bottles) ? data.bottles : [],
+      shop: Array.isArray(data.shop) ? data.shop : [],
+      challenges: Array.isArray(data.challenges) ? data.challenges : [],
+    };
   }
 
   // ── Chat ──────────────────────────────────────────────────────────
@@ -1480,7 +1562,7 @@ class ApiClient {
   }
 
   async startCreatorCheckout(tierId: string | number): Promise<{ checkout_url: string }> {
-    const response = await this.client.post('/subscriptions/creator-checkout/', { tier_id: tierId });
+    const response = await this.client.post('/subscriptions/creator-subscriptions/checkout/', { tier_id: tierId });
     return response.data;
   }
 
@@ -1553,8 +1635,12 @@ class ApiClient {
     return response.data;
   }
 
-  async getFailedIdeas() {
-    const response = await this.client.get('/speculative/failed-ideas/');
+  async getFailedIdeas(params?: { exhibition?: string }) {
+    const response = await this.client.get('/speculative/failed-ideas/', {
+      params: params?.exhibition && params.exhibition !== 'all'
+        ? { exhibition: params.exhibition }
+        : undefined,
+    });
     return response.data;
   }
 
@@ -1621,8 +1707,14 @@ class ApiClient {
     return response.data;
   }
 
-  async getForgeStories() {
-    const response = await this.client.get('/forge/stories/');
+  async getForgeStories(params?: { ordering?: string; genre?: string; status?: string }) {
+    const response = await this.client.get('/forge/stories/', {
+      params: {
+        ...(params?.ordering ? { ordering: params.ordering } : {}),
+        ...(params?.genre && params.genre !== 'all' ? { genre: params.genre } : {}),
+        ...(params?.status && params.status !== 'all' ? { status: params.status } : {}),
+      },
+    });
     return response.data;
   }
 
@@ -1644,6 +1736,11 @@ class ApiClient {
   async publishForgeStory(storyId: string | number) {
     const response = await this.client.post(`/forge/stories/${storyId}/publish/`, {});
     return response.data;
+  }
+
+  async toggleForgeSave(storyId: string | number) {
+    const response = await this.client.post(`/forge/stories/${storyId}/toggle_save/`, {});
+    return response.data as { saved?: boolean };
   }
 
   async getAdCampaigns() {

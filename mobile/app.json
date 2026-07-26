@@ -17,7 +17,8 @@
     "infoPlist": {
       "NSCameraUsageDescription": "This app uses camera for creating posts and stories",
       "NSPhotoLibraryUsageDescription": "This app accesses photo library for media uploads",
-      "NSMicrophoneUsageDescription": "This app uses microphone for video recording"
+      "NSMicrophoneUsageDescription": "This app uses microphone for video recording",
+      "NSLocationWhenInUseUsageDescription": "Cosmory uses your location to center the Story Map and show nearby pins."
     }
   },
   "android": {
@@ -31,7 +32,9 @@
       "READ_EXTERNAL_STORAGE",
       "WRITE_EXTERNAL_STORAGE",
       "RECORD_AUDIO",
-      "INTERNET"
+      "INTERNET",
+      "ACCESS_COARSE_LOCATION",
+      "ACCESS_FINE_LOCATION"
     ]
   },
   "web": {

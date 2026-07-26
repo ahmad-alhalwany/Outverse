@@ -142,13 +142,9 @@ export default function ExploreScreen({ navigation }: any) {
   };
 
   const openTag = (tag: string) => {
-    setActiveTab('posts');
-    setQuery(tag);
-    setLoading(true);
-    api.searchPosts(tag)
-      .then((rows) => setPosts(Array.isArray(rows) ? rows : []))
-      .catch(() => setPosts([]))
-      .finally(() => setLoading(false));
+    const clean = String(tag || '').replace(/^#/, '').trim();
+    if (!clean) return;
+    navigation.navigate('TagFeed', { tag: clean });
   };
 
   const EmptyComponent = ({ label }: { label: string }) => (
@@ -286,6 +282,15 @@ export default function ExploreScreen({ navigation }: any) {
                 <Text style={{ fontSize: 18, color: colors.textSecondary }}>x</Text>
               </TouchableOpacity>
             ) : null}
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Search')}
+              accessibilityRole="button"
+              accessibilityLabel="Open full search"
+              hitSlop={8}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>All</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.tabs}>
             {TABS.map((tab) => (

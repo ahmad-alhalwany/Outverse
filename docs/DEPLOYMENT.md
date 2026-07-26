@@ -31,13 +31,25 @@ location / {
 
 ## Scheduled jobs
 
-Run these Django management commands from the backend environment:
+Production Compose includes a `cron` sidecar (`backend/scripts/cron-loop.sh`) that runs:
+
+| Cadence | Command |
+|---------|---------|
+| Every minute | `python manage.py publish_scheduled_posts` |
+| Every minute | `python manage.py publish_premiere_videos` |
+| Once daily at 08:00 UTC (override with `CRON_DIGEST_HOUR` / `CRON_DIGEST_MINUTE`) | `python manage.py send_email_digests` |
+
+Do **not** run digests hourly — `send_email_digests` is not idempotent per hour and would re-mail users.
+
+Manual / host crontab alternative:
 
 ```cron
-*/1 * * * * python manage.py publish_scheduled_posts
-*/1 * * * * python manage.py publish_premiere_videos
-0 * * * * python manage.py send_email_digests
+*/1 * * * * docker compose -f docker-compose.prod.yml exec -T backend python manage.py publish_scheduled_posts
+*/1 * * * * docker compose -f docker-compose.prod.yml exec -T backend python manage.py publish_premiere_videos
+0 8 * * *   docker compose -f docker-compose.prod.yml exec -T backend python manage.py send_email_digests
 ```
+
+Marketing campaigns are sent on-demand from the admin UI (`send_marketing_campaign <id>`), not via cron.
 
 ## Frontend (Next.js)
 

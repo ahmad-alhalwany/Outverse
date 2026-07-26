@@ -52,6 +52,9 @@ backend/staticfiles/
 _throttle_backup/
 *.stackdump
 
+# Downloaded local dev tools (re-fetch, don't commit binaries)
+/tools/
+
 # Claude Code local runtime state (launch.json/settings.json stay tracked)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock

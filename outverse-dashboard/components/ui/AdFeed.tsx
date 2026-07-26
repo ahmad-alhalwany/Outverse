@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { logAdImpression, logAdClick, type Ad, type AdImpressionResponse } from '@/lib/adsApi';
+import { apiFetch } from '@/lib/api';
 import { ArrowTopRightOnSquareIcon, SparklesIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 
 interface AdFeedProps {
@@ -31,20 +32,33 @@ export function useAd(placement: AdFeedProps['placement'], options?: { skip?: bo
     setLoading(true);
     setError(false);
     try {
-      const ads = await fetch(`/api/ads/delivery?placement=${placement}`).then(r => r.ok ? r.json() : null);
-      if (ads && ads.length > 0) {
-        setAd(ads[0]);
-      } else {
-        // Fallback: try to get any active ad
-        const fallback = await fetch('/api/ads/delivery').then(r => r.ok ? r.json() : null);
-        if (fallback && fallback.length > 0) {
-          setAd(fallback[0]);
-        } else {
-          setAd(null);
+      // Hit Django directly — more reliable than the Next BFF under slow cold starts.
+      const pick = (payload: unknown): Ad | null => {
+        const list = Array.isArray(payload)
+          ? payload
+          : payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)
+            ? (payload as { results: unknown[] }).results
+            : [];
+        return (list[0] as Ad) || null;
+      };
+
+      const primary = await apiFetch(`ads/ads/?placement=${encodeURIComponent(placement)}`);
+      if (primary.ok) {
+        const chosen = pick(await primary.json());
+        if (chosen) {
+          setAd(chosen);
+          return;
         }
+      }
+      const fallback = await apiFetch('ads/ads/');
+      if (fallback.ok) {
+        setAd(pick(await fallback.json()));
+      } else {
+        setAd(null);
       }
     } catch {
       setAd(null);
+      setError(true);
     } finally {
       setLoading(false);
     }

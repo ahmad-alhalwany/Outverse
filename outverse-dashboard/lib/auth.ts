@@ -195,6 +195,10 @@ export async function logout() {
 
 /** Validate token and refresh user fields (e.g. is_staff) from the API. */
 export async function refreshSession(): Promise<AuthUser | null> {
+  // Avoid noisy 401s when the visitor has no session at all.
+  if (!getToken() && !hasSessionCookie() && !getUser()) {
+    return null;
+  }
   try {
     const res = await fetch(apiUrl('users/me/'), { headers: authHeaders(), credentials: 'include' });
     if (!res.ok) {

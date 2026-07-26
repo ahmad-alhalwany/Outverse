@@ -4,10 +4,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
-import { type AuthUser, getUser, logout, refreshSession } from '@/lib/auth';
-import { apiFetch, apiFetchJson } from '@/lib/api';
-import { apiUrl } from '@/lib/api';
+import { type AuthUser, getUser, isAuthenticated, logout, refreshSession } from '@/lib/auth';
+import { apiFetch, apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import RelativeTime from '@/components/RelativeTime';
 import { 
@@ -19,7 +17,6 @@ import {
   ShoppingCartIcon,
   BellIcon,
   ChatBubbleLeftRightIcon,
-  UserCircleIcon,
   MagnifyingGlassIcon,
   SparklesIcon,
   SunIcon,
@@ -160,8 +157,10 @@ const Header = () => {
     searchResults.shop.length;
 
   const fetchNotifications = async (silent = true) => {
+    if (!isAuthenticated() && !getUser()) return;
     try {
       const res = await apiFetch('notifications/');
+      if (res.status === 401) return;
       if (res.ok) {
         const data = await res.json();
         setNotifications(Array.isArray(data.results) ? data.results : []);
@@ -186,10 +185,27 @@ const Header = () => {
   }, [notifActionError]);
 
   useEffect(() => {
-    refreshSession().then((u) => setUser(u ?? getUser()));
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 120000);
-    return () => clearInterval(interval);
+    let cancelled = false;
+    const boot = async () => {
+      const cached = getUser();
+      if (cached) setUser(cached);
+      // Only hit /users/me when we already have a local session signal.
+      if (!isAuthenticated() && !cached) return;
+      const u = await refreshSession();
+      if (cancelled) return;
+      setUser(u ?? getUser());
+      if (u || getUser()) {
+        await fetchNotifications();
+      }
+    };
+    void boot();
+    const interval = setInterval(() => {
+      if (isAuthenticated() || getUser()) void fetchNotifications();
+    }, 120000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   useLiveNotifications({
@@ -317,18 +333,21 @@ const Header = () => {
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-4">
       <div className="mx-auto max-w-7xl">
-        <div className="flex h-16 items-center justify-between rounded-[24px] border border-white/10 bg-background/72 px-3 shadow-[0_20px_60px_rgba(9,6,28,0.35)] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/62 sm:px-5">
+        <div className="flex h-16 items-center justify-between rounded-[28px] bg-background/78 px-3 shadow-[0_18px_50px_rgba(6,3,24,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-white/[0.06] backdrop-blur-2xl supports-[backdrop-filter]:bg-background/68 sm:px-5">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/" className="flex items-center gap-2 text-2xl font-bold text-text hover:opacity-90 transition">
+            <Link href="/" className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-text hover:opacity-90 transition">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/cosmory-icon.svg" alt="Cosmory" width={36} height={36} className="h-9 w-9 rounded-xl" />
-              <span>Cosmory</span>
+              <img src="/cosmory-icon.svg" alt="Cosmory" width={36} height={36} className="h-9 w-9 rounded-xl shadow-[0_0_20px_rgba(124,58,237,0.35)]" />
+              <span className="bg-gradient-to-r from-white via-violet-100 to-sky-200 bg-clip-text text-transparent">Cosmory</span>
             </Link>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="hidden lg:flex space-x-1 rounded-2xl border border-white/6 bg-white/[0.03] p-1" aria-label={t('nav.mainNavigation')}>
+          {/* Navigation Tabs — soft glass, no hard white outline */}
+          <nav
+            className="hidden lg:flex items-center gap-0.5 rounded-full bg-white/[0.04] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
+            aria-label={t('nav.mainNavigation')}
+          >
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -338,25 +357,27 @@ const Header = () => {
                   onClick={() => navigateTab(tab.id)}
                   aria-label={tab.name}
                   aria-current={isActive ? 'page' : undefined}
-                  className={`relative flex items-center gap-2 rounded-xl px-3 py-2 transition-all duration-200 group
-                    ${isActive ? `${tabColors[tab.id]} shadow-[0_10px_24px_rgba(17,12,42,0.22)]` : 'text-text-secondary hover:bg-white/[0.04] hover:text-text'}
+                  className={`relative flex items-center gap-2 rounded-full px-3.5 py-2 transition-all duration-200
+                    ${isActive
+                      ? `${tabColors[tab.id]} shadow-[0_8px_22px_rgba(17,12,42,0.28)]`
+                      : 'text-text-secondary hover:bg-white/[0.06] hover:text-text'}
                   `}
                   style={isActive ? { fontWeight: 700 } : {}}
                 >
                   <motion.span
-                    whileHover={{ scale: 1.12 }}
+                    whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.96 }}
                     className="flex items-center"
                   >
-                    <Icon className="h-5 w-5" strokeWidth={1.75} />
+                    <Icon className="h-5 w-5" strokeWidth={isActive ? 2 : 1.75} />
                   </motion.span>
                   <span className="hidden md:inline-block text-sm">{tab.name}</span>
                   {isActive && (
                     <motion.div
                       layoutId="activeTab"
-                      className={`absolute bottom-0 left-0 right-0 h-0.5 rounded ${tabBgColors[tab.id]}`}
+                      className={`absolute inset-x-3 -bottom-0.5 h-[2px] rounded-full ${tabBgColors[tab.id]} opacity-90`}
                       initial={false}
-                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 32 }}
                     />
                   )}
                 </button>
@@ -365,7 +386,7 @@ const Header = () => {
           </nav>
 
           {/* Right Side Icons */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <div className="relative hidden sm:block">
               <input
                 type="text"
@@ -374,7 +395,7 @@ const Header = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowSearch(true)}
                 onBlur={() => setTimeout(() => setShowSearch(false), 150)}
-                className="cosmic-input w-44 rounded-full border-white/10 bg-white/[0.05] py-2 pl-10 pr-4 text-sm sm:w-56"
+                className="cosmic-input w-44 rounded-full !border-transparent bg-white/[0.06] py-2 pl-10 pr-4 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-56 focus:!border-violet-400/40"
               />
               <MagnifyingGlassIcon className="h-4 w-4 text-text-secondary absolute left-3.5 top-1/2 transform -translate-y-1/2" strokeWidth={1.75} />
               {showSearch && searchQuery.trim() && (
@@ -446,11 +467,12 @@ const Header = () => {
               )}
             </div>
 
+            <div className="flex items-center gap-0.5 rounded-full bg-white/[0.04] p-0.5 sm:gap-1 sm:p-1">
             <motion.button
-              whileHover={{ scale: 1.08 }}
+              whileHover={{ scale: 1.06 }}
               whileTap={{ scale: 0.94 }}
               onClick={toggleTheme}
-              className="icon-only border border-white/6 bg-white/[0.04] p-2"
+              className="icon-only !border-transparent p-2 hover:!bg-white/[0.08]"
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
               aria-label="Toggle theme"
             >
@@ -464,16 +486,16 @@ const Header = () => {
             <div className="relative flex items-center justify-center">
               <motion.button
                 ref={notifRef}
-                whileHover={{ scale: 1.08 }}
+                whileHover={{ scale: 1.06 }}
                 whileTap={{ scale: 0.94 }}
-                className="icon-only relative border border-white/6 bg-white/[0.04] p-2"
+                className="icon-only relative !border-transparent p-2 hover:!bg-white/[0.08]"
                 onClick={toggleNotifications}
                 aria-label={t('notifications.title')}
                 aria-expanded={showNotifications}
               >
                 <BellIcon className="h-5 w-5" strokeWidth={1.75} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-gradient-to-tr from-yellow-400 to-pink-400 text-white text-[10px] font-bold rounded-full min-w-[1.1rem] h-[1.1rem] flex items-center justify-center px-1 shadow-lg border-2 border-background z-10">
+                  <span className="absolute -top-0.5 -right-0.5 z-10 flex h-[1.1rem] min-w-[1.1rem] items-center justify-center rounded-full bg-gradient-to-tr from-amber-400 to-fuchsia-500 px-1 text-[10px] font-bold text-white shadow-md ring-2 ring-background">
                     {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
@@ -558,7 +580,7 @@ const Header = () => {
             
             <Link
               href="/chat"
-              className="icon-only hidden border border-white/6 bg-white/[0.04] p-2 sm:inline-flex"
+              className="icon-only hidden !border-transparent p-2 hover:!bg-white/[0.08] sm:inline-flex"
               title="Cosmic Chat"
               aria-label="Cosmic Chat"
             >
@@ -567,23 +589,35 @@ const Header = () => {
 
             <Link
               href="/settings"
-              className="icon-only hidden border border-white/6 bg-white/[0.04] p-2 sm:inline-flex"
+              className="icon-only hidden !border-transparent p-2 hover:!bg-white/[0.08] sm:inline-flex"
               title="Settings"
               aria-label="Settings"
             >
               <Cog6ToothIcon className="h-5 w-5" strokeWidth={1.75} />
             </Link>
+            </div>
             
-            <div className="relative">
+            <div className="relative ml-0.5">
               <motion.button
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                className="flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.04] py-1 pl-1 pr-2 transition-colors hover:bg-white/[0.08]"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                className="flex items-center gap-2 rounded-full bg-gradient-to-br from-violet-500/25 to-sky-500/15 p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_20px_rgba(76,29,149,0.25)] transition hover:shadow-[0_0_0_1px_rgba(167,139,250,0.35),0_10px_24px_rgba(76,29,149,0.35)]"
                 onClick={() => setShowAccount(v => !v)}
                 aria-label="Account menu"
               >
-                <UserCircleIcon className="h-6 w-6 text-text-secondary" strokeWidth={1.75} />
-                {user && <span className="hidden lg:inline-block text-sm font-medium">{user.username}</span>}
+                {user?.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={mediaUrl(user.avatar) || user.avatar}
+                    alt={user.username}
+                    className="h-8 w-8 rounded-full object-cover ring-2 ring-background/80"
+                  />
+                ) : (
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white ring-2 ring-background/80">
+                    {user?.username ? user.username.slice(0, 2).toUpperCase() : '?'}
+                  </span>
+                )}
+                {user && <span className="hidden pr-2.5 text-sm font-medium text-text lg:inline-block">{user.username}</span>}
               </motion.button>
               {showAccount && (
                 <motion.div

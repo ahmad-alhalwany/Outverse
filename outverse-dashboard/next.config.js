@@ -29,6 +29,14 @@ const nextConfig = {
     const devConnectSrc = isDev
       ? ' http://localhost:8000 http://127.0.0.1:8000 ws://localhost:8000 ws://127.0.0.1:8000'
       : '';
+    // Local media is served over http://localhost:8000 — `https:` alone does
+    // not cover that, so img-src must allow the Django origin in development.
+    const imgSrc = isDev
+      ? "img-src 'self' data: https: blob: http://localhost:8000 http://127.0.0.1:8000"
+      : "img-src 'self' data: https: blob:";
+    const mediaSrc = isDev
+      ? "media-src 'self' blob: http://localhost:8000 http://127.0.0.1:8000 https:"
+      : "media-src 'self' blob: https:";
     const connectSrc = `connect-src 'self' https://api.cosmory.app https://cosmory.app https://fonts.googleapis.com https://fonts.gstatic.com https://www.google-analytics.com wss://*.cosmory.app${devConnectSrc}`;
     return [
       {
@@ -47,7 +55,8 @@ const nextConfig = {
                         "default-src 'self'",
                         "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://www.googletagmanager.com",
                         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-                        "img-src 'self' data: https: blob:",
+                        imgSrc,
+                        mediaSrc,
                         "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com data:",
                         connectSrc,
                         "frame-src 'self'",
@@ -62,7 +71,8 @@ const nextConfig = {
                         "default-src 'self'",
                         "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://www.googletagmanager.com",
                         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-                        "img-src 'self' data: https: blob:",
+                        imgSrc,
+                        mediaSrc,
                         "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com data:",
                         connectSrc,
                         "frame-src 'self'",
@@ -78,7 +88,8 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      { source: '/favicon.ico', destination: '/vercel.svg', permanent: false },
+      { source: '/favicon.ico', destination: '/cosmory-icon.svg', permanent: false },
+      { source: '/outverse-icon.svg', destination: '/cosmory-icon.svg', permanent: false },
     ];
   },
   images: {

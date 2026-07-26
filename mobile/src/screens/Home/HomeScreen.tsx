@@ -368,7 +368,7 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       key={tag}
                       style={styles.trendChip}
-                      onPress={() => (navigation as any).navigate('Explore', { tag })}
+                      onPress={() => (navigation as any).navigate('TagFeed', { tag })}
                     >
                       <Text style={styles.trendChipText}>#{tag}</Text>
                     </TouchableOpacity>

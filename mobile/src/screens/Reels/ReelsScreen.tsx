@@ -441,19 +441,38 @@ function ReelItem({
     ? reel.effect_meta.overlays
     : reel.template_detail?.overlay_stickers || [];
   const overlayText = reel.effect_meta?.overlay_text || reel.template_detail?.overlay_text || '';
+  const chromaKey = Boolean(reel.effect_meta?.chroma_key);
+  const backdropKey = String(reel.effect_meta?.backdrop || reel.template_detail?.backdrop_preset || '');
+  const BACKDROP_COLORS: Record<string, string> = {
+    nebula: '#4C1D95',
+    orbit: '#0E7490',
+    void: '#111827',
+    aurora: '#059669',
+    sunset: '#C2410C',
+  };
+  const backdropColor = BACKDROP_COLORS[backdropKey] || '#0A0A0F';
 
   return (
     <View style={styles.reelContainer}>
+      {chromaKey ? (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: backdropColor }]}
+          accessibilityLabel={`Cosmic backdrop ${backdropKey || 'void'}`}
+        />
+      ) : null}
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={handleTap}
         onPressIn={onHoldStart}
         onPressOut={onHoldEnd}
+        accessibilityRole="button"
+        accessibilityLabel={paused ? 'Play reel' : 'Pause reel'}
       >
         {videoUrl ? (
           <Video
             source={{ uri: videoUrl }}
-            style={styles.video}
+            style={[styles.video, chromaKey ? { opacity: 0.92 } : null]}
             resizeMode="cover"
             paused={paused}
             muted={muted}

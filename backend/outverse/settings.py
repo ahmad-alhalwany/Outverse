@@ -286,6 +286,32 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': int(os.environ.get('DRF_PAGE_SIZE', '20')),
+    # Rates for the scoped throttle classes in outverse/throttles.py — every
+    # scope referenced there must have an entry or the throttle crashes the
+    # request with ImproperlyConfigured instead of just rate-limiting it.
+    'DEFAULT_THROTTLE_RATES': {
+        'burst': '200/min',
+        'sustained': '1000/hour',
+        'auth.login': '30/5min',
+        'auth.register': '5/hour',
+        'auth.forgot_password': '3/hour',
+        'auth.reset_password': '10/10min',
+        'auth.verify_email': '10/hour',
+        'auth.check_username': '30/min',
+        'content.post_create': '30/min',
+        'content.reel_create': '20/min',
+        'content.draft_write': '60/min',
+        'content.scheduled_create': '30/min',
+        'anon.read': '100/min',
+        'anon.share': '30/min',
+        'user.follow': '60/min',
+        'user.like': '120/min',
+        'user.comment': '30/min',
+        'user.bookmark': '60/min',
+        'user.report': '10/min',
+        'search.query': '30/min',
+        'search.autocomplete': '60/min',
+    },
 }
 
 ENABLE_HTTPS_SECURITY = os.environ.get(
@@ -312,6 +338,12 @@ else:
     # STATIC_URL already set above; preserve the env-driven value.
 MEDIA_ROOT = os.environ.get('DJANGO_MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
 EMAIL_BACKEND = os.environ.get('DJANGO_EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587') or '587')
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() in ('true', '1', 'yes')
+EMAIL_USE_SSL = os.environ.get('EMAIL_USE_SSL', 'false').lower() in ('true', '1', 'yes')
 DEFAULT_FROM_EMAIL = os.environ.get('DJANGO_DEFAULT_FROM_EMAIL', 'no-reply@outverse.local')
 
 # AI moderation (optional — soft-flag by default when keys present)

@@ -76,6 +76,32 @@ services:
     ports:
       - "3000:3000"
 
+  # Local parity with prod: scheduled posts, premieres, digests.
+  cron:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}
+      DATABASE_URL: postgres://${POSTGRES_USER:-outverse}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-outverse}
+      POSTGRES_HOST: db
+      POSTGRES_NAME: ${POSTGRES_DB:-outverse}
+      POSTGRES_USER: ${POSTGRES_USER:-outverse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: "*"
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      CRON_DIGEST_HOUR: ${CRON_DIGEST_HOUR:-08}
+      CRON_DIGEST_MINUTE: ${CRON_DIGEST_MINUTE:-00}
+    volumes:
+      - backend_media:/app/media
+    entrypoint: ["/bin/sh", "/app/scripts/cron-loop.sh"]
+
 volumes:
   pgdata:
   backend_media:

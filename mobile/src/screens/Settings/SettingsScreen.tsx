@@ -24,6 +24,8 @@ type PreferenceState = {
 };
 
 const LINKS = [
+  { title: 'Saved', subtitle: 'Posts, reels, ideas, and stories you bookmarked', route: 'Saved' },
+  { title: 'Search', subtitle: 'Find people, posts, ideas, and signals', route: 'Search' },
   { title: 'Orbit Friends', subtitle: 'Manage close friends for private stories', route: 'OrbitFriends' },
   { title: 'Signal Publish', subtitle: 'Default signal publishing controls', route: 'SignalPublish' },
   { title: 'Pulse Creator', subtitle: 'Reel remix, weave, and download defaults', route: 'PulseCreator' },

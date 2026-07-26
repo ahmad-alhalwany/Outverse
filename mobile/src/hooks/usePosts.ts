@@ -8,6 +8,7 @@ interface UsePostsOptions {
   ordering?: string;
   author?: string | number;
   feed?: string;
+  tag?: string;
 }
 
 export function usePosts(options: UsePostsOptions = {}) {
@@ -29,6 +30,7 @@ export function usePosts(options: UsePostsOptions = {}) {
         ordering: options.ordering,
         author: options.author,
         feed: options.feed,
+        tag: options.tag,
       });
       setPosts(data.results || []);
       setHasMore(!!data.has_more);
@@ -38,7 +40,7 @@ export function usePosts(options: UsePostsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [limit, options.ordering, options.author, options.feed]);
+  }, [limit, options.ordering, options.author, options.feed, options.tag]);
 
   const loadMore = useCallback(async () => {
     if (loading || refreshing || !hasMore) return;
@@ -49,6 +51,7 @@ export function usePosts(options: UsePostsOptions = {}) {
         ordering: options.ordering,
         author: options.author,
         feed: options.feed,
+        tag: options.tag,
       });
       setPosts((prev) => [...prev, ...(data.results || [])]);
       setHasMore(!!data.has_more);
@@ -56,7 +59,7 @@ export function usePosts(options: UsePostsOptions = {}) {
     } catch (e: any) {
       setError(e?.message || 'فشل تحميل المزيد');
     }
-  }, [offset, loading, refreshing, hasMore, limit, options.ordering, options.author, options.feed]);
+  }, [offset, loading, refreshing, hasMore, limit, options.ordering, options.author, options.feed, options.tag]);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);

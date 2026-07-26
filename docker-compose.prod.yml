@@ -80,6 +80,37 @@ services:
     expose:
       - "3000"
 
+  # Sidecar: publish scheduled posts + premieres every minute; digests once daily.
+  cron:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost}
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-outverse}
+      POSTGRES_USER: ${POSTGRES_USER:-outverse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_URL: redis://redis:6379/0
+      FRONTEND_URL: ${FRONTEND_URL:-}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
+      CRON_DIGEST_HOUR: ${CRON_DIGEST_HOUR:-08}
+      CRON_DIGEST_MINUTE: ${CRON_DIGEST_MINUTE:-00}
+    volumes:
+      - backend_media:/app/media
+    entrypoint: ["/bin/sh", "/app/scripts/cron-loop.sh"]
+
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped

@@ -5,6 +5,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/hooks/useTheme';
 import { api } from '@/api/client';
 import * as ImagePicker from 'expo-image-picker';
+import ChromaPreview from '@/components/reels/ChromaPreview';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -678,6 +679,10 @@ export default function CreateScreen({ navigation }: any) {
               setChromaEnabled((v) => !v);
               if (!chromaEnabled && !backdrop) setBackdrop(BACKDROP_PRESETS[0].key);
             }}
+            accessibilityRole="switch"
+            accessibilityLabel="Green screen chroma"
+            accessibilityState={{ checked: chromaEnabled }}
+            hitSlop={8}
             style={{
               padding: 12,
               borderRadius: 12,
@@ -692,40 +697,32 @@ export default function CreateScreen({ navigation }: any) {
           </TouchableOpacity>
           {chromaEnabled ? (
             <>
-              <View
-                style={{
-                  minHeight: 120,
-                  borderRadius: 18,
-                  padding: 14,
-                  backgroundColor: selectedBackdropPreset.color,
-                  overflow: 'hidden',
-                  justifyContent: 'space-between',
-                }}
-              >
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={{ color: '#fff', fontWeight: '800' }}>Preview backdrop</Text>
-                  <TouchableOpacity
-                    onPress={() => setChromaEnabled(false)}
-                    style={{
-                      paddingHorizontal: 10,
-                      paddingVertical: 6,
-                      borderRadius: 999,
-                      backgroundColor: 'rgba(255,255,255,0.2)',
-                    }}
-                  >
-                    <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>On</Text>
-                  </TouchableOpacity>
+              {reelVideo?.uri ? (
+                <ChromaPreview videoUri={reelVideo.uri} backdrop={backdrop || selectedBackdropPreset.key} />
+              ) : (
+                <View
+                  style={{
+                    minHeight: 120,
+                    borderRadius: 18,
+                    padding: 14,
+                    backgroundColor: selectedBackdropPreset.color,
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>
+                    Pick a reel clip to preview live chroma against {selectedBackdropPreset.label}.
+                  </Text>
                 </View>
-                <Text style={{ color: 'rgba(255,255,255,0.86)', fontSize: 12, lineHeight: 17 }}>
-                  Green screen metadata will use {selectedBackdropPreset.label}. Mobile preview is a backdrop note,
-                  not live pixel processing.
-                </Text>
-              </View>
+              )}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
                 {BACKDROP_PRESETS.map((preset) => (
                   <TouchableOpacity
                     key={preset.key}
                     onPress={() => setBackdrop(preset.key)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Backdrop ${preset.label}`}
+                    accessibilityState={{ selected: backdrop === preset.key }}
+                    hitSlop={8}
                     style={{
                       paddingHorizontal: 14,
                       paddingVertical: 10,

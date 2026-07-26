@@ -74,6 +74,9 @@ import PromptRoomsScreen from './screens/Worlds/PromptRoomsScreen';
 import ShopSellerScreen from './screens/Worlds/ShopSellerScreen';
 import TwoFactorSetupScreen from './screens/Worlds/TwoFactorSetupScreen';
 import AdminScreen from './screens/Worlds/AdminScreen';
+import SavedScreen from './screens/Saved/SavedScreen';
+import SearchScreen from './screens/Search/SearchScreen';
+import TagFeedScreen from './screens/Tag/TagFeedScreen';
 
 SplashScreenExpo.preventAutoHideAsync();
 
@@ -251,6 +254,9 @@ function MainStack() {
       <Stack.Screen name="ShopSeller" component={ShopSellerScreen} />
       <Stack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
       <Stack.Screen name="Admin" component={AdminScreen} />
+      <Stack.Screen name="Saved" component={SavedScreen} />
+      <Stack.Screen name="Search" component={SearchScreen} />
+      <Stack.Screen name="TagFeed" component={TagFeedScreen} />
     </Stack.Navigator>
   );
 }

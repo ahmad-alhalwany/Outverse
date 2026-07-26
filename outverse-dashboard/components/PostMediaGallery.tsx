@@ -75,7 +75,11 @@ export default function PostMediaGallery({
   const hasMultiple = items.length > 1;
   const allImages = items.every((m) => m.type === 'image');
   const useCollage = allImages && items.length >= 2;
-  const currentAspect = !useCollage && current.type === 'image' ? (aspect[idx] ?? DEFAULT_ASPECT) : undefined;
+  const currentAspect = !useCollage
+    ? current.type === 'image'
+      ? (aspect[idx] ?? DEFAULT_ASPECT)
+      : 16 / 9
+    : undefined;
 
   const go = (delta: number) =>
     setIdx((i) => (i + delta + items.length) % items.length);
@@ -192,7 +196,13 @@ export default function PostMediaGallery({
             <CosmicVideoPlayer
               src={current.url}
               className="post-media-gallery__video"
-              style={{ width: '100%', maxHeight: inLightbox ? '82vh' : 'min(75vh, 560px)' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                maxHeight: inLightbox ? '82vh' : 'min(75vh, 560px)',
+                aspectRatio: 'unset',
+                borderRadius: inLightbox ? '1rem' : 0,
+              }}
             />
           </div>
         )}

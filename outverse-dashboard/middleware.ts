@@ -15,7 +15,8 @@ import { check, type RateLimitKey } from './lib/rateLimit';
 
 /** Map URL pathname → rate-limit preset. */
 const ROUTE_LIMITS: { pattern: RegExp; key: RateLimitKey }[] = [
-  { pattern: /^\/api\/csp-report$/, key: 'apiRoute' },
+  // csp-report intentionally excluded — browsers can flood dozens of reports
+  // per page load; rate-limiting them causes noisy 429s without security benefit.
   { pattern: /^\/api\/analytics\/web-vitals$/, key: 'apiRoute' },
   { pattern: /^\/api\/picker\/media$/, key: 'apiRoute' },
   // Auth pages — rate-limit by IP to slow credential stuffing at the edge.

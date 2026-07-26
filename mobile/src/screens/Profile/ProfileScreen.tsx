@@ -390,6 +390,36 @@ export default function ProfileScreen({ route, navigation }: ProfileScreenProps)
                     paddingHorizontal: 14,
                     paddingVertical: 9,
                     borderRadius: 999,
+                    backgroundColor: 'rgba(99,102,241,0.14)',
+                    borderColor: 'rgba(99,102,241,0.45)',
+                    borderWidth: 1,
+                  }}
+                  onPress={() => navigation.navigate('Saved')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open saved items"
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#818CF8' }}>Saved</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 9,
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(129,140,248,0.12)',
+                    borderColor: 'rgba(129,140,248,0.4)',
+                    borderWidth: 1,
+                  }}
+                  onPress={() => navigation.navigate('Search')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open search"
+                >
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#A5B4FC' }}>Search</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: 14,
+                    paddingVertical: 9,
+                    borderRadius: 999,
                     backgroundColor: 'rgba(196,181,253,0.14)',
                     borderColor: 'rgba(196,181,253,0.45)',
                     borderWidth: 1,

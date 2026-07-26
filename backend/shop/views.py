@@ -399,3 +399,25 @@ class CreateCoinCheckoutView(APIView):
             return Response({'error': str(exc)}, status=status.HTTP_502_BAD_GATEWAY)
 
         return Response({'checkout_url': session.url})
+
+
+class MyTransactionsView(APIView):
+    """Purchases made by the current user."""
+
+    def get(self, request):
+        user, err = require_user(request)
+        if err:
+            return err
+        qs = Transaction.objects.filter(user=user).select_related('item', 'seller')
+        return Response(TransactionSerializer(qs, many=True).data)
+
+
+class MySalesView(APIView):
+    """Sales of items the current user is the seller of."""
+
+    def get(self, request):
+        user, err = require_user(request)
+        if err:
+            return err
+        qs = Transaction.objects.filter(seller=user).select_related('item', 'user')
+        return Response(TransactionSerializer(qs, many=True).data)

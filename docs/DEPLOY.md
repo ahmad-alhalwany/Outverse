@@ -59,14 +59,27 @@ https://yourdomain.com/api/subscriptions/webhook/
 
 Use the signing secret in `STRIPE_WEBHOOK_SECRET`.
 
-## 5. Verify
+## 5. Scheduled jobs (cron sidecar)
+
+`docker-compose.prod.yml` starts a `cron` service that publishes due scheduled posts and premiere videos every minute, and sends email digests once daily (08:00 UTC by default).
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f cron
+# Optional: force a digest dry-run
+docker compose -f docker-compose.prod.yml exec cron python manage.py send_email_digests --dry-run
+```
+
+Tune digest time with `CRON_DIGEST_HOUR` / `CRON_DIGEST_MINUTE` in `.env`. See `docs/DEPLOYMENT.md`.
+
+## 6. Verify
 
 - `https://yourdomain.com` — dashboard loads
 - `https://yourdomain.com/api/health/` — backend OK
 - Settings → Enable browser push
 - `/premium` — checkout redirect (test mode keys first)
+- `docker compose -f docker-compose.prod.yml ps` — `cron` is `Up`
 
-## 6. Updates
+## 7. Updates
 
 ```bash
 git pull
