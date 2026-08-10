@@ -23,7 +23,10 @@ import CommentMediaPicker, { type PickerTab } from './comments/CommentMediaPicke
 import PostReactions from './PostReactions';
 import RelativeTime from './RelativeTime';
 import { useLocale } from './LocaleProvider';
+import Link from 'next/link';
 import { apiFetch, mediaUrl } from '@/lib/api';
+import { isAuthenticated } from '@/lib/auth';
+import { publicDisplayName } from '@/lib/publicDisplayName';
 
 interface User {
   id: number;
@@ -129,14 +132,20 @@ export default function Comments({
   const [translations, setTranslations] = useState<Record<number, { text: string; visible: boolean }>>({});
   const [translatingId, setTranslatingId] = useState<number | null>(null);
   const [addingComment, setAddingComment] = useState(false);
+  const addingCommentRef = useRef(false);
   const [editingLoading, setEditingLoading] = useState(false);
   const [deletingLoading, setDeletingLoading] = useState<number | null>(null);
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionUsers, setMentionUsers] = useState<{ id: number; name: string }[]>([]);
+  const [canComment, setCanComment] = useState<boolean | null>(null);
   const mentionAbortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const attachRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setCanComment(isAuthenticated());
+  }, []);
 
   useEffect(() => {
     if (!showMentionList || mentionQuery.length < 1) {
@@ -157,9 +166,9 @@ export default function Comments({
           const data = await res.json();
           setMentionUsers(
             Array.isArray(data)
-              ? data.map((u: { id: number; name?: string; username?: string }) => ({
+              ? data.map((u: { id: number; name?: string; username?: string; first_name?: string; last_name?: string }) => ({
                   id: u.id,
-                  name: u.name || u.username || 'User',
+                  name: publicDisplayName(u, u.name || 'User'),
                 }))
               : [],
           );
@@ -226,7 +235,13 @@ export default function Comments({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAuthenticated()) {
+      window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
     if (!newComment.trim() && !gifUrl && !stickerUrl) return;
+    if (addingCommentRef.current) return;
+    addingCommentRef.current = true;
     setAddingComment(true);
     try {
       await onAddComment({
@@ -235,11 +250,11 @@ export default function Comments({
         stickerUrl: stickerUrl || undefined,
       });
       playComment();
-      setAddingComment(false);
       setNewComment('');
       setGifUrl(null);
       setStickerUrl(null);
     } finally {
+      addingCommentRef.current = false;
       setAddingComment(false);
     }
   };
@@ -654,7 +669,16 @@ export default function Comments({
             </div>
             {replyLocked ? (
               <p className="px-4 pb-3 text-sm text-text-secondary">{t('feed.replyLimited')}</p>
-            ) : (
+            ) : canComment === false ? (
+              <div className="px-4 pb-4">
+                <Link
+                  href="/login?next=/"
+                  className="flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-violet-600 to-sky-500 px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(124,58,237,0.35)]"
+                >
+                  Sign in to comment
+                </Link>
+              </div>
+            ) : canComment === null ? null : (
             <form onSubmit={handleSubmit} className="cosmic-comments__form">
               <div className="cosmic-comments__composer" ref={attachRef}>
                 {user.avatar ? (

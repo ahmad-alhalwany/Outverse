@@ -6,6 +6,7 @@ import re
 
 from django.conf import settings
 from django.utils import timezone
+from datetime import timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,53 @@ HIGH_RISK_CATEGORIES = frozenset({
     'violence',
     'violence_graphic',
 })
+
+# Bottles are anonymous public drops — block harsh language aggressively.
+BOTTLE_BLOCK_CATEGORIES = HIGH_RISK_CATEGORIES | frozenset({
+    'profanity',
+    'harassment',
+    'harassment_threatening',
+    'threat',
+    'self_harm',
+    'self_harm_intent',
+    'self_harm_instructions',
+    'spam',
+})
+
+# Severe local lexicon (EN + AR). Kept short and high-signal to avoid false
+# positives on ordinary emotional language.
+_SEVERE_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        r'\bf+u+c+k+(?:ing|er|ed)?\b',
+        r'\bsh+i+t+\b',
+        r'\bb+i+t+c+h+(?:es|y)?\b',
+        r'\bass+h+o+l+e+s?\b',
+        r'\bn+i+g+g+(?:er|a)s?\b',
+        r'\bc+u+n+t+s?\b',
+        r'\bslut+s?\b',
+        r'\bwhore+s?\b',
+        r'\bkill\s+yourself\b',
+        r'\bkys\b',
+        r'\bgo\s+die\b',
+        r'كس ام',
+        r'ابن ال[كل]',
+        r'شرموط',
+        r'عرص',
+        r'زب\b',
+        r'منيوك',
+    )
+]
+
+
+def check_severe_language(text: str) -> bool:
+    """Return True when text contains severe/abusive language."""
+    if not text:
+        return False
+    sample = text.strip()
+    if not sample:
+        return False
+    return any(pattern.search(sample) for pattern in _SEVERE_PATTERNS)
 
 REPEATED_CHAR_RE = re.compile(r'(.)\1{4,}', re.IGNORECASE)
 URL_RE = re.compile(r'https?://|www\.', re.IGNORECASE)
@@ -58,16 +106,24 @@ def check_spam(text: str) -> dict | None:
     return None
 
 
-def apply_hard_block(result: dict) -> dict:
+def apply_hard_block(result: dict, *, content_type: str | None = None) -> dict:
     """Set hard_block on flagged results when policy requires blocking."""
     if not result.get('flagged') or result.get('error'):
         result['hard_block'] = False
+        result['bottle_block'] = False
         return result
     categories = result.get('categories') or {}
     high_risk = any(categories.get(cat) for cat in HIGH_RISK_CATEGORIES)
     result['hard_block'] = bool(
         getattr(settings, 'AI_MODERATION_HARD_BLOCK', False) or high_risk
     )
+    if content_type == 'bottle':
+        bottle_hit = any(categories.get(cat) for cat in BOTTLE_BLOCK_CATEGORIES)
+        result['bottle_block'] = bottle_hit
+        if bottle_hit:
+            result['hard_block'] = True
+    else:
+        result['bottle_block'] = False
     return result
 
 
@@ -85,6 +141,22 @@ def soft_moderate_content(
     try:
         from moderation.ai_moderation import auto_moderate
 
+        if content_type == 'bottle' and check_severe_language(text):
+            severe = {
+                'flagged': True,
+                'categories': {'profanity': True},
+                'category_scores': {'profanity': 1.0},
+                'model': 'severe_lexicon',
+            }
+            result = auto_moderate(
+                text=text,
+                content_type=content_type,
+                object_id=object_id,
+                user=user,
+                result=severe,
+            )
+            return apply_hard_block(result, content_type=content_type)
+
         spam_result = check_spam(text)
         if spam_result is not None:
             result = auto_moderate(
@@ -94,7 +166,7 @@ def soft_moderate_content(
                 user=user,
                 result=spam_result,
             )
-            return apply_hard_block(result)
+            return apply_hard_block(result, content_type=content_type)
 
         result = auto_moderate(
             text=text,
@@ -102,7 +174,7 @@ def soft_moderate_content(
             object_id=object_id,
             user=user,
         )
-        return apply_hard_block(result)
+        return apply_hard_block(result, content_type=content_type)
     except Exception as exc:  # noqa: BLE001
         logger.warning('soft_moderate_content failed: %s', exc)
         return {'flagged': False, 'error': str(exc)}
@@ -179,6 +251,17 @@ def enforce_moderation_result(
                 obj.is_active = False
                 obj.save(update_fields=['is_active'])
                 return True
+        elif content_type == 'bottle':
+            from bottles.models import MessageBottle
+
+            obj = MessageBottle.objects.filter(pk=object_id).first()
+            if obj is None:
+                return False
+            # Vanish from the map immediately.
+            obj.is_opened = True
+            obj.expiry_time = timezone.now() - timedelta(seconds=1)
+            obj.save(update_fields=['is_opened', 'expiry_time'])
+            return True
     except Exception as exc:  # noqa: BLE001
         logger.warning(
             'enforce_moderation_result failed for %s:%s — %s',

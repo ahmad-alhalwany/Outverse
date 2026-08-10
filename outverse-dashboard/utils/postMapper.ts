@@ -1,4 +1,5 @@
 import { mediaUrl } from '@/lib/api';
+import { publicDisplayName } from '@/lib/publicDisplayName';
 
 export { mediaUrl as fullMediaUrl };
 
@@ -7,6 +8,7 @@ type PostUser = {
   username?: string;
   first_name?: string;
   last_name?: string;
+  display_name?: string;
   avatar?: string | null;
   badge_verified?: boolean;
   is_following?: boolean;
@@ -69,10 +71,13 @@ type ApiPost = {
 export type { ApiPost };
 
 function userFullName(user: PostUser) {
-  if (user.first_name || user.last_name) {
-    return `${user.first_name || ''} ${user.last_name || ''}`.trim();
-  }
-  return user.username || '';
+  return publicDisplayName(
+    {
+      ...user,
+      name: user.display_name || undefined,
+    },
+    'Traveler',
+  );
 }
 
 export type EmbeddedPost = {

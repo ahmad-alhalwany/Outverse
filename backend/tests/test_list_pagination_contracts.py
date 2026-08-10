@@ -17,7 +17,8 @@ from ideas.models import Idea
 from narratives.models import Story
 from resources.models import Resource
 from shop.models import ShopItem
-from speculative.models import Character, DrawSession, FailedIdea, FutureMemory
+from speculative.models import Character, FailedIdea, FutureMemory
+from studio.models import DrawSession
 from subscriptions.models import SubscriptionPlan
 
 
@@ -80,7 +81,7 @@ def test_speculative_failed_ideas_list_is_paginated(api_client, user):
 @pytest.mark.django_db
 def test_speculative_draw_sessions_list_is_paginated(api_client, user):
     DrawSession.objects.create(title='Test Session', host=user)
-    res = api_client.get('/api/speculative/draw-sessions/')
+    res = api_client.get('/api/studio/sessions/')
     assert res.status_code == 200
     _assert_paginated_envelope(res.data)
     assert any(item['title'] == 'Test Session' for item in res.data['results'])

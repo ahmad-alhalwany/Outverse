@@ -7,7 +7,7 @@ import { SparklesIcon } from '@heroicons/react/24/outline';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
-import { shopCreatorName, type ShopItem } from '@/lib/shopTypes';
+import { IDEA_KIND_ICONS, shopCreatorName, type ShopItem } from '@/lib/shopTypes';
 
 const PALETTES = {
   light: {
@@ -59,6 +59,7 @@ export default function ProductDetailView({
   const [shippingAddress, setShippingAddress] = useState('');
   const isPhysical = item.type === 'physical';
   const shippingMissing = isPhysical && !owned && !shippingAddress.trim();
+  const soldOut = item.stock === 0;
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -95,7 +96,7 @@ export default function ProductDetailView({
               className="px-2.5 py-1 rounded-full text-xs"
               style={{ background: C.cream, color: C.text2, border: `1px solid ${C.line}` }}
             >
-              {item.type_display}
+              {item.idea_kind ? `${IDEA_KIND_ICONS[item.idea_kind] ?? ''} ${item.idea_kind_display}` : item.type_display}
             </span>
             {item.is_featured && (
               <span
@@ -103,6 +104,19 @@ export default function ProductDetailView({
                 style={{ background: C.brown }}
               >
                 {t('shop.featured')}
+              </span>
+            )}
+            {item.stock != null && item.stock > 0 && (
+              <span
+                className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                style={{ background: item.stock <= 5 ? '#fdecec' : C.cream, color: item.stock <= 5 ? '#c0392b' : C.text2, border: `1px solid ${C.line}` }}
+              >
+                {item.stock <= 5 ? '🔥 ' : ''}{t('shop.leftInStock', { count: item.stock })}
+              </span>
+            )}
+            {soldOut && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: C.card2, color: C.text2 }}>
+                {t('shop.soldOut')}
               </span>
             )}
           </div>
@@ -113,7 +127,11 @@ export default function ProductDetailView({
             className="text-sm mt-3 leading-relaxed whitespace-pre-wrap"
             style={{ color: C.text2 }}
           >
-            {item.description}
+            {item.content_locked
+              ? item.idea_kind === 'bottle' && item.unlock_at
+                ? t('shop.contentLockedUntil', { date: new Date(item.unlock_at).toLocaleString() })
+                : t('shop.contentLockedPurchase')
+              : item.description}
           </p>
           <div className="flex items-center gap-3 mt-4 text-sm" style={{ color: C.text2 }}>
             <span className="flex items-center gap-1">
@@ -162,7 +180,7 @@ export default function ProductDetailView({
           <button
             type="button"
             onClick={() => onBuy(shippingAddress.trim())}
-            disabled={owned || !canAfford || shippingMissing}
+            disabled={owned || !canAfford || shippingMissing || soldOut}
             className="mt-4 w-full py-3 rounded-xl font-semibold text-white disabled:opacity-70"
             style={{
               background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`,
@@ -171,13 +189,15 @@ export default function ProductDetailView({
           >
             {owned
               ? t('common.owned')
-              : !canAfford
-                ? t('shop.notEnoughCoins')
-                : shippingMissing
-                  ? t('shop.shippingAddressRequired')
-                  : `${t('shop.unlockFor')} ${item.price} ✨`}
+              : soldOut
+                ? t('shop.soldOut')
+                : !canAfford
+                  ? t('shop.notEnoughCoins')
+                  : shippingMissing
+                    ? t('shop.shippingAddressRequired')
+                    : `${t('shop.unlockFor')} ${item.price} ✨`}
           </button>
-          {owned && item.type === 'digital' && accessUrl && (
+          {owned && item.type !== 'physical' && accessUrl && (
             <a
               href={accessUrl}
               target="_blank"

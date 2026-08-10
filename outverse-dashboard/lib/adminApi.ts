@@ -9,6 +9,7 @@ import type {
   AdminPost,
   AdminProfile,
   AdminReel,
+  AdminSellerApplication,
   AdminShopItem,
   AdminStory,
   AdminVerificationRequest,
@@ -177,6 +178,19 @@ export async function fetchVerificationRequests(): Promise<AdminVerificationRequ
 
 export async function reviewVerificationRequest(id: number, action: 'approve' | 'reject') {
   return apiFetchJson(`users/admin/verification/${id}/`, {
+    method: 'POST',
+    json: { action },
+  });
+}
+
+export async function fetchSellerApplications(): Promise<AdminSellerApplication[]> {
+  const res = await apiFetch('users/admin/seller-applications/');
+  if (!res.ok) throw new Error('Failed to load seller applications');
+  return unwrapList<AdminSellerApplication>(res);
+}
+
+export async function reviewSellerApplication(id: number, action: 'approve' | 'reject') {
+  return apiFetchJson(`users/admin/seller-applications/${id}/`, {
     method: 'POST',
     json: { action },
   });

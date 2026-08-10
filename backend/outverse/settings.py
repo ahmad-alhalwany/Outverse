@@ -92,10 +92,12 @@ INSTALLED_APPS = [
     'collab',
     'subscriptions',
     'speculative',
+    'studio',
     'saved',
     'notes',
     'communities',
     'ads.apps.AdsConfig',
+    'storages',
 ]
 
 ASGI_APPLICATION = 'outverse.asgi.application'
@@ -193,14 +195,17 @@ def _database_from_url(url: str) -> dict:
     }
 
 
+_pg_host = os.environ.get('POSTGRES_HOST', 'localhost')
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql_psycopg2',
         'NAME': os.environ.get('POSTGRES_DB', 'outverse_db'),
         'USER': os.environ.get('POSTGRES_USER', 'postgres'),
         'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
-        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'HOST': _pg_host,
         'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        # Managed hosts (RDS, etc.) require/expect SSL; local dev Postgres usually doesn't have it configured.
+        'OPTIONS': {'sslmode': 'require'} if _pg_host not in ('localhost', '127.0.0.1') else {},
     }
 }
 
@@ -279,7 +284,7 @@ REST_FRAMEWORK = {
         'django_filters.rest_framework.DjangoFilterBackend',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'outverse.authentication.SoftTokenAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -329,10 +334,32 @@ SECURE_PROXY_SSL_HEADER = (
     ('HTTP_X_FORWARDED_PROTO', 'https') if ENABLE_HTTPS_SECURITY else None
 )
 
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '').strip()
+USE_S3_MEDIA_STORAGE = bool(AWS_STORAGE_BUCKET_NAME)
+if USE_S3_MEDIA_STORAGE:
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+    AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
+    AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', '').strip() or None
+    AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN', '').strip() or (
+        f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+    )
+    AWS_DEFAULT_ACL = None
+    # Bucket keeps Block Public Access on (deliberate) — every media URL must be
+    # a signed, time-limited GET rather than assuming public-read.
+    AWS_QUERYSTRING_AUTH = True
+    AWS_QUERYSTRING_EXPIRE = 3600
+    STORAGES = {
+        'default': {'BACKEND': 'storages.backends.s3.S3Storage'},
+        'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+    }
+
 _CDN_URL = os.environ.get('CDN_URL', '').rstrip('/')
 if _CDN_URL:
     MEDIA_URL = f'{_CDN_URL}/media/'
     STATIC_URL = f'{_CDN_URL}/static/'
+elif USE_S3_MEDIA_STORAGE:
+    MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '').strip() or f'https://{AWS_S3_CUSTOM_DOMAIN}/'
 else:
     MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
     # STATIC_URL already set above; preserve the env-driven value.

@@ -1,26 +1,19 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import WorldShell from '@/components/world/WorldShell';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { apiFetch, apiFetchJson } from '@/lib/api';
+import { apiFetch, apiFetchJson, apiUrl } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import {
   PlusIcon,
   UsersIcon,
   PencilSquareIcon,
-  PaperAirplaneIcon,
   TrashIcon,
   MagnifyingGlassIcon,
-  ShareIcon,
-  ClockIcon,
-  BookmarkIcon,
-  ArrowUpTrayIcon,
 } from '@heroicons/react/24/outline';
 
-import { apiUrl } from '@/lib/api';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 
 const BASE = apiUrl('forge/stories');
@@ -83,29 +76,6 @@ function useForgeColors() {
   return PALETTES[theme];
 }
 
-/** Renders the lightweight **bold** / *italic* / ~underline~ markup inserted by the segment toolbar. */
-function renderFormattedText(content: string): ReactNode[] {
-  const parts: ReactNode[] = [];
-  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|~[^~]+~)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-  while ((match = regex.exec(content)) !== null) {
-    if (match.index > lastIndex) parts.push(content.slice(lastIndex, match.index));
-    const token = match[0];
-    if (token.startsWith('**')) {
-      parts.push(<strong key={key++}>{token.slice(2, -2)}</strong>);
-    } else if (token.startsWith('~')) {
-      parts.push(<u key={key++}>{token.slice(1, -1)}</u>);
-    } else {
-      parts.push(<em key={key++}>{token.slice(1, -1)}</em>);
-    }
-    lastIndex = match.index + token.length;
-  }
-  if (lastIndex < content.length) parts.push(content.slice(lastIndex));
-  return parts;
-}
-
 const GENRES = [
   { key: 'all', label: 'All' },
   { key: 'fantasy', label: 'Fantasy' },
@@ -121,6 +91,7 @@ const TABS = [
   { key: 'trending', label: 'Trending' },
   { key: 'new', label: 'New' },
   { key: 'completed', label: 'Completed' },
+  { key: 'my', label: 'My Forge' },
 ];
 
 type Story = {
@@ -137,15 +108,6 @@ type Story = {
   segment_count: number;
   contributors_count: number;
 };
-
-type Segment = {
-  id: number;
-  content: string;
-  order: number;
-  author: { username: string; first_name?: string; last_name?: string; avatar?: string } | null;
-};
-
-type StoryDetail = Story & { segments: Segment[] };
 
 function genreLabel(key: string) {
   return GENRES.find((g) => g.key === key)?.label || key;
@@ -168,44 +130,41 @@ function StoryForgeContent() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [activeId, setActiveId] = useState<number | null>(null);
+  const [myKind, setMyKind] = useState<'all' | 'owned' | 'saved' | 'collaborating'>('all');
   const [editingStory, setEditingStory] = useState<Story | null>(null);
   const [deletingStory, setDeletingStory] = useState<Story | null>(null);
   const [search, setSearch] = useState('');
 
   const openStory = useCallback(
     (id: number) => {
-      setActiveId(id);
-      router.replace(`/forge?story=${id}`);
+      router.push(`/forge/${id}`);
     },
     [router],
   );
-
-  const closeStory = useCallback(() => {
-    setActiveId(null);
-    if (searchParams.get('story')) router.replace('/forge');
-  }, [router, searchParams]);
 
   useEffect(() => {
     const s = searchParams.get('story');
     if (s) {
       const id = parseInt(s, 10);
-      if (!Number.isNaN(id)) setActiveId(id);
+      if (!Number.isNaN(id)) {
+        router.replace(`/forge/${id}`);
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(false);
     try {
-      const ordering = tab === 'new' ? 'new' : 'trending';
-      const status = tab === 'completed' ? 'completed' : 'all';
-      const res = await fetch(`${BASE}/?ordering=${ordering}&genre=${genre}&status=${status}`);
+      const path =
+        tab === 'my'
+          ? `forge/stories/my/?kind=${myKind}`
+          : `forge/stories/?ordering=${tab === 'new' ? 'new' : 'trending'}&genre=${genre}&status=${tab === 'completed' ? 'completed' : 'all'}`;
+      const res = await apiFetch(path);
       if (res.ok) {
         const data = await res.json();
         setStories(Array.isArray(data) ? data : data.results || []);
-      }
-      else {
+      } else {
         setStories([]);
         setLoadError(true);
       }
@@ -215,7 +174,7 @@ function StoryForgeContent() {
     } finally {
       setLoading(false);
     }
-  }, [tab, genre]);
+  }, [tab, genre, myKind]);
 
   useEffect(() => {
     load();
@@ -308,6 +267,31 @@ function StoryForgeContent() {
                   </button>
                 ))}
               </div>
+
+              {tab === 'my' && (
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                  {([
+                    ['all', 'All'],
+                    ['owned', 'Owned'],
+                    ['saved', 'Saved'],
+                    ['collaborating', 'Collaborating'],
+                  ] as const).map(([k, label]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setMyKind(k)}
+                      className="rounded-full px-3 py-1 text-xs font-semibold"
+                      style={{
+                        background: myKind === k ? C.brown : C.white,
+                        color: myKind === k ? '#fff' : C.text2,
+                        border: `1px solid ${C.line}`,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
                 {GENRES.map((g) => (
@@ -469,9 +453,6 @@ function StoryForgeContent() {
 
       <AnimatePresence>
         {createOpen && <CreateStoryModal onClose={() => setCreateOpen(false)} onCreated={load} />}
-        {activeId != null && (
-          <ReadStoryModal id={activeId} onClose={closeStory} onContributed={load} />
-        )}
         {editingStory && (
           <EditStoryModal
             story={editingStory}
@@ -687,339 +668,16 @@ function DeleteStoryDialog({ story, onClose, onDeleted }: { story: Story; onClos
   );
 }
 
-function ReadStoryModal({ id, onClose, onContributed }: { id: number; onClose: () => void; onContributed: () => void }) {
-  const C = useForgeColors();
-  const [story, setStory] = useState<StoryDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [text, setText] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [shareState, setShareState] = useState<'idle' | 'done'>('idle');
-  const [saved, setSaved] = useState(false);
-  const [actionMsg, setActionMsg] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  function wrapSelection(marker: string) {
-    const el = textareaRef.current;
-    if (!el) return;
-    const start = el.selectionStart ?? text.length;
-    const end = el.selectionEnd ?? text.length;
-    const selected = text.slice(start, end);
-    const inner = selected || 'text';
-    const next = `${text.slice(0, start)}${marker}${inner}${marker}${text.slice(end)}`;
-    setText(next);
-    requestAnimationFrame(() => {
-      el.focus();
-      el.setSelectionRange(start + marker.length, start + marker.length + inner.length);
-    });
-  }
-
-  const fetchStory = useCallback(async () => {
-    setLoading(true);
-    setStory(null);
-    try {
-      const res = await fetch(`${BASE}/${id}/`);
-      if (res.ok) setStory(await res.json());
-    } finally {
-      setLoading(false);
-    }
-  }, [id]);
-
-  useEffect(() => {
-    fetchStory();
-  }, [fetchStory]);
-
-  async function contribute() {
-    if (!text.trim()) {
-      setError('Write your part first ✍️');
-      return;
-    }
-    setError('');
-    setSaving(true);
-    try {
-      const res = await apiFetchJson(`forge/stories/${id}/segments/`, {
-        method: 'POST',
-        json: { content: text.trim() },
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'failed');
-      }
-      setText('');
-      await fetchStory();
-      onContributed();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not add your part.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function shareStory() {
-    const url = typeof window !== 'undefined' ? `${window.location.origin}/forge?story=${id}` : `/forge?story=${id}`;
-    try {
-      if (navigator.share && story) {
-        await navigator.share({ title: story.title, text: story.premise, url });
-      } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(url);
-      }
-      setShareState('done');
-      window.setTimeout(() => setShareState('idle'), 2200);
-    } catch (e) {
-      setShareState('idle');
-      if (e instanceof DOMException && e.name === 'AbortError') return;
-      setActionMsg('Could not share the link.');
-      window.setTimeout(() => setActionMsg(''), 2500);
-    }
-  }
-
-  async function toggleSaveStory() {
-    try {
-      const res = await apiFetchJson(`forge/stories/${id}/toggle_save/`, { method: 'POST' });
-      if (!res.ok) throw new Error('failed');
-      const data = await res.json();
-      setSaved(Boolean(data.saved));
-      setActionMsg(data.saved ? 'Story saved' : 'Removed from saved');
-      window.setTimeout(() => setActionMsg(''), 2000);
-    } catch {
-      setActionMsg('Could not update saved status.');
-      window.setTimeout(() => setActionMsg(''), 2500);
-    }
-  }
-
-  async function publishStory() {
-    try {
-      const res = await apiFetchJson(`forge/stories/${id}/publish/`, { method: 'POST' });
-      if (!res.ok) throw new Error('failed');
-      await fetchStory();
-      setActionMsg('Story published');
-      window.setTimeout(() => setActionMsg(''), 2000);
-    } catch {
-      setActionMsg('Could not publish the story.');
-      window.setTimeout(() => setActionMsg(''), 2500);
-    }
-  }
-
-  function focusWrite() {
-    textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    textareaRef.current?.focus();
-  }
-
-  const full = story && story.segment_count >= story.max_segments;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
-      style={{ background: C.overlay, backdropFilter: 'blur(3px)' }}
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.94, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.94, y: 20 }}
-        onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-6xl rounded-[28px] relative max-h-[92vh] flex flex-col overflow-hidden"
-        style={{ background: C.cream, boxShadow: C.modalShadow, border: `1px solid ${C.line}` }}
-      >
-        <button type="button" onClick={onClose} className="absolute top-3 right-3 w-9 h-9 rounded-full text-xl flex items-center justify-center z-10" style={{ background: C.card, color: C.text }} aria-label="Close">×</button>
-
-        {loading ? (
-          <div className="p-16 text-center" style={{ color: C.text2 }}>Loading story…</div>
-        ) : !story ? (
-          <div className="p-12 text-center">
-            <p className="font-semibold mb-3" style={{ color: C.text }}>Story not found</p>
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
-              style={{ background: C.brownDk }}
-            >
-              Close
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1.7fr)_320px]">
-              <div className="min-h-0 overflow-y-auto">
-                <div
-                  className="h-52 bg-cover bg-center"
-                  style={{
-                    background: story.cover_url
-                      ? `url(${story.cover_url}) center/cover`
-                      : `linear-gradient(135deg, ${C.card}, ${C.card2})`,
-                  }}
-                />
-                <div className="p-6">
-                  <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-5" style={{ borderColor: C.line }}>
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: C.card2, color: C.brown }}>{genreLabel(story.genre)}</span>
-                        <span className="text-xs" style={{ color: C.text2 }}>{story.segment_count}/{story.max_segments} parts</span>
-                      </div>
-                      <h2 className="text-2xl font-bold" style={{ color: C.text }}>{story.title}</h2>
-                      <p className="mt-2 max-w-2xl text-sm leading-relaxed" style={{ color: C.text2 }}>{story.premise}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => void shareStory()}
-                      className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
-                      style={{ background: C.white, color: C.text, border: `1px solid ${C.line}` }}
-                    >
-                      <ShareIcon className="h-4 w-4" />
-                      {shareState === 'done' ? 'Link copied' : 'Share'}
-                    </button>
-                  </div>
-
-                  <div className="mt-5 rounded-[24px] p-5" style={{ background: C.card2 }}>
-                    {story.segments.length > 0 ? (
-                      <>
-                        <div className="mb-3 flex items-center justify-between gap-3">
-                          <div>
-                            <h3 className="text-xl font-bold" style={{ color: C.text }}>
-                              {story.title}
-                            </h3>
-                            <p className="text-sm" style={{ color: C.text2 }}>
-                              Chapter {story.segment_count}: Community continuation
-                            </p>
-                          </div>
-                          <ClockIcon className="h-5 w-5" style={{ color: C.brownDk }} />
-                        </div>
-                        <div className="space-y-4">
-                          {story.segments.map((seg, index) => (
-                            <div key={seg.id} className={index === story.segments.length - 1 ? 'rounded-2xl bg-white/60 p-4' : ''}>
-                              <p className="text-base leading-8" style={{ color: C.text }}>{renderFormattedText(seg.content)}</p>
-                              <span className="mt-2 inline-block text-xs" style={{ color: C.text2 }}>
-                                — {seg.author ? (seg.author.first_name || seg.author.username) : 'Anonymous'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-sm" style={{ color: C.text2 }}>
-                        No contributions yet. Start the first paragraph below.
-                      </p>
-                    )}
-                  </div>
-
-                  {full && (
-                    <div className="mt-4 rounded-xl p-3 text-center text-sm" style={{ background: C.fundedBg, color: C.fundedText }}>
-                      ✨ This story is complete. A mini-tale forged by many hands.
-                    </div>
-                  )}
-
-                  {!full && story.status !== 'completed' && (
-                    <div className="mt-5 rounded-[24px] border p-4 md:p-5" style={{ borderColor: C.line, background: C.white }}>
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <button type="button" onClick={() => wrapSelection('**')} className="rounded-xl border px-3 py-2 text-sm font-semibold" style={{ borderColor: C.line, color: C.text }}>B</button>
-                        <button type="button" onClick={() => wrapSelection('*')} className="rounded-xl border px-3 py-2 text-sm italic" style={{ borderColor: C.line, color: C.text }}>I</button>
-                        <button type="button" onClick={() => wrapSelection('~')} className="rounded-xl border px-3 py-2 text-sm underline" style={{ borderColor: C.line, color: C.text }}>U</button>
-                      </div>
-                      <textarea
-                        ref={textareaRef}
-                        value={text}
-                        onChange={(e) => setText(e.target.value)}
-                        rows={5}
-                        maxLength={500}
-                        placeholder="Continue the story..."
-                        className="w-full rounded-2xl px-4 py-3 outline-none resize-none text-sm"
-                        style={{ background: C.cream, border: `1px solid ${C.line}`, color: C.text }}
-                      />
-                      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                        <span className="text-sm" style={{ color: C.text2 }}>
-                          {text.length}/500 characters
-                        </span>
-                        <button onClick={contribute} disabled={saving} className="flex items-center gap-2 px-5 py-3 rounded-xl font-semibold text-white disabled:opacity-60" style={{ background: `linear-gradient(90deg, ${C.accentStrong}, ${C.brownDk})` }}>
-                          <PaperAirplaneIcon className="h-4 w-4" /> {saving ? 'Adding…' : 'Submit Contribution'}
-                        </button>
-                      </div>
-                      {error && <div className="text-sm mt-2" style={{ color: '#c0392b' }}>{error}</div>}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <aside className="border-t lg:border-l lg:border-t-0 p-5 space-y-4 overflow-y-auto" style={{ borderColor: C.line, background: C.white }}>
-                <div className="rounded-[24px] border p-4" style={{ borderColor: C.line, background: C.cream }}>
-                  <h3 className="text-lg font-bold" style={{ color: C.text }}>Active Contributors</h3>
-                  <div className="mt-4 space-y-3">
-                    {story.segments.slice(-4).map((seg) => (
-                      <div key={seg.id} className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold" style={{ color: C.text }}>
-                            {seg.author ? (seg.author.first_name || seg.author.username) : 'Anonymous'}
-                          </p>
-                          <p className="text-xs" style={{ color: C.text2 }}>
-                            {seg.order === 0 ? 'Author' : seg.order === story.segments.length - 1 ? 'Narrator' : 'Editor'}
-                          </p>
-                        </div>
-                        <UsersIcon className="h-4 w-4 shrink-0" style={{ color: C.brown }} />
-                      </div>
-                    ))}
-                    {story.segments.length === 0 ? (
-                      <p className="text-sm" style={{ color: C.text2 }}>
-                        Contributors will appear here as the story grows.
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border p-4" style={{ borderColor: C.line, background: C.cream }}>
-                  <h3 className="text-lg font-bold" style={{ color: C.text }}>Recent Activity</h3>
-                  <div className="mt-4 space-y-3">
-                    {story.segments.slice(-3).reverse().map((seg) => (
-                      <div key={seg.id}>
-                        <p className="text-sm font-semibold" style={{ color: C.text }}>
-                          {seg.author ? (seg.author.first_name || seg.author.username) : 'Anonymous'}
-                        </p>
-                        <p className="text-sm" style={{ color: C.text2 }}>
-                          added part {seg.order + 1}
-                        </p>
-                      </div>
-                    ))}
-                    {story.segments.length === 0 ? (
-                      <p className="text-sm" style={{ color: C.text2 }}>
-                        No activity yet.
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border p-4" style={{ borderColor: C.line, background: C.cream }}>
-                  {actionMsg ? (
-                    <p className="mb-2 text-xs font-semibold" style={{ color: C.brownDk }}>{actionMsg}</p>
-                  ) : null}
-                  <div className="grid grid-cols-3 gap-2">
-                    <button type="button" onClick={focusWrite} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: C.card2, color: C.brownDk }}>
-                      <PencilSquareIcon className="h-4 w-4" /> Write
-                    </button>
-                    <button type="button" onClick={() => void toggleSaveStory()} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: saved ? C.brownDk : C.card2, color: saved ? '#fff' : C.brownDk }}>
-                      <BookmarkIcon className="h-4 w-4" /> {saved ? 'Saved' : 'Save'}
-                    </button>
-                    <button type="button" onClick={() => void publishStory()} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold" style={{ background: C.card2, color: C.brownDk }}>
-                      <ArrowUpTrayIcon className="h-4 w-4" /> Publish
-                    </button>
-                  </div>
-                </div>
-              </aside>
-            </div>
-          </>
-        )}
-      </motion.div>
-    </motion.div>
-  );
-}
-
 function CreateStoryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const C = useForgeColors();
   const [title, setTitle] = useState('');
   const [premise, setPremise] = useState('');
   const [genre, setGenre] = useState('fantasy');
   const [coverUrl, setCoverUrl] = useState('');
-  const [maxSegments, setMaxSegments] = useState('10');
+  const [maxSegments, setMaxSegments] = useState('12');
+  const [visibility, setVisibility] = useState('public');
+  const [requireApproval, setRequireApproval] = useState(false);
+  const [tone, setTone] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -1039,12 +697,18 @@ function CreateStoryModal({ onClose, onCreated }: { onClose: () => void; onCreat
           premise: premise.trim(),
           genre,
           cover_url: coverUrl.trim(),
-          max_segments: parseInt(maxSegments, 10) || 10,
+          max_segments: parseInt(maxSegments, 10) || 12,
+          visibility,
+          require_approval: requireApproval || visibility === 'invite_only',
+          tone: tone.trim(),
+          studio_mode: visibility === 'invite_only' ? 'collab' : 'solo',
         },
       });
       if (!res.ok) throw new Error('create failed');
+      const created = await res.json().catch(() => null);
       onCreated();
       onClose();
+      if (created?.id) window.location.href = `/forge/${created.id}`;
     } catch {
       setError('Could not start the story. Check the connection.');
     } finally {
@@ -1092,8 +756,25 @@ function CreateStoryModal({ onClose, onCreated }: { onClose: () => void; onCreat
           </div>
           <div>
             <label className="text-sm font-medium" style={{ color: C.text2 }}>Max parts</label>
-            <input value={maxSegments} onChange={(e) => setMaxSegments(e.target.value.replace(/\D/g, ''))} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} placeholder="10" inputMode="numeric" />
+            <input value={maxSegments} onChange={(e) => setMaxSegments(e.target.value.replace(/\D/g, ''))} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} placeholder="12" inputMode="numeric" />
           </div>
+        </div>
+
+        <label className="text-sm font-medium mt-3 block" style={{ color: C.text2 }}>Tone (optional)</label>
+        <input value={tone} onChange={(e) => setTone(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} placeholder="Dreamy, absurd, noir…" />
+
+        <div className="grid grid-cols-2 gap-3 mt-3">
+          <div>
+            <label className="text-sm font-medium" style={{ color: C.text2 }}>Visibility</label>
+            <select value={visibility} onChange={(e) => setVisibility(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field}>
+              <option value="public">Public</option>
+              <option value="invite_only">Invite only</option>
+            </select>
+          </div>
+          <label className="flex items-end gap-2 pb-2 text-sm" style={{ color: C.text2 }}>
+            <input type="checkbox" checked={requireApproval} onChange={(e) => setRequireApproval(e.target.checked)} />
+            Require approval
+          </label>
         </div>
 
         <label className="text-sm font-medium mt-3 block" style={{ color: C.text2 }}>Cover image URL</label>

@@ -26,23 +26,6 @@ class FailedIdea(models.Model):
         return self.title
 
 
-class DrawSession(models.Model):
-    """Live Creation Studio — a simplified shared drawing room (autosave, no real-time video)."""
-
-    title = models.CharField(max_length=200, default='Untitled session')
-    host = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='draw_sessions')
-    strokes = models.JSONField(default=list, blank=True)
-    is_live = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ['-updated_at']
-
-    def __str__(self):
-        return self.title
-
-
 class FutureMemory(models.Model):
     """Future Memories Bank — a deposit vault for imagined/speculative memories."""
 

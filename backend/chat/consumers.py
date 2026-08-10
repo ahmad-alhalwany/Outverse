@@ -22,7 +22,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         self.conversation_id = int(self.scope['url_route']['kwargs']['conversation_id'])
-        self.user_id = resolve_ws_user_id(self.scope)
+        self.user_id = await resolve_ws_user_id(self.scope)
         if not self.user_id:
             await self.close(code=4001)
             return
@@ -85,7 +85,7 @@ class RoomChatConsumer(AsyncJsonWebsocketConsumer):
 
     async def connect(self):
         self.room_id = int(self.scope['url_route']['kwargs']['room_id'])
-        self.user_id = resolve_ws_user_id(self.scope)
+        self.user_id = await resolve_ws_user_id(self.scope)
         if not self.user_id:
             await self.close(code=4001)
             return
@@ -155,7 +155,7 @@ class SignalConsumer(AsyncJsonWebsocketConsumer):
     """Presence + WebRTC signaling (1:1 and group rooms)."""
 
     async def connect(self):
-        self.user_id = resolve_ws_user_id(self.scope)
+        self.user_id = await resolve_ws_user_id(self.scope)
         if not self.user_id:
             await self.close(code=4001)
             return

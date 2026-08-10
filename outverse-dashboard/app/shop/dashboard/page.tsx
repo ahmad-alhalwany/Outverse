@@ -6,8 +6,9 @@ import WorldShell from '@/components/world/WorldShell';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 import { apiFetch, apiFetchJson } from '@/lib/api';
-import type { CreatorSales } from '@/lib/shopTypes';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
+import type { CreatorSales, ShopItem } from '@/lib/shopTypes';
+import { ArrowLeftIcon, PlusIcon } from '@heroicons/react/24/outline';
+import ProductFormModal from '@/components/shop/ProductFormModal';
 
 const PALETTES = {
   light: {
@@ -45,6 +46,9 @@ export default function CreatorDashboardPage() {
   const [data, setData] = useState<CreatorSales | null>(null);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ShopItem | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,6 +63,17 @@ export default function CreatorDashboardPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function deleteItem(id: number) {
+    if (!window.confirm(t('creatorDashboard.deleteConfirm'))) return;
+    setDeletingId(id);
+    try {
+      const res = await apiFetch(`shop/items/${id}/`, { method: 'DELETE' });
+      if (res.ok) void load();
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function markShipped(transactionId: number) {
     setBusyId(transactionId);
@@ -92,9 +107,20 @@ export default function CreatorDashboardPage() {
           {t('shop.backToShop')}
         </Link>
 
-        <h1 className="text-2xl md:text-3xl font-bold mb-1" style={{ color: C.brown }}>
-          {t('creatorDashboard.title')}
-        </h1>
+        <div className="flex flex-wrap items-start justify-between gap-3 mb-1">
+          <h1 className="text-2xl md:text-3xl font-bold" style={{ color: C.brown }}>
+            {t('creatorDashboard.title')}
+          </h1>
+          <button
+            type="button"
+            onClick={() => { setEditingItem(null); setFormOpen(true); }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-semibold text-white shrink-0"
+            style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
+          >
+            <PlusIcon className="h-4 w-4" />
+            {t('creatorDashboard.addProduct')}
+          </button>
+        </div>
         <p className="text-sm mb-6" style={{ color: C.text2 }}>
           {t('creatorDashboard.subtitle')}{' '}
           <Link href="/analytics" className="underline" style={{ color: C.brown }}>
@@ -147,14 +173,36 @@ export default function CreatorDashboardPage() {
                     <div key={item.id} className="rounded-2xl p-4 flex items-center justify-between gap-3" style={{ background: C.white, border: `1px solid ${C.line}` }}>
                       <div className="min-w-0">
                         <p className="font-semibold truncate" style={{ color: C.text }}>{item.name}</p>
-                        <p className="text-xs" style={{ color: C.text2 }}>{item.price} ✨ · {item.sales_count} {t('creatorDashboard.sold')}</p>
+                        <p className="text-xs" style={{ color: C.text2 }}>
+                          {item.price} ✨ · {item.sales_count} {t('creatorDashboard.sold')}
+                          {item.stock != null && ` · ${t('shop.leftInStock', { count: item.stock })}`}
+                        </p>
                       </div>
-                      <span
-                        className="shrink-0 px-2.5 py-1 rounded-full text-xs font-semibold"
-                        style={{ background: item.is_available ? C.successBg : C.card2, color: item.is_available ? C.successText : C.text2 }}
-                      >
-                        {item.is_available ? t('creatorDashboard.visible') : t('creatorDashboard.hidden')}
-                      </span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span
+                          className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                          style={{ background: item.is_available ? C.successBg : C.card2, color: item.is_available ? C.successText : C.text2 }}
+                        >
+                          {item.is_available ? t('creatorDashboard.visible') : t('creatorDashboard.hidden')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingItem(item); setFormOpen(true); }}
+                          className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                          style={{ background: C.card2, color: C.brownDk }}
+                        >
+                          {t('creatorDashboard.edit')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void deleteItem(item.id)}
+                          disabled={deletingId === item.id}
+                          className="px-2.5 py-1 rounded-full text-xs font-semibold disabled:opacity-60"
+                          style={{ background: C.card2, color: '#c0392b' }}
+                        >
+                          {t('creatorDashboard.deleteProduct')}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -207,6 +255,13 @@ export default function CreatorDashboardPage() {
           </>
         )}
       </div>
+      {formOpen && (
+        <ProductFormModal
+          item={editingItem}
+          onClose={() => setFormOpen(false)}
+          onSaved={() => void load()}
+        />
+      )}
     </WorldShell>
   );
 }

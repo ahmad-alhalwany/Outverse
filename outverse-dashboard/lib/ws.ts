@@ -1,6 +1,6 @@
 'use client';
 
-import { getToken } from '@/lib/auth';
+import { authHeaders, getToken } from '@/lib/auth';
 import { API_ORIGIN } from './api';
 
 function appendAuthToken(url: string): string {
@@ -43,19 +43,33 @@ export async function getChatRuntimeConfig(): Promise<ChatRuntimeConfig | null> 
   if (!runtimeConfigPromise) {
     runtimeConfigPromise = fetch(`${API_ORIGIN}/api/chat/config/`, {
       credentials: 'include',
+      headers: {
+        Accept: 'application/json',
+        ...authHeaders(),
+      },
     })
-      .then((response) => (response.ok ? response.json() : null))
-      .catch(() => null);
+      .then((response) => {
+        if (!response.ok) {
+          runtimeConfigPromise = null;
+          return null;
+        }
+        return response.json() as Promise<ChatRuntimeConfig>;
+      })
+      .catch(() => {
+        runtimeConfigPromise = null;
+        return null;
+      });
   }
   return runtimeConfigPromise;
 }
 
 export async function resolveWsUrl(
-  kind: 'chat' | 'room' | 'signal' | 'notifications' | 'live',
+  kind: 'chat' | 'room' | 'signal' | 'notifications' | 'live' | 'studio',
   params: Record<string, string | number> = {},
 ): Promise<string> {
   const config = await getChatRuntimeConfig();
-  const template = kind !== 'live' ? config?.websocket?.[kind as 'chat' | 'room' | 'signal' | 'notifications'] : undefined;
+  const template =
+    kind !== 'live' && kind !== 'studio' ? config?.websocket?.[kind as 'chat' | 'room' | 'signal' | 'notifications'] : undefined;
   if (template) {
     const resolvedPath = Object.entries(params).reduce(
       (value, [key, param]) => value.replace(`{${key}}`, String(param)),
@@ -74,6 +88,9 @@ export async function resolveWsUrl(
   }
   if (kind === 'live') {
     return wsUrl(`/ws/live/${params.session_id}/`);
+  }
+  if (kind === 'studio') {
+    return wsUrl(`/ws/studio/${params.session_id}/`);
   }
   return wsUrl('/ws/signal/');
 }

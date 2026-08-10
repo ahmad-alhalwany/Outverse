@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { formatBottleTimeLeft } from '@/utils/bottleTime';
 import 'leaflet/dist/leaflet.css';
 import MapZoomBridgeInner from './MapZoomBridgeInner';
 import type { VaultMapStyle } from '@/lib/vaultMapStyle';
+import type { RegionMood } from '@/lib/vaultRegionMood';
 
 export type VaultMapMarker = {
   id: number | string;
@@ -19,6 +20,7 @@ export type VaultMapMarker = {
   isMine?: boolean;
   message?: string | null;
   senderName?: string | null;
+  emotion?: string;
 };
 
 function bottleDivIcon(emoji: string, color: string, cosmic: boolean, isMine: boolean) {
@@ -26,8 +28,17 @@ function bottleDivIcon(emoji: string, color: string, cosmic: boolean, isMine: bo
   return L.divIcon({
     className: 'vault-bottle-pin-wrapper',
     html: `<div class="vault-bottle-pin${cosmic ? ' vault-bottle-pin--cosmic' : ''}${mine}" style="--pin-color:${color}"><span class="vault-bottle-pin__ring"></span><span class="vault-bottle-pin__emoji">${emoji}</span></div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+  });
+}
+
+function pickDivIcon() {
+  return L.divIcon({
+    className: 'vault-bottle-pin-wrapper',
+    html: `<div class="vault-pick-pin"><span>📍</span></div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 36],
   });
 }
 
@@ -50,13 +61,33 @@ function FitBoundsOnMarkers({ markers }: { markers: VaultMapMarker[] }) {
     if (markers.length === 0) return;
     if (fittedKey.current === key) return;
     if (markers.length === 1) {
-      map.setView([markers[0].lat, markers[0].lng], 6);
+      map.setView([markers[0].lat, markers[0].lng], 5);
     } else {
       const bounds = L.latLngBounds(markers.map((m) => [m.lat, m.lng]));
-      map.fitBounds(bounds.pad(0.25), { maxZoom: 10 });
+      const span = Math.max(
+        Math.abs(bounds.getNorth() - bounds.getSouth()),
+        Math.abs(bounds.getEast() - bounds.getWest()),
+      );
+      map.fitBounds(bounds.pad(0.2), { maxZoom: span > 40 ? 3 : span > 10 ? 5 : 12 });
     }
     fittedKey.current = key;
   }, [key, markers, map]);
+  return null;
+}
+
+function MapClickPicker({
+  enabled,
+  onPick,
+}: {
+  enabled: boolean;
+  onPick?: (lat: number, lng: number) => void;
+}) {
+  useMapEvents({
+    click(e) {
+      if (!enabled || !onPick) return;
+      onPick(e.latlng.lat, e.latlng.lng);
+    },
+  });
   return null;
 }
 
@@ -83,9 +114,6 @@ function BottleMapMarker({ marker: m, cosmic }: { marker: VaultMapMarker; cosmic
           )}
           <div className="text-lg leading-none mb-1">{m.emoji} 🍶</div>
           <strong>{m.label || 'Mood'}</strong>
-          {m.senderName && (
-            <p className="text-xs mt-1 opacity-75">from @{m.senderName}</p>
-          )}
           {hasMessage && (
             <p className="text-sm mt-2 leading-relaxed max-w-[220px] whitespace-pre-wrap">
               {m.message}
@@ -96,19 +124,56 @@ function BottleMapMarker({ marker: m, cosmic }: { marker: VaultMapMarker; cosmic
               Vanishes in {timeLeft}
             </p>
           )}
-        </div>
+          <p className="text-[10px] mt-2 opacity-60">Anonymous traveler</p>        </div>
       </Popup>
     </Marker>
   );
 }
 
+function RegionMoodLayer({ regions }: { regions: RegionMood[] }) {
+  if (!regions.length) return null;
+  return (
+    <>
+      {regions.map((r) => (
+        <Circle
+          key={r.id}
+          center={[r.lat, r.lng]}
+          radius={Math.min(1800, 700 + r.count * 180)}
+          pathOptions={{
+            color: r.color,
+            fillColor: r.color,
+            fillOpacity: 0.18,
+            weight: 2,
+            opacity: 0.55,
+          }}
+        >
+          <Popup>
+            <div className="text-sm">
+              <div className="text-base mb-1">
+                {r.emoji} <strong>This area feels {r.label}</strong>
+              </div>
+              <p className="opacity-80">
+                {r.count} drifting {r.count === 1 ? 'bottle' : 'bottles'} nearby
+              </p>
+            </div>
+          </Popup>
+        </Circle>
+      ))}
+    </>
+  );
+}
+
 type Props = {
   markers: VaultMapMarker[];
+  regions?: RegionMood[];
   variant: 'light' | 'dark';
   mapStyle: VaultMapStyle;
   flyTarget: FlyTarget;
   className?: string;
   onMapReady?: (map: L.Map) => void;
+  pickMode?: boolean;
+  onPickLocation?: (lat: number, lng: number) => void;
+  pickPreview?: { lat: number; lng: number } | null;
 };
 
 function tileFor(mapStyle: VaultMapStyle) {
@@ -119,9 +184,6 @@ function tileFor(mapStyle: VaultMapStyle) {
         '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO',
     };
   }
-  // The "street" style always uses the richly-detailed Voyager tiles (roads, parks,
-  // building footprints) regardless of app theme — map embeds read best with real
-  // cartographic detail; only the "cosmic" style opts into a flat dark look.
   return {
     url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
     attribution:
@@ -131,25 +193,31 @@ function tileFor(mapStyle: VaultMapStyle) {
 
 export default function EmotionVaultMapInner({
   markers,
+  regions = [],
   variant,
   mapStyle,
   flyTarget,
   className = '',
   onMapReady,
+  pickMode = false,
+  onPickLocation,
+  pickPreview = null,
 }: Props) {
+  void variant;
   const defaultCenter: [number, number] = markers.length
     ? [markers[0].lat, markers[0].lng]
-    : [20, 0];
-  const defaultZoom = markers.length ? 3 : 2;
+    : [1.31, 103.92];
+  const defaultZoom = markers.length ? 12 : 3;
 
   const tile = useMemo(() => tileFor(mapStyle), [mapStyle]);
   const cosmic = mapStyle === 'cosmic';
+  const pickIcon = useMemo(() => pickDivIcon(), []);
 
   return (
     <MapContainer
       center={defaultCenter}
       zoom={defaultZoom}
-      className={`vault-leaflet-map vault-leaflet-map--${mapStyle} ${className}`}
+      className={`vault-leaflet-map vault-leaflet-map--${mapStyle} ${className}${pickMode ? ' vault-leaflet-map--picking' : ''}`}
       scrollWheelZoom
       zoomControl={false}
     >
@@ -157,9 +225,14 @@ export default function EmotionVaultMapInner({
       {onMapReady && <MapZoomBridgeInner onMap={(m) => onMapReady(m as L.Map)} />}
       <FitBoundsOnMarkers markers={markers} />
       <MapFlyTo target={flyTarget} />
+      <MapClickPicker enabled={pickMode} onPick={onPickLocation} />
+      <RegionMoodLayer regions={regions} />
       {markers.map((m) => (
         <BottleMapMarker key={m.id} marker={m} cosmic={cosmic} />
       ))}
+      {pickPreview && (
+        <Marker position={[pickPreview.lat, pickPreview.lng]} icon={pickIcon} />
+      )}
     </MapContainer>
   );
 }

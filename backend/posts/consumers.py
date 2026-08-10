@@ -9,7 +9,7 @@ class PostCommentsConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
         self.post_id = int(self.scope['url_route']['kwargs']['post_id'])
         self.group_name = f'post_comments_{self.post_id}'
-        self.viewer_id = resolve_ws_user_id(self.scope)
+        self.viewer_id = await resolve_ws_user_id(self.scope)
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
         await self.send_json({

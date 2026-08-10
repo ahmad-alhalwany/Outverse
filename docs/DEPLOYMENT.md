@@ -37,7 +37,8 @@ Production Compose includes a `cron` sidecar (`backend/scripts/cron-loop.sh`) th
 |---------|---------|
 | Every minute | `python manage.py publish_scheduled_posts` |
 | Every minute | `python manage.py publish_premiere_videos` |
-| Once daily at 08:00 UTC (override with `CRON_DIGEST_HOUR` / `CRON_DIGEST_MINUTE`) | `python manage.py send_email_digests` |
+| Once daily at 08:00 UTC (`CRON_DIGEST_HOUR` / `CRON_DIGEST_MINUTE`) | `python manage.py send_email_digests` |
+| Once daily at 06:00 UTC (`CRON_DAILY_CHALLENGE_HOUR` / `CRON_DAILY_CHALLENGE_MINUTE`) | `python manage.py generate_daily_challenge` |
 
 Do **not** run digests hourly — `send_email_digests` is not idempotent per hour and would re-mail users.
 
@@ -47,6 +48,14 @@ Manual / host crontab alternative:
 */1 * * * * docker compose -f docker-compose.prod.yml exec -T backend python manage.py publish_scheduled_posts
 */1 * * * * docker compose -f docker-compose.prod.yml exec -T backend python manage.py publish_premiere_videos
 0 8 * * *   docker compose -f docker-compose.prod.yml exec -T backend python manage.py send_email_digests
+0 6 * * *   docker compose -f docker-compose.prod.yml exec -T backend python manage.py generate_daily_challenge
+```
+
+On Windows (local, no Docker cron):
+
+```powershell
+cd backend
+powershell -ExecutionPolicy Bypass -File .\scripts\register-daily-challenge-task.ps1 -Hour 6 -Minute 0 -Lang en
 ```
 
 Marketing campaigns are sent on-demand from the admin UI (`send_marketing_campaign <id>`), not via cron.

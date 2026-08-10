@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from users.models import User
 
-from .models import Character, DrawSession, FailedIdea, FutureMemory
+from .models import Character, FailedIdea, FutureMemory
 
 
 class SpecUserSerializer(serializers.ModelSerializer):
@@ -22,15 +22,6 @@ class FailedIdeaSerializer(serializers.ModelSerializer):
             'exhibition_display', 'cover_url', 'user', 'created_at',
         ]
         read_only_fields = ['user', 'created_at']
-
-
-class DrawSessionSerializer(serializers.ModelSerializer):
-    host = SpecUserSerializer(read_only=True)
-
-    class Meta:
-        model = DrawSession
-        fields = ['id', 'title', 'host', 'strokes', 'is_live', 'created_at', 'updated_at']
-        read_only_fields = ['host', 'created_at', 'updated_at']
 
 
 class FutureMemorySerializer(serializers.ModelSerializer):

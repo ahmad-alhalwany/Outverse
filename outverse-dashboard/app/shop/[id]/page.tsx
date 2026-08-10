@@ -90,7 +90,9 @@ export default function ShopProductPage() {
             ? t('shop.insufficientCoins', { price: item.price })
             : data.error === 'A shipping address is required for physical items.'
               ? t('shop.shippingAddressRequired')
-              : data.error || t('shop.purchaseFailed');
+              : data.error === 'This item is out of stock.'
+                ? t('shop.outOfStock')
+                : data.error || t('shop.purchaseFailed');
         setToast(msg);
         if (typeof data.balance === 'number') setBalance(data.balance);
         setTimeout(() => setToast(''), 3500);
@@ -133,7 +135,7 @@ export default function ShopProductPage() {
           canAfford={balance == null || balance >= item.price}
           balance={balance}
           onBuy={(shippingAddress) => void buy(shippingAddress)}
-          accessUrl={owned && item.type === 'digital' ? item.cover_url || item.cover : null}
+          accessUrl={owned && item.type !== 'physical' ? item.cover_url || item.cover : null}
         />
       )}
       {toast && (

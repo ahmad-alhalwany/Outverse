@@ -12,6 +12,11 @@ export type ShopItem = {
   cover: string;
   rating: number;
   sales_count: number;
+  stock: number | null;
+  idea_kind?: string;
+  idea_kind_display?: string;
+  unlock_at?: string | null;
+  content_locked?: boolean;
   is_featured: boolean;
   is_available: boolean;
   creator: {
@@ -43,6 +48,15 @@ export type CreatorSales = {
   sales_by_day?: { day: string; revenue: number; orders: number }[];
   items: ShopItem[];
   orders: ShopTransaction[];
+};
+
+export const IDEA_KIND_ICONS: Record<string, string> = {
+  cursed_prompt: '🌌',
+  alternate_you: '🎭',
+  blind_drop: '📦',
+  constellation_pack: '🧩',
+  bottle: '⏳',
+  reverse_commission: '🃏',
 };
 
 export function shopCreatorName(c: ShopItem['creator']) {

@@ -111,6 +111,20 @@ export default function ReelCommentsSheet({
         const created = mapComment(payload.comment);
         setComments((prev) => {
           if (prev.some((c) => c.id === created.id)) return prev;
+          const optIdx = prev.findIndex(
+            (c) =>
+              c.id < 0 &&
+              c.user.id === created.user.id &&
+              c.text === created.text &&
+              (c.gif_url || '') === (created.gif_url || '') &&
+              (c.sticker_url || '') === (created.sticker_url || ''),
+          );
+          if (optIdx >= 0) {
+            const next = [...prev];
+            next[optIdx] = created;
+            onCountChange?.(countAllComments(next));
+            return next;
+          }
           const merged = [...prev, created];
           onCountChange?.(countAllComments(merged));
           return merged;
@@ -171,7 +185,17 @@ export default function ReelCommentsSheet({
       const res = await apiFetchJson('reel-comments/', { method: 'POST', json: payload });
       if (res.ok) {
         const created = mapComment((await res.json()) as Record<string, unknown>);
-        setComments((prev) => prev.map((c) => (c.id === tempId ? created : c)));
+        setComments((prev) => {
+          const replaced = prev.map((c) => (c.id === tempId ? created : c));
+          const seen = new Set<number>();
+          const deduped = replaced.filter((c) => {
+            if (seen.has(c.id)) return false;
+            seen.add(c.id);
+            return true;
+          });
+          onCountChange?.(countAllComments(deduped));
+          return deduped;
+        });
       } else {
         setComments((prev) => prev.filter((c) => c.id !== tempId));
         setError(t('reels.commentSendFailed'));

@@ -3,15 +3,16 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeftIcon, MapPinIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, MapPinIcon, PlusIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import { apiFetch, mediaUrl } from '@/lib/api';
 import { formatRelativeTime } from '@/utils/dateFormatter';
+import './story-map.css';
 
 const StoryMapInner = dynamic(() => import('./StoryMapInner'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[560px] items-center justify-center rounded-3xl bg-surface text-sm text-text-secondary">
-      Loading story map...
+    <div className="story-map-frame flex h-[560px] items-center justify-center text-sm text-violet-200">
+      Loading story map…
     </div>
   ),
 });
@@ -77,78 +78,99 @@ export default function StoryMapPage() {
     void load();
   }, [load]);
 
-  const latestPins = useMemo(() => pins.slice(0, 6), [pins]);
+  const latestPins = useMemo(() => pins.slice(0, 8), [pins]);
+  const cities = useMemo(() => new Set(pins.map((p) => p.locationName)).size, [pins]);
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <Link href="/" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-text-secondary hover:text-vault">
-            <ArrowLeftIcon className="h-4 w-4" />
-            Back to home
-          </Link>
-          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-[-0.03em] text-text">
-            <MapPinIcon className="h-8 w-8 text-vault" />
-            Story Map
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            Explore snaps shared with location across Cosmory.
-          </p>
-        </div>
-      </div>
+    <main className="story-map-page">
+      <div className="story-map-shell mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-8">
+        <header className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <Link href="/" className="story-map-back mb-3 inline-flex items-center gap-1 text-sm font-semibold">
+              <ArrowLeftIcon className="h-4 w-4" />
+              Back to home
+            </Link>
+            <div className="mb-2">
+              <span className="story-map-kicker">
+                <SparklesIcon className="h-3.5 w-3.5" />
+                Live locations
+              </span>
+            </div>
+            <h1 className="story-map-title flex items-center gap-2 text-3xl font-extrabold sm:text-4xl">
+              <MapPinIcon className="h-8 w-8 shrink-0 text-cyan-300" />
+              Story Map
+            </h1>
+            <p className="story-map-subtitle mt-2 text-sm sm:text-base">
+              Every pin is a Cosmory story dropped somewhere on Earth. Tap a marker or a card to open it.
+            </p>
+          </div>
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+            <div className="story-map-stats">
+              <div className="story-map-stat">
+                Pins<strong>{pins.length}</strong>
+              </div>
+              <div className="story-map-stat">
+                Places<strong>{cities}</strong>
+              </div>
+            </div>
+            <Link href="/?addStory=1" className="story-map-cta">
+              <PlusIcon className="h-4 w-4" />
+              Add story with location
+            </Link>
+          </div>
+        </header>
 
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="flex h-[560px] items-center justify-center rounded-3xl bg-surface text-sm text-text-secondary">
-          Loading story map...
-        </div>
-      ) : (
-        <StoryMapInner pins={pins} />
-      )}
-
-      <section className="rounded-3xl border border-surface bg-white/70 p-4 shadow-sm dark:bg-white/[0.04]">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-base font-bold text-text">Latest mapped stories</h2>
-          <span className="text-xs font-semibold text-text-secondary">{pins.length} pins</span>
-        </div>
-        {latestPins.length === 0 ? (
-          <p className="text-sm text-text-secondary">No located stories yet.</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {latestPins.map((pin) => (
-              <Link
-                key={pin.id}
-                href={`/?story=${pin.id}`}
-                className="group flex gap-3 rounded-2xl border border-surface bg-surface/70 p-3 transition hover:border-vault/40 hover:bg-vault/10"
-              >
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-vault/15">
-                  {pin.thumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={pin.thumbnail} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-lg">✨</div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-text">@{pin.author}</p>
-                  <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-text-secondary">
-                    <MapPinIcon className="h-3.5 w-3.5 shrink-0" />
-                    {pin.locationName}
-                  </p>
-                  {pin.createdAt && (
-                    <p className="mt-1 text-[11px] text-text-secondary">{formatRelativeTime(pin.createdAt)}</p>
-                  )}
-                </div>
-              </Link>
-            ))}
+        {error && (
+          <div className="rounded-2xl border-2 border-red-400/50 bg-red-950/60 px-4 py-3 text-sm font-bold text-red-100">
+            {error}
           </div>
         )}
-      </section>
+
+        {loading ? (
+          <div className="story-map-frame flex h-[560px] items-center justify-center text-sm text-violet-200">
+            Loading story map…
+          </div>
+        ) : (
+          <StoryMapInner pins={pins} />
+        )}
+
+        <section className="story-map-list">
+          <div className="story-map-list-head">
+            <h2>Latest mapped stories</h2>
+            <span className="story-map-count">{pins.length} pins</span>
+          </div>
+          {latestPins.length === 0 ? (
+            <p className="text-sm text-violet-200/90">
+              No located stories yet. From Home → Add story → Location → pick a city → Publish.
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {latestPins.map((pin) => (
+                <Link key={pin.id} href={`/?story=${pin.id}`} className="story-map-card group">
+                  <div className="story-map-thumb">
+                    {pin.thumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={pin.thumbnail} alt="" className="h-full w-full object-cover transition group-hover:scale-105" />
+                    ) : (
+                      <span aria-hidden>✨</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="story-map-author truncate">@{pin.author}</p>
+                    <p className="story-map-loc truncate">
+                      <MapPinIcon className="h-3.5 w-3.5 shrink-0" />
+                      {pin.locationName}
+                    </p>
+                    {pin.createdAt && (
+                      <p className="story-map-time">{formatRelativeTime(pin.createdAt)}</p>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }

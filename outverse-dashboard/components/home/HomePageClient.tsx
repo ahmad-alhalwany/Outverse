@@ -5,7 +5,7 @@ import FeedTabs from '@/components/home/FeedTabs';
 import PostFeedSkeleton from '@/components/home/PostFeedSkeleton';
 import HomeMobileNav from '@/components/home/HomeMobileNav';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { mapPost, type ApiPost } from '@/utils/postMapper';
 import { fetchFeedPage, type HomeFeed } from '@/lib/postsApi';
 import { useLocale } from '@/components/LocaleProvider';
@@ -14,15 +14,19 @@ import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outl
 const Header = dynamic(() => import('@/components/Header'), { ssr: false });
 const Sidebar = dynamic(() => import('@/components/Sidebar'), { ssr: false });
 const CreatePostCard = dynamic(() => import('@/components/CreatePostCard'), {
+  ssr: false,
   loading: () => <div className="h-32 rounded-2xl bg-surface/40 animate-pulse mb-6" />,
 });
 const FeedHero = dynamic(() => import('@/components/home/FeedHero'), {
+  ssr: false,
   loading: () => <div className="h-24 rounded-2xl bg-surface/30 animate-pulse mb-4" />,
 });
 const HomeStoriesRail = dynamic(() => import('@/components/home/HomeStoriesRail'), {
+  ssr: false,
   loading: () => <div className="h-20 rounded-xl bg-surface/30 animate-pulse mb-4" />,
 });
 const HomePostList = dynamic(() => import('@/components/home/HomePostList'), {
+  ssr: false,
   loading: () => <PostFeedSkeleton count={4} />,
 });
 const RightSidebar = dynamic(() => import('@/components/RightSidebar'), {
@@ -31,15 +35,11 @@ const RightSidebar = dynamic(() => import('@/components/RightSidebar'), {
 });
 const DailyChallengeBanner = dynamic(
   () => import('@/components/home/DailyChallengeBanner'),
-  { loading: () => null },
+  { ssr: false, loading: () => null },
 );
 const DailyRitualPanel = dynamic(
   () => import('@/components/home/DailyRitualPanel'),
   { ssr: false, loading: () => null },
-);
-const NotesRail = dynamic(
-  () => import('@/components/NotesRail'),
-  { ssr: false, loading: () => <div className="h-24 rounded-2xl bg-surface/40 animate-pulse mb-6" /> },
 );
 const HomeDiscoverMobile = dynamic(
   () => import('@/components/home/HomeDiscoverMobile'),
@@ -57,7 +57,6 @@ export default function HomePageClient({
 }) {
   const { t } = useLocale();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [posts, setPosts] = useState<ApiPost[]>(initialPosts);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -66,25 +65,18 @@ export default function HomePageClient({
   const [error, setError] = useState(false);
   const [feed, setFeed] = useState<HomeFeed>(initialFeed);
   const offsetRef = useRef(initialPosts.length);
+  const skipNextFetch = useRef(true);
 
   useEffect(() => {
-    const raw = searchParams.get('feed');
-    setFeed(parseFeedParam(raw));
-  }, [searchParams]);
-
-  function parseFeedParam(raw: string | null): HomeFeed {
-    if (raw === 'following') return 'following';
-    if (raw === 'discover') return 'discover';
-    if (raw === 'joined' || raw === 'resonance') return 'joined';
-    return 'for_you';
-  }
-
-  useEffect(() => {
+    setFeed(initialFeed);
     setPosts(initialPosts);
     offsetRef.current = initialPosts.length;
     setHasMore(initialPosts.length >= FEED_PAGE_SIZE);
     setLoading(false);
-  }, [initialPosts]);
+    setError(false);
+    // Server already hydrated the first page for this feed — skip the remount refetch once.
+    skipNextFetch.current = true;
+  }, [initialFeed, initialPosts]);
 
   const fetchPosts = useCallback(async (reset = true, silent = false) => {
     if (reset) {
@@ -116,7 +108,11 @@ export default function HomePageClient({
   }, [feed]);
 
   useEffect(() => {
-    fetchPosts(true);
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
+      return;
+    }
+    void fetchPosts(true);
   }, [fetchPosts]);
 
   const loadMorePosts = () => {
@@ -127,6 +123,7 @@ export default function HomePageClient({
 
   const setFeedTab = (tab: HomeFeed) => {
     const q = tab === 'for_you' ? '' : `?feed=${tab}`;
+    setFeed(tab);
     router.push(`/${q}`);
   };
 

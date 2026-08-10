@@ -16,7 +16,7 @@ import { EllipsisHorizontalIcon, PencilSquareIcon, TrashIcon, BookmarkIcon, Link
 import { BookmarkIcon as BookmarkSolid, CheckBadgeIcon, MapPinIcon as MapPinSolid } from '@heroicons/react/24/solid';
 import LinkPreview from './LinkPreview';
 import RelativeTime from './RelativeTime';
-import { getUser } from '@/lib/auth';
+import { getToken, getUser, requireAuth } from '@/lib/auth';
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
 import { usePostCommentsWebSocket } from '@/hooks/usePostCommentsWebSocket';
 import { countsToEmojiMap, COSMIC_REACTIONS, REACTION_TYPE_BY_EMOJI, EMOJI_BY_REACTION_TYPE, hapticReaction } from '@/lib/reactions';
@@ -32,6 +32,10 @@ import { trackEngagement } from '@/lib/engagementTracker';
 import { usePostEngagementTracker } from '@/hooks/usePostEngagementTracker';
 import SaveToCollectionMenu from './SaveToCollectionMenu';
 import { useLocale } from './LocaleProvider';
+import { publicDisplayName } from '@/lib/publicDisplayName';
+import ReportDialog, { type ReportReason } from './ReportDialog';
+import FeedUndoToast from './FeedUndoToast';
+import ShareToStoryConfirm, { type StoryShareDraft } from './ShareToStoryConfirm';
 
 const DEFAULT_AVATAR = 'https://randomuser.me/api/portraits/lego/1.jpg';
 const COMMENT_LIMIT = 10;
@@ -42,9 +46,7 @@ function commentMediaUrl(url?: string | null) {
 }
 
 function commentUserName(u: { username?: string; first_name?: string; last_name?: string } | null) {
-  if (!u) return 'Anonymous';
-  const full = `${u.first_name || ''} ${u.last_name || ''}`.trim();
-  return full || u.username || 'Anonymous';
+  return publicDisplayName(u, 'Anonymous');
 }
 
 interface PostCardProps {
@@ -225,7 +227,18 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
   const [linkCopied, setLinkCopied] = useState(false);
   const [sharingToStory, setSharingToStory] = useState(false);
   const [sharedToStory, setSharedToStory] = useState(false);
+  const [storyConfirmOpen, setStoryConfirmOpen] = useState(false);
   const [feedHidden, setFeedHidden] = useState(false);
+  const [feedHiddenType, setFeedHiddenType] = useState<'not_interested' | 'see_less' | 'hide_post' | null>(null);
+  const [feedUndoBusy, setFeedUndoBusy] = useState(false);
+  const [feedUndoToast, setFeedUndoToast] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState<
+    | { kind: 'post' }
+    | { kind: 'comment'; commentId: number; snippet: string }
+    | null
+  >(null);
+  const [reportSentFlash, setReportSentFlash] = useState(false);
   const [shareCount, setShareCount] = useState(stats.shares);
   const [commentsCount, setCommentsCount] = useState(stats.comments);
   const [viewCount, setViewCount] = useState(stats.views);
@@ -401,9 +414,24 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
         const created = mapComment(payload.comment);
         setComments((prev) => {
           if (prev.some((c) => c.id === created.id)) return prev;
+          // Same comment often arrives over WS before the POST response
+          // replaces the optimistic temp id — merge instead of duplicating.
+          const optIdx = prev.findIndex(
+            (c) =>
+              c.id < 0 &&
+              c.user.id === created.user.id &&
+              c.text === created.text &&
+              (c.gifUrl || '') === (created.gifUrl || '') &&
+              (c.stickerUrl || '') === (created.stickerUrl || ''),
+          );
+          if (optIdx >= 0) {
+            const next = [...prev];
+            next[optIdx] = created;
+            return next;
+          }
+          setCommentsCount((c) => c + 1);
           return [...prev, created];
         });
-        setCommentsCount((c) => c + 1);
         return;
       }
       void fetchComments(true);
@@ -416,6 +444,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
 
   const handleReaction = async (reactionEmoji: string) => {
     if (!id || reactionBusy) return;
+    if (!getToken() && !requireAuth()) return;
     const type = REACTION_TYPE_BY_EMOJI[reactionEmoji];
     if (!type) return;
 
@@ -495,6 +524,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
     stickerUrl?: string;
   }) => {
     if (!id || (!data.text?.trim() && !data.gifUrl && !data.stickerUrl)) return;
+    if (!getToken() && !requireAuth()) return;
     const me = getUser();
     const tempId = -Date.now();
     const optimistic = mapComment({
@@ -514,7 +544,16 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
       const res = await apiFetchJson('comments/', { method: 'POST', json: commentPayload(data) });
       if (res.ok) {
         const created = mapComment((await res.json()) as Record<string, unknown>);
-        setComments((prev) => prev.map((c) => (c.id === tempId ? created : c)));
+        setComments((prev) => {
+          const replaced = prev.map((c) => (c.id === tempId ? created : c));
+          // Drop a duplicate if WebSocket already inserted the real id.
+          const seen = new Set<number>();
+          return replaced.filter((c) => {
+            if (seen.has(c.id)) return false;
+            seen.add(c.id);
+            return true;
+          });
+        });
         if (user.id) {
           trackEngagement({
             content_type: 'post',
@@ -540,6 +579,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
     data: { text: string; gifUrl?: string; stickerUrl?: string; quotedCommentId?: number },
   ) => {
     if (!id || (!data.text?.trim() && !data.gifUrl && !data.stickerUrl)) return;
+    if (!getToken() && !requireAuth()) return;
     try {
       const payload: Record<string, unknown> = { ...commentPayload(data), parent: parentId };
       if (data.quotedCommentId) payload.quoted_comment = data.quotedCommentId;
@@ -938,21 +978,52 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
     }
   };
 
-  const handleReportPost = async () => {
+  const handleReportPost = () => {
     if (!id || !getUser()) return;
-    if (!(await confirm('Report this post to moderators?', { confirmLabel: 'Report' }))) return;
     setMenuOpen(false);
+    setReportTarget({ kind: 'post' });
+    setReportOpen(true);
+  };
+
+  const handleReportComment = (commentId: number, snippet: string) => {
+    if (!id || !getUser()) return;
+    setReportTarget({ kind: 'comment', commentId, snippet });
+    setReportOpen(true);
+  };
+
+  const submitContentReport = async (reason: ReportReason, details: string) => {
+    if (!id || !getUser() || !reportTarget) return false;
+    const payload =
+      reportTarget.kind === 'post'
+        ? {
+            type: 'post',
+            object_id: id,
+            content: `post:${id} @${user.name}: ${displayText.slice(0, 200)}`,
+            reason,
+            details,
+            reporter: getUser()!.username,
+          }
+        : {
+            type: 'comment',
+            object_id: reportTarget.commentId,
+            content: `post:${id} comment:${reportTarget.commentId}: ${reportTarget.snippet.slice(0, 200)}`,
+            reason,
+            details,
+            reporter: getUser()!.username,
+          };
     try {
-      await apiFetchJson('moderation/flagged/', {
+      const res = await apiFetchJson('moderation/flagged/', {
         method: 'POST',
-        json: {
-          type: 'post',
-          content: `post:${id} @${user.name}: ${displayText.slice(0, 200)}`,
-          reporter: getUser()!.username,
-        },
+        json: payload,
       });
+      if (res.ok) {
+        setReportSentFlash(true);
+        setTimeout(() => setReportSentFlash(false), 2500);
+        return true;
+      }
+      return false;
     } catch {
-      flashActionError('Could not submit the report.');
+      return false;
     }
   };
 
@@ -970,9 +1041,34 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
           metadata: { feedback: type },
         });
       }
+      setFeedHiddenType(type);
       setFeedHidden(true);
+      setFeedUndoToast(true);
+    } else {
+      flashActionError('Could not update feed preferences.');
     }
   };
+
+  const handleUndoFeedFeedback = async () => {
+    if (!id || !feedHiddenType || feedUndoBusy) return;
+    setFeedUndoBusy(true);
+    try {
+      const ok = await sendFeedFeedback(id, feedHiddenType, true);
+      if (ok) {
+        setFeedHidden(false);
+        setFeedHiddenType(null);
+        setFeedUndoToast(false);
+      } else {
+        flashActionError('Could not undo.');
+      }
+    } finally {
+      setFeedUndoBusy(false);
+    }
+  };
+
+  const dismissFeedUndoToast = useCallback(() => {
+    setFeedUndoToast(false);
+  }, []);
 
   const handleFollowAuthor = async () => {
     if (!user.id || followBusy || currentUser.id === 0 || currentUser.id === user.id) return;
@@ -992,23 +1088,6 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
     }
   };
 
-  const handleReportComment = async (commentId: number, snippet: string) => {
-    if (!id || !getUser()) return;
-    if (!(await confirm('Report this comment to moderators?', { confirmLabel: 'Report' }))) return;
-    try {
-      await apiFetchJson('moderation/flagged/', {
-        method: 'POST',
-        json: {
-          type: 'comment',
-          content: `post:${id} comment:${commentId}: ${snippet.slice(0, 200)}`,
-          reporter: getUser()!.username,
-        },
-      });
-    } catch {
-      flashActionError('Could not submit the report.');
-    }
-  };
-
   const handleCopyLink = async () => {
     if (!id || typeof window === 'undefined') return;
     const url = postShareUrl(id, 'copy');
@@ -1022,14 +1101,25 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
     }
   };
 
-  const handleShareToStory = async () => {
+  const handleShareToStory = () => {
+    if (!id || !images?.[0] || sharingToStory) return;
+    setStoryConfirmOpen(true);
+  };
+
+  const confirmShareToStory = async (draft: StoryShareDraft) => {
     if (!id || !images?.[0] || sharingToStory) return;
     setSharingToStory(true);
     try {
-      const ok = await sharePostToStory(id, images[0]);
+      const ok = await sharePostToStory(id, images[0], {
+        text: draft.text,
+        audience: draft.audience,
+      });
       if (ok) {
         setSharedToStory(true);
+        setStoryConfirmOpen(false);
         setTimeout(() => setSharedToStory(false), 2200);
+      } else {
+        flashActionError(t('feed.shareActionFailed'));
       }
     } finally {
       setSharingToStory(false);
@@ -1127,7 +1217,23 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
   const urlMatch = displayText.match(/https?:\/\/[\w\-._~:/?#[\]@!$&'()*+,;=%]+/i);
   const firstUrl = urlMatch ? urlMatch[0] : null;
 
-  if (feedHidden) return null;
+  if (feedHidden) {
+    const doneKey =
+      feedHiddenType === 'see_less'
+        ? 'social.seeLessDone'
+        : feedHiddenType === 'not_interested'
+          ? 'social.notInterestedDone'
+          : 'social.hidePostDone';
+    return feedUndoToast ? (
+      <FeedUndoToast
+        message={t(doneKey as never)}
+        undoLabel={t('social.undoFeedback')}
+        busy={feedUndoBusy}
+        onUndo={() => void handleUndoFeedFeedback()}
+        onDismiss={dismissFeedUndoToast}
+      />
+    ) : null;
+  }
 
   return (
     <motion.div
@@ -1706,9 +1812,12 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
             storyMediaUrl={images?.[0] || null}
             onShareToStory={
               images?.[0]
-                ? async () => {
+                ? async (draft) => {
                     if (!id || !images[0]) return false;
-                    return sharePostToStory(id, images[0]);
+                    return sharePostToStory(id, images[0], {
+                      text: draft?.text,
+                      audience: draft?.audience,
+                    });
                   }
                 : undefined
             }
@@ -1751,6 +1860,36 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
         onLoadMore={loadMoreComments}
         replyLocked={reply_control === 'nobody' && !isOwner}
       />
+      <ReportDialog
+        open={reportOpen}
+        onClose={() => {
+          setReportOpen(false);
+          setReportTarget(null);
+        }}
+        title={
+          reportTarget?.kind === 'comment'
+            ? t('social.reportWhyComment')
+            : t('social.reportWhyPost')
+        }
+        onSubmit={submitContentReport}
+      />
+      {reportSentFlash && (
+        <p className="absolute left-1/2 top-2 z-30 -translate-x-1/2 rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-400 shadow-lg">
+          {t('social.reportSent')}
+        </p>
+      )}
+      {images?.[0] ? (
+        <ShareToStoryConfirm
+          open={storyConfirmOpen}
+          mediaUrl={images[0]}
+          initialText={displayText.slice(0, 200)}
+          busy={sharingToStory}
+          onClose={() => {
+            if (!sharingToStory) setStoryConfirmOpen(false);
+          }}
+          onConfirm={confirmShareToStory}
+        />
+      ) : null}
     </motion.div>
   );
 }

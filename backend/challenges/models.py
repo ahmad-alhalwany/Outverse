@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from outverse.upload_validators import validate_image_upload
+
 
 class Challenge(models.Model):
     CHALLENGE_TYPES = [
@@ -22,8 +24,22 @@ class Challenge(models.Model):
     )
     difficulty = models.CharField(max_length=50, default='medium')
     cover_url = models.URLField(blank=True)
+    cover_image = models.ImageField(
+        upload_to='challenges/covers/',
+        blank=True,
+        null=True,
+        validators=[validate_image_upload],
+    )
     is_daily = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    is_ai_generated = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_challenges',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     end_date = models.DateTimeField()
 
@@ -51,6 +67,12 @@ class Submission(models.Model):
 
     class Meta:
         ordering = ['-submitted_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'challenge'],
+                name='unique_submission_per_user_challenge',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.user.username} -> {self.challenge.title}"

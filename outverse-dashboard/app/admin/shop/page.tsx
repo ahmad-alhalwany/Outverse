@@ -129,7 +129,7 @@ export default function AdminShopPage() {
             {featured.map((item) => (
               <div key={item.id} className="admin-shop-card">
                 <strong>{item.name}</strong>
-                <div className="admin-shop-card__price">{item.price} coins</div>
+                <div className="admin-shop-card__price">{item.price} Nova</div>
                 <p style={{ fontSize: '0.75rem', opacity: 0.7 }}>Stock: {item.sales_count} sales</p>
                 <span className="admin-badge admin-badge--featured">Featured</span>
               </div>

@@ -97,7 +97,7 @@ export default function HomeStoriesRail({ onRefresh }: { onRefresh?: () => void 
   };
 
   return (
-    <section className="home-stories-rail mb-6 rounded-2xl p-4 sm:p-5 relative overflow-hidden">
+    <section className="home-stories-rail mb-6 rounded-2xl relative overflow-visible">
       <div className="story-rail-glow" aria-hidden />
 
       {spotlight.length > 0 && (
@@ -185,10 +185,10 @@ export default function HomeStoriesRail({ onRefresh }: { onRefresh?: () => void 
 
       <div className="relative z-10">
         {loading ? (
-          <div className="flex gap-5 overflow-hidden py-1">
+          <div className="story-rail-track flex gap-5 overflow-x-auto py-3">
             {Array.from({ length: 7 }).map((_, i) => (
               <div key={i} className="shrink-0 flex flex-col items-center gap-2">
-                <div className="w-[4.5rem] h-[4.5rem] rounded-full skeleton-pulse" />
+                <div className="w-20 h-20 sm:w-[5.25rem] sm:h-[5.25rem] rounded-full skeleton-pulse" />
                 <div className="w-14 h-2.5 rounded skeleton-pulse" />
               </div>
             ))}
@@ -203,13 +203,14 @@ export default function HomeStoriesRail({ onRefresh }: { onRefresh?: () => void 
             Launch your first story into orbit
           </button>
         ) : (
-          <div className="story-rail-track flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory -mx-1 px-1">
+          <div className="story-rail-track flex gap-5 sm:gap-6 overflow-x-auto snap-x snap-mandatory">
             {rings.map((ring, i) => (
               <motion.div
                 key={ring.userId}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.03 }}
+                className="story-rail-item"
               >
                 <StoryRingAvatar
                   name={ring.name}

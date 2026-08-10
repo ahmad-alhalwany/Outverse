@@ -21,9 +21,10 @@ class PrivateUserSerializer(UserSerializer):
         model = User
         fields = [
             'id', 'username', 'email', 'first_name', 'last_name',
-            'bio', 'avatar', 'location', 'is_staff', 'is_verified', 'onboarding_completed', 'interests',
+            'bio', 'avatar', 'location', 'is_staff', 'is_verified', 'is_shop_seller',
+            'onboarding_completed', 'interests',
         ]
-        read_only_fields = ['id', 'is_staff', 'is_verified']
+        read_only_fields = ['id', 'is_staff', 'is_verified', 'is_shop_seller']
 
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):

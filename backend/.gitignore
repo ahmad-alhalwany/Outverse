@@ -20,4 +20,5 @@ posts_api_response.json
 *.log
 _*_out.txt
 _*.sqlite3
+_smoke_api_report.json
 smoke_test.sqlite3

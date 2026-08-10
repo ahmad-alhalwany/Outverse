@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { type AuthUser, getUser, isAuthenticated, logout, refreshSession } from '@/lib/auth';
+import { type AuthUser, getToken, getUser, isAuthenticated, logout, refreshSession } from '@/lib/auth';
 import { apiFetch, apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import RelativeTime from '@/components/RelativeTime';
@@ -22,6 +22,9 @@ import {
   SunIcon,
   MoonIcon,
   Cog6ToothIcon,
+  LightBulbIcon,
+  PlayIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useRef } from 'react';
 import { useLocale } from '@/components/LocaleProvider';
@@ -57,6 +60,7 @@ interface AppNotification {
   reel: number | null;
   story?: number | null;
   idea?: number | null;
+  studio_session?: number | null;
   text: string;
   is_read: boolean;
   created_at: string;
@@ -84,6 +88,7 @@ function notificationHref(n: AppNotification): string | null {
   if (n.post) return `/post/${n.post}`;
   if (n.story) return `/?story=${n.story}`;
   if (n.idea || kind.startsWith('idea_')) return n.idea ? `/bazaar/${n.idea}` : '/bazaar';
+  if (kind === 'studio_invite') return n.studio_session ? `/studio?session=${n.studio_session}` : '/studio';
   if (kind === 'chat_message') return '/chat';
   if (kind === 'going_live') return '/live';
   if (kind.includes('video')) return '/videos';
@@ -123,6 +128,18 @@ const Header = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [notifActionError, setNotifActionError] = useState('');
   const notifRef = useRef<HTMLButtonElement>(null);
+  const notifPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showNotifications) return;
+    function handleClickOutside(e: MouseEvent) {
+      const target = e.target as Node;
+      if (notifRef.current?.contains(target) || notifPanelRef.current?.contains(target)) return;
+      setShowNotifications(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showNotifications]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -187,10 +204,10 @@ const Header = () => {
   useEffect(() => {
     let cancelled = false;
     const boot = async () => {
+      // Migrates legacy outverse_* keys → cosmory_* before reading.
       const cached = getUser();
-      if (cached) setUser(cached);
-      // Only hit /users/me when we already have a local session signal.
-      if (!isAuthenticated() && !cached) return;
+      if (cached && getToken()) setUser(cached);
+      if (!isAuthenticated()) return;
       const u = await refreshSession();
       if (cancelled) return;
       setUser(u ?? getUser());
@@ -200,7 +217,7 @@ const Header = () => {
     };
     void boot();
     const interval = setInterval(() => {
-      if (isAuthenticated() || getUser()) void fetchNotifications();
+      if (isAuthenticated()) void fetchNotifications();
     }, 120000);
     return () => {
       cancelled = true;
@@ -390,24 +407,43 @@ const Header = () => {
             <div className="relative hidden sm:block">
               <input
                 type="text"
-                placeholder="Search creators & posts..."
+                placeholder="Search the cosmos…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowSearch(true)}
                 onBlur={() => setTimeout(() => setShowSearch(false), 150)}
-                className="cosmic-input w-44 rounded-full !border-transparent bg-white/[0.06] py-2 pl-10 pr-4 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-56 focus:!border-violet-400/40"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && searchQuery.trim()) goToSearchResult(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
+                }}
+                className="cosmic-input w-44 rounded-full !border-transparent bg-white/[0.06] !py-2 !pl-10 !pr-8 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:w-64 focus:!border-violet-400/40"
               />
               <MagnifyingGlassIcon className="h-4 w-4 text-text-secondary absolute left-3.5 top-1/2 transform -translate-y-1/2" strokeWidth={1.75} />
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text transition-colors"
+                >
+                  <XMarkIcon className="h-4 w-4" strokeWidth={2} />
+                </button>
+              )}
               {showSearch && searchQuery.trim() && (
-                <div className="absolute left-0 top-14 z-50 max-h-96 w-72 overflow-y-auto rounded-[22px] border border-white/10 bg-background/95 shadow-2xl backdrop-blur-2xl">
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-0 top-14 z-50 max-h-[28rem] w-80 overflow-y-auto rounded-[22px] border border-white/10 bg-background/95 shadow-2xl backdrop-blur-2xl"
+                >
                   {totalSearchResults === 0 ? (
                     <div className="px-4 py-6 text-center text-text-secondary text-sm">No results found.</div>
                   ) : (
                     <>
                       {searchResults.users.length > 0 && (
                         <div className="py-2">
-                          <div className="px-4 py-1 text-[10px] uppercase tracking-wide text-text-secondary">Creators</div>
-                          {searchResults.users.map((u) => (
+                          <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">Creators</div>
+                          {searchResults.users.slice(0, 3).map((u) => (
                             <button
                               key={`u-${u.id}`}
                               type="button"
@@ -417,9 +453,9 @@ const Header = () => {
                             >
                               {u.avatar ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={u.avatar} alt={u.username} className="w-8 h-8 rounded-full object-cover" />
+                                <img src={u.avatar} alt={u.username} className="w-8 h-8 rounded-full object-cover shrink-0" />
                               ) : (
-                                <span className="w-8 h-8 rounded-full bg-gradient-to-tr from-vault to-bazaar text-white flex items-center justify-center text-[10px] font-bold">
+                                <span className="w-8 h-8 rounded-full bg-gradient-to-tr from-vault to-bazaar text-white flex items-center justify-center text-[10px] font-bold shrink-0">
                                   {u.username.slice(0, 2).toUpperCase()}
                                 </span>
                               )}
@@ -431,22 +467,103 @@ const Header = () => {
                           ))}
                         </div>
                       )}
-                      {searchResults.posts.length > 0 && (
-                        <div className="py-2 border-t border-surface">
-                          <div className="px-4 py-1 text-[10px] uppercase tracking-wide text-text-secondary">Posts</div>
-                          {searchResults.posts.map((p) => (
-                            <button
-                              key={`p-${p.id}`}
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => goToSearchResult(`/post/${p.id}`)}
-                              className="w-full flex flex-col px-4 py-2 hover:bg-surface transition-colors text-left"
-                            >
-                              <span className="text-sm text-text truncate">{p.snippet || 'Untitled'}</span>
-                              <span className="text-xs text-text-secondary">@{p.author}</span>
-                            </button>
-                          ))}
-                        </div>
+                      {[
+                        {
+                          key: 'posts',
+                          label: 'Posts',
+                          icon: BookOpenIcon,
+                          color: 'from-lab to-bazaar',
+                          items: searchResults.posts.map((p) => ({
+                            id: p.id,
+                            primary: p.snippet || 'Untitled',
+                            secondary: `@${p.author}`,
+                            path: `/post/${p.id}`,
+                          })),
+                        },
+                        {
+                          key: 'reels',
+                          label: 'Signals',
+                          icon: PlayIcon,
+                          color: 'from-vault to-story',
+                          items: searchResults.reels.map((r) => ({
+                            id: r.id,
+                            primary: r.caption || 'Cosmic signal',
+                            secondary: `@${r.author}`,
+                            path: `/reels?id=${r.id}`,
+                          })),
+                        },
+                        {
+                          key: 'ideas',
+                          label: 'Ideas',
+                          icon: LightBulbIcon,
+                          color: 'from-bazaar to-vault',
+                          items: searchResults.ideas.map((i) => ({
+                            id: i.id,
+                            primary: i.title,
+                            secondary: `@${i.owner}`,
+                            path: `/bazaar/${i.id}`,
+                          })),
+                        },
+                        {
+                          key: 'stories',
+                          label: 'Stories',
+                          icon: BookOpenIcon,
+                          color: 'from-story to-lab',
+                          items: searchResults.stories.map((s) => ({
+                            id: s.id,
+                            primary: s.title,
+                            secondary: `@${s.owner}`,
+                            path: `/forge?story=${s.id}`,
+                          })),
+                        },
+                        {
+                          key: 'bottles',
+                          label: 'Vault',
+                          icon: ArchiveBoxIcon,
+                          color: 'from-vault to-bazaar',
+                          items: searchResults.bottles.map((b) => ({
+                            id: b.id,
+                            primary: b.message,
+                            secondary: b.emotion_type,
+                            path: `/bottles`,
+                          })),
+                        },
+                        {
+                          key: 'shop',
+                          label: 'Shop',
+                          icon: ShoppingCartIcon,
+                          color: 'from-bazaar to-shop',
+                          items: searchResults.shop.map((s) => ({
+                            id: s.id,
+                            primary: s.name,
+                            secondary: `${s.price} ✨ · @${s.creator}`,
+                            path: `/shop/${s.id}`,
+                          })),
+                        },
+                      ].map(
+                        (section) =>
+                          section.items.length > 0 && (
+                            <div key={section.key} className="py-2 border-t border-surface">
+                              <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">{section.label}</div>
+                              {section.items.slice(0, 3).map((item) => (
+                                <button
+                                  key={`${section.key}-${item.id}`}
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => goToSearchResult(item.path)}
+                                  className="w-full flex items-center gap-3 px-4 py-2 hover:bg-surface transition-colors text-left"
+                                >
+                                  <span className={`w-8 h-8 rounded-full bg-gradient-to-tr ${section.color} text-white flex items-center justify-center shrink-0`}>
+                                    <section.icon className="h-4 w-4" strokeWidth={1.8} />
+                                  </span>
+                                  <span className="min-w-0">
+                                    <span className="block text-sm text-text truncate">{item.primary}</span>
+                                    <span className="block text-xs text-text-secondary truncate">{item.secondary}</span>
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ),
                       )}
                       <div className="border-t border-surface px-4 py-3">
                         <Link
@@ -458,12 +575,12 @@ const Header = () => {
                           }}
                           className="text-sm font-semibold text-vault hover:underline"
                         >
-                          See all results
+                          See all {totalSearchResults} results →
                         </Link>
                       </div>
                     </>
                   )}
-                </div>
+                </motion.div>
               )}
             </div>
 
@@ -503,13 +620,14 @@ const Header = () => {
               </motion.button>
               {showNotifications && (
                 <motion.div
+                  ref={notifPanelRef}
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="absolute right-0 top-14 z-50 w-80 overflow-hidden rounded-[24px] border border-white/10 bg-background/92 shadow-2xl backdrop-blur-2xl"
-                  style={{ boxShadow: '0 8px 32px 0 rgba(80, 0, 120, 0.25)' }}
+                  className="absolute right-0 top-14 z-50 w-80 overflow-hidden rounded-[24px] border border-white/10 bg-background shadow-2xl"
+                  style={{ boxShadow: '0 20px 50px -8px rgba(0, 0, 0, 0.55), 0 8px 32px 0 rgba(80, 0, 120, 0.25)' }}
                 >
-                  <div className="relative p-4 border-b border-surface flex items-center gap-2 bg-gradient-to-r from-purple-700/80 to-blue-700/80">
+                  <div className="relative p-4 flex items-center gap-2 bg-gradient-to-r from-purple-700 to-blue-700">
                     <motion.span
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 8, ease: 'linear' }}
@@ -517,7 +635,7 @@ const Header = () => {
                     >
                       <SparklesIcon className="h-5 w-5" strokeWidth={1.75} />
                     </motion.span>
-                    <span className="font-bold text-base text-white tracking-wide drop-shadow">Notifications</span>
+                    <span className="font-bold text-base text-white tracking-wide">Notifications</span>
                     {unreadCount > 0 && (
                       <button onClick={handleMarkAllRead} className="ml-auto bg-gradient-to-tr from-pink-400 to-purple-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow hover:scale-105 transition" title="Mark all as read">
                         Mark all as read
@@ -529,7 +647,7 @@ const Header = () => {
                       {notifActionError}
                     </div>
                   )}
-                  <ul className="max-h-80 overflow-y-auto">
+                  <ul className="max-h-80 overflow-y-auto bg-background divide-y divide-white/[0.05]">
                     {notifications.length === 0 ? (
                       <li className="p-8 text-center text-text-secondary flex flex-col items-center gap-2">
                         <SparklesIcon className="h-8 w-8 animate-bounce" strokeWidth={1.75} />
@@ -543,14 +661,14 @@ const Header = () => {
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: 0.05 * i }}
                           onClick={() => handleNotificationClick(n)}
-                          className={`flex items-start gap-3 px-5 py-4 border-0 relative cursor-pointer hover:bg-surface transition-colors ${n.is_read ? 'bg-transparent' : 'bg-vault/10 backdrop-blur-sm shadow-inner'} rounded-xl mb-1`}
-                          style={{ boxShadow: n.is_read ? undefined : '0 0 12px 2px #7f5fff33' }}
+                          className={`flex items-start gap-3 px-5 py-3.5 relative cursor-pointer transition-colors ${n.is_read ? 'bg-background hover:bg-surface' : 'bg-vault/[0.09] hover:bg-vault/[0.14]'}`}
                         >
-                          <span className="text-2xl mt-0.5 drop-shadow-glow">
+                          {!n.is_read && <span className="absolute left-1.5 top-1/2 -translate-y-1/2 h-1.5 w-1.5 rounded-full bg-vault" />}
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-vault to-bazaar text-lg shadow-sm">
                             {n.reel ? '🛸' : verbIcon[n.verb] || '✨'}
                           </span>
-                          <div className="flex-1">
-                            <div className="text-sm text-text font-medium">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm text-text font-medium leading-snug">
                               <span className="font-bold">{n.actor?.username || 'Someone'}</span> {n.text}
                             </div>
                             <RelativeTime
@@ -558,14 +676,11 @@ const Header = () => {
                               className="text-xs text-text-secondary mt-0.5 block"
                             />
                           </div>
-                          {i < notifications.length - 1 && (
-                            <span className="absolute left-8 right-2 bottom-0 h-0.5 bg-gradient-to-r from-purple-400/30 via-blue-400/30 to-transparent rounded-full blur-sm" />
-                          )}
                         </motion.li>
                       ))
                     )}
                   </ul>
-                  <div className="p-3 border-t border-surface text-center">
+                  <div className="p-3 border-t border-surface bg-background text-center">
                     <Link
                       href="/notifications"
                       onClick={() => setShowNotifications(false)}
@@ -601,23 +716,28 @@ const Header = () => {
               <motion.button
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                className="flex items-center gap-2 rounded-full bg-gradient-to-br from-violet-500/25 to-sky-500/15 p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_20px_rgba(76,29,149,0.25)] transition hover:shadow-[0_0_0_1px_rgba(167,139,250,0.35),0_10px_24px_rgba(76,29,149,0.35)]"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-violet-500/25 to-sky-500/15 p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_8px_20px_rgba(76,29,149,0.25)] transition hover:shadow-[0_0_0_1px_rgba(167,139,250,0.35),0_10px_24px_rgba(76,29,149,0.35)]"
                 onClick={() => setShowAccount(v => !v)}
                 aria-label="Account menu"
+                title={user?.username || 'Account'}
               >
                 {user?.avatar ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={mediaUrl(user.avatar) || user.avatar}
-                    alt={user.username}
-                    className="h-8 w-8 rounded-full object-cover ring-2 ring-background/80"
+                    alt=""
+                    className="h-full w-full rounded-full object-cover ring-2 ring-background/80"
                   />
                 ) : (
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white ring-2 ring-background/80">
-                    {user?.username ? user.username.slice(0, 2).toUpperCase() : '?'}
+                  <span className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 text-[11px] font-bold text-white ring-2 ring-background/80">
+                    {user?.username
+                      ? (user.username.includes('@')
+                          ? user.username.split('@')[0]
+                          : user.username
+                        ).slice(0, 2).toUpperCase()
+                      : '?'}
                   </span>
                 )}
-                {user && <span className="hidden pr-2.5 text-sm font-medium text-text lg:inline-block">{user.username}</span>}
               </motion.button>
               {showAccount && (
                 <motion.div

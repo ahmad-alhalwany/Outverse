@@ -22,6 +22,24 @@ EVENT_BOOST = {
 }
 
 
+def _iter_tags(raw) -> list[str]:
+    """Normalize tags whether stored as JSON list or comma-separated string."""
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, str):
+        items = raw.split(',')
+    else:
+        items = [raw]
+    out: list[str] = []
+    for tag in items:
+        name = str(tag).strip().lstrip('#')
+        if name:
+            out.append(name)
+    return out
+
+
 def compute_trending_tags(limit: int = 12) -> list[dict]:
     since = timezone.now() - timedelta(hours=48)
     scores: Counter[str] = Counter()
@@ -31,11 +49,8 @@ def compute_trending_tags(limit: int = 12) -> list[dict]:
         'tags', 'likes_count', 'comments_count', 'shares_count', 'created_at',
     ):
         weight = 1.0 + (post.likes_count or 0) * 0.08 + (post.comments_count or 0) * 0.12 + (post.shares_count or 0) * 0.15
-        for tag in post.tags or []:
-            name = str(tag).strip().lstrip('#')
-            if not name:
-                continue
-            key = name.lower()
+        for tag in _iter_tags(post.tags):
+            key = tag.lower()
             scores[key] += weight
             counts[key] += 1
 
@@ -43,11 +58,8 @@ def compute_trending_tags(limit: int = 12) -> list[dict]:
         'tags', 'likes_count', 'created_at',
     ):
         weight = 1.0 + (reel.likes_count or 0) * 0.1
-        for tag in (reel.tags or '').split(','):
-            name = tag.strip().lstrip('#')
-            if not name:
-                continue
-            key = name.lower()
+        for tag in _iter_tags(reel.tags):
+            key = tag.lower()
             scores[key] += weight * 0.8
             counts[key] += 1
 
@@ -62,11 +74,7 @@ def compute_trending_tags(limit: int = 12) -> list[dict]:
     if post_ids:
         tag_map: dict[int, list[str]] = {}
         for post in Post.objects.filter(id__in=post_ids).only('id', 'tags'):
-            tag_map[post.id] = [
-                str(t).strip().lstrip('#').lower()
-                for t in (post.tags or [])
-                if str(t).strip()
-            ]
+            tag_map[post.id] = [t.lower() for t in _iter_tags(post.tags)]
         for ev in ContentEngagementEvent.objects.filter(
             content_type='post',
             content_id__in=post_ids,

@@ -222,7 +222,8 @@ class LoginView(APIView):
         )
         if not user:
             return Response({'error': 'Invalid credentials.'}, status=400)
-        if not user.is_verified:
+        # Staff/superusers (local demo/admin) skip the email gate.
+        if not user.is_verified and not (user.is_staff or user.is_superuser):
             return Response(
                 {'error': 'Please verify your email before logging in.', 'code': 'email_not_verified'},
                 status=403,

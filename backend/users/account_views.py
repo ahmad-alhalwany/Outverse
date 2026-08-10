@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from outverse.rate_limit import rate_limit_response
 
 from .data_export import build_user_export
-from .models import Profile, SocialAuthAccount, UserToken, UserTwoFactor, VerificationRequest
+from .models import Profile, SellerApplication, SocialAuthAccount, UserToken, UserTwoFactor, VerificationRequest
 from .oauth_google import GoogleAuthError, username_from_google, verify_google_id_token
 from .oauth_apple import AppleAuthError, username_from_apple, verify_apple_identity_token
 from .totp import (
@@ -83,7 +83,7 @@ class GoogleAuthView(APIView):
                 user = User.objects.create_user(
                     username=username_from_google(data, User),
                     email=email,
-                    password=User.objects.make_random_password(length=32),
+                    password=secrets.token_urlsafe(32),
                     first_name=(data.get('given_name') or '')[:150],
                     last_name=(data.get('family_name') or '')[:150],
                     is_verified=True,
@@ -138,7 +138,7 @@ class AppleAuthView(APIView):
                 user = User.objects.create_user(
                     username=username_from_apple(data, User),
                     email=email or f'{provider_uid[:16]}@privaterelay.appleid.com',
-                    password=User.objects.make_random_password(length=32),
+                    password=secrets.token_urlsafe(32),
                     is_verified=True,
                 )
                 Profile.objects.get_or_create(user=user)
@@ -345,3 +345,78 @@ class AdminVerificationReviewView(APIView):
             req.user.badge_verified = True
             req.user.save(update_fields=['badge_verified'])
         return Response({'id': req.id, 'status': req.status})
+
+
+class SellerApplicationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.is_shop_seller:
+            return Response({'is_shop_seller': True, 'requests': []})
+        rows = SellerApplication.objects.filter(user=request.user).order_by('-created_at')[:5]
+        return Response({
+            'is_shop_seller': False,
+            'requests': [
+                {
+                    'id': r.id,
+                    'status': r.status,
+                    'reason': r.reason,
+                    'links': r.links,
+                    'created_at': r.created_at.isoformat(),
+                    'review_note': r.review_note,
+                }
+                for r in rows
+            ],
+        })
+
+    def post(self, request):
+        if request.user.is_shop_seller:
+            return Response({'error': 'You are already an approved seller.'}, status=400)
+        if SellerApplication.objects.filter(user=request.user, status='pending').exists():
+            return Response({'error': 'You already have a pending application.'}, status=400)
+        reason = (request.data.get('reason') or '').strip()
+        if len(reason) < 20:
+            return Response({'error': 'Please explain what you plan to sell (20+ chars).'}, status=400)
+        links = request.data.get('links') or []
+        if not isinstance(links, list):
+            links = []
+        app = SellerApplication.objects.create(
+            user=request.user,
+            reason=reason[:2000],
+            links=[str(u)[:500] for u in links[:5]],
+        )
+        return Response({'id': app.id, 'status': app.status}, status=201)
+
+
+class AdminSellerApplicationReviewView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def get(self, request):
+        rows = SellerApplication.objects.filter(status='pending').select_related('user')[:50]
+        return Response([
+            {
+                'id': r.id,
+                'user_id': r.user_id,
+                'username': r.user.username,
+                'reason': r.reason,
+                'links': r.links,
+                'created_at': r.created_at.isoformat(),
+            }
+            for r in rows
+        ])
+
+    def post(self, request, request_id):
+        action = (request.data.get('action') or '').lower()
+        if action not in ('approve', 'reject'):
+            return Response({'error': 'Invalid action.'}, status=400)
+        app = SellerApplication.objects.filter(pk=request_id).select_related('user').first()
+        if not app:
+            return Response({'error': 'Not found.'}, status=404)
+        app.status = 'approved' if action == 'approve' else 'rejected'
+        app.reviewed_by = request.user
+        app.review_note = (request.data.get('note') or '')[:1000]
+        app.save(update_fields=['status', 'reviewed_by', 'review_note'])
+        if action == 'approve':
+            app.user.is_shop_seller = True
+            app.user.save(update_fields=['is_shop_seller'])
+        return Response({'id': app.id, 'status': app.status})

@@ -107,6 +107,11 @@ export default function PostReactions({
       longPressTriggered.current = false;
       return;
     }
+    // Reels: tap = quick spark (TikTok-style). Long-press opens the full orbit.
+    if (variant === 'reel') {
+      pick(selectedReaction || '✨');
+      return;
+    }
     if (selectedReaction) {
       pick(selectedReaction);
     } else {
@@ -132,13 +137,13 @@ export default function PostReactions({
         {selected.emoji}
       </motion.span>
       {!compact && <span>{t(`reactions.${selected.type}` as 'reactions.spark')}</span>}
-      {total > 0 && <span className="opacity-80">{total}</span>}
+      {variant !== 'reel' && total > 0 && <span className="opacity-80">{total}</span>}
     </>
   ) : (
     <>
       <span className="text-lg cosmic-reactions__idle">✨</span>
       {!compact && <span>{t('feed.react')}</span>}
-      {total > 0 && <span className="opacity-70">{total}</span>}
+      {variant !== 'reel' && total > 0 && <span className="opacity-70">{total}</span>}
     </>
   );
 

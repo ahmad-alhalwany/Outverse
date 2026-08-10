@@ -9,10 +9,9 @@ from outverse.throttles import AnonReadThrottle, ContentPostCreateThrottle, Thro
 from outverse.auth_utils import require_user
 from users.models import Profile
 
-from .models import Character, CharacterOwnership, DrawSession, FailedIdea, FutureMemory
+from .models import Character, CharacterOwnership, FailedIdea, FutureMemory
 from .serializers import (
     CharacterSerializer,
-    DrawSessionSerializer,
     FailedIdeaSerializer,
     FutureMemorySerializer,
 )
@@ -48,29 +47,6 @@ class FailedIdeaViewSet(ThrottleMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
-
-class DrawSessionViewSet(ThrottleMixin, viewsets.ModelViewSet):
-    serializer_class = DrawSessionSerializer
-    queryset = DrawSession.objects.select_related('host').filter(is_live=True)
-
-    def get_permissions(self):
-        if self.action in ('create', 'update', 'partial_update', 'destroy', 'add_strokes'):
-            return [IsAuthenticated()]
-        return [AllowAny()]
-
-    def perform_create(self, serializer):
-        serializer.save(host=self.request.user)
-
-    @action(detail=True, methods=['post'], url_path='strokes')
-    def add_strokes(self, request, pk=None):
-        session = self.get_object()
-        new_strokes = request.data.get('strokes', [])
-        if not isinstance(new_strokes, list):
-            return Response({'error': 'strokes must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
-        session.strokes = (session.strokes or []) + new_strokes
-        session.save(update_fields=['strokes', 'updated_at'])
-        return Response(DrawSessionSerializer(session).data)
 
 
 class FutureMemoryViewSet(ThrottleMixin, viewsets.ModelViewSet):

@@ -66,14 +66,40 @@ def _moderate_bottle(bottle, user):
             object_id=bottle.id,
             user=user,
         )
-        if result.get('hard_block'):
+        if result.get('hard_block') or result.get('bottle_block'):
             enforce_moderation_result(
                 result,
                 content_type='bottle',
                 object_id=bottle.id,
             )
+            return result
+        return result
     except Exception:
-        pass
+        return {'flagged': False}
+
+
+def _precheck_bottle_message(text, user):
+    """Block severe language before a bottle is created."""
+    from moderation.hooks import check_severe_language, soft_moderate_content
+
+    severe = check_severe_language(text or '')
+    if severe:
+        return {
+            'blocked': True,
+            'detail': 'This message cannot be thrown — please keep the vault kind and safe.',
+        }
+    result = soft_moderate_content(
+        text=text or '',
+        content_type='bottle',
+        object_id=None,
+        user=user,
+    )
+    if result.get('hard_block') or result.get('bottle_block'):
+        return {
+            'blocked': True,
+            'detail': 'This message was blocked by safety filters. Soften the language and try again.',
+        }
+    return {'blocked': False, 'result': result}
 
 
 class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
@@ -124,12 +150,24 @@ class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def throw(self, request):
+        user, err = require_user(request)
+        if err:
+            return err
+        message = (request.data.get('message') or '').strip()
+        pre = _precheck_bottle_message(message, user)
+        if pre.get('blocked'):
+            return Response({'detail': pre['detail']}, status=status.HTTP_400_BAD_REQUEST)
         serializer = self.get_serializer(
             data=request.data, context=_viewer_context(request)
         )
         serializer.is_valid(raise_exception=True)
         bottle = serializer.save()
-        _moderate_bottle(bottle, request.user)
+        result = _moderate_bottle(bottle, user)
+        if result and (result.get('hard_block') or result.get('bottle_block')):
+            return Response(
+                {'detail': 'This message was blocked by safety filters.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='polish-tone')
@@ -157,7 +195,12 @@ class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
             expiry_time__gt=timezone.now(),
         ).exclude(sender_id=user.id)
 
-        bottle = _random_bottle(qs)
+        bottle_id = request.data.get('bottle_id') or request.query_params.get('bottle_id')
+        if bottle_id:
+            bottle = qs.filter(pk=bottle_id).first()
+        else:
+            bottle = _random_bottle(qs)
+
         if not bottle:
             return Response(
                 {'detail': 'The cosmic sea is empty for now. Try again soon.'},
@@ -169,7 +212,9 @@ class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
         bottle.read_at = timezone.now()
         bottle.caught_at = timezone.now()
         bottle.caught_by_id = user.id
-        bottle.save()
+        bottle.save(update_fields=[
+            'is_opened', 'is_read', 'read_at', 'caught_at', 'caught_by_id',
+        ])
 
         return Response(BottleCatchSerializer(bottle).data)
 

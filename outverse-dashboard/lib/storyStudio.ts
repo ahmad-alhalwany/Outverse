@@ -194,15 +194,33 @@ export function newQuestionOverlay(): StoryQuestionOverlay {
   };
 }
 
-export function newLocationOverlay(label = 'Somewhere magical'): StoryLocationOverlay {
+export function newLocationOverlay(
+  label = 'Somewhere magical',
+  lat?: number | null,
+  lng?: number | null,
+): StoryLocationOverlay {
   return {
     id: `l-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     type: 'location',
     x: 50,
     y: 50,
     label,
+    lat: typeof lat === 'number' ? lat : null,
+    lng: typeof lng === 'number' ? lng : null,
   };
 }
+
+/** Quick picks so Story Map gets real pins without GPS. */
+export const STORY_MAP_PRESETS: { label: string; lat: number; lng: number }[] = [
+  { label: 'Damascus', lat: 33.5138, lng: 36.2765 },
+  { label: 'Amman', lat: 31.9539, lng: 35.9106 },
+  { label: 'Cairo', lat: 30.0444, lng: 31.2357 },
+  { label: 'Dubai', lat: 25.0805, lng: 55.1403 },
+  { label: 'Istanbul', lat: 41.0082, lng: 28.9784 },
+  { label: 'Tokyo', lat: 35.6595, lng: 139.7004 },
+  { label: 'Berlin', lat: 52.52, lng: 13.405 },
+  { label: 'San Francisco', lat: 37.8199, lng: -122.4783 },
+];
 
 export function newMentionOverlay(userId: number, username: string): StoryMentionOverlay {
   return {

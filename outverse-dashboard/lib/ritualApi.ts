@@ -25,7 +25,9 @@ export async function fetchDailyRitual(opts?: {
   try {
     const res = await apiFetch(`questions/daily/?${params.toString()}`, { method: 'GET' });
     if (!res.ok) return null;
-    return await res.json().catch(() => null);
+    const data = await res.json().catch(() => null);
+    if (!data || data.available === false || !data.question) return null;
+    return data as DailyRitual;
   } catch {
     return null;
   }
@@ -43,7 +45,9 @@ export async function completeDailyRitual(opts?: {
   try {
     const res = await apiFetchJson(`questions/daily/?${params.toString()}`, { method: 'POST' });
     if (!res.ok) return null;
-    return await res.json().catch(() => null);
+    const data = await res.json().catch(() => null);
+    if (!data || data.available === false || !data.question || !data.ritual) return null;
+    return data as DailyRitual;
   } catch {
     return null;
   }

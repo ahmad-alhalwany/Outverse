@@ -8,7 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
-import { shopCreatorName, type ShopItem } from '@/lib/shopTypes';
+import { IDEA_KIND_ICONS, shopCreatorName, type ShopItem } from '@/lib/shopTypes';
 import {
   MagnifyingGlassIcon,
   SparklesIcon,
@@ -77,6 +77,7 @@ const TYPES = [
   { key: 'all', labelKey: 'shop.all' },
   { key: 'digital', labelKey: 'shop.digital' },
   { key: 'physical', labelKey: 'shop.physical' },
+  { key: 'idea', labelKey: 'shop.idea' },
 ] as const;
 
 const SORTS = [
@@ -211,7 +212,9 @@ function ShopContent() {
         const msg =
           data.error === 'Insufficient coins.'
             ? t('shop.insufficientCoins', { price: item.price })
-            : data.error || t('shop.purchaseFailed');
+            : data.error === 'This item is out of stock.'
+              ? t('shop.outOfStock')
+              : data.error || t('shop.purchaseFailed');
         setToast(msg);
         if (typeof data.balance === 'number') setBalance(data.balance);
         setTimeout(() => setToast(''), 3500);
@@ -352,15 +355,17 @@ function ShopContent() {
                 <button
                   type="button"
                   onClick={() => buy(banner)}
-                  disabled={owned[banner.id] || (balance != null && balance < banner.price)}
+                  disabled={owned[banner.id] || banner.stock === 0 || (balance != null && balance < banner.price)}
                   className="px-5 py-2.5 rounded-xl font-semibold text-white disabled:opacity-70"
                   style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`, boxShadow: C.btnShadow }}
                 >
                   {owned[banner.id]
                     ? t('common.owned')
-                    : balance != null && balance < banner.price
-                      ? t('common.needCoins')
-                      : `${t('shop.getFor')} ${banner.price} ✨`}
+                    : banner.stock === 0
+                      ? t('shop.soldOut')
+                      : balance != null && balance < banner.price
+                        ? t('common.needCoins')
+                        : `${t('shop.getFor')} ${banner.price} ✨`}
                 </button>
                 <span className="text-xs" style={{ color: C.text2 }}>{t('shop.tapDetails')}</span>
               </div>
@@ -511,6 +516,8 @@ function ProductCard({
 }) {
   const C = useShopColors();
   const { t } = useLocale();
+  const soldOut = item.stock === 0;
+  const ideaIcon = item.idea_kind ? IDEA_KIND_ICONS[item.idea_kind] : '';
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -525,8 +532,18 @@ function ProductCard({
           style={{ background: item.cover ? `url(${item.cover}) center/cover` : `linear-gradient(135deg, ${C.card}, ${C.card2})` }}
         />
         <span className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ background: C.badgeBg, color: C.brown }}>
-          {item.type_display}
+          {ideaIcon ? `${ideaIcon} ${item.idea_kind_display}` : item.type_display}
         </span>
+        {item.stock != null && item.stock > 0 && item.stock <= 5 && (
+          <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: C.badgeBg, color: '#c0392b' }}>
+            🔥 {t('shop.leftInStock', { count: item.stock })}
+          </span>
+        )}
+        {soldOut && (
+          <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: C.badgeBg, color: C.text2 }}>
+            {t('shop.soldOut')}
+          </span>
+        )}
       </div>
       <div className="p-3 flex flex-col flex-1">
         <div className="flex items-center gap-1 text-xs" style={{ color: C.text2 }}>
@@ -534,7 +551,13 @@ function ProductCard({
           <span className="mx-1">·</span> {item.sales_count} {t('common.sold')}
         </div>
         <h4 className="font-semibold mt-1 leading-snug text-sm line-clamp-1" style={{ color: C.text }}>{item.name}</h4>
-        <p className="text-xs mt-0.5 line-clamp-2 flex-1" style={{ color: C.text2 }}>{item.description}</p>
+        <p className="text-xs mt-0.5 line-clamp-2 flex-1" style={{ color: C.text2 }}>
+          {item.content_locked
+            ? item.idea_kind === 'bottle' && item.unlock_at
+              ? t('shop.contentLockedUntil', { date: new Date(item.unlock_at).toLocaleDateString() })
+              : t('shop.contentLockedPurchase')
+            : item.description}
+        </p>
         <div className="text-[11px] mt-2" style={{ color: C.text2 }}>{t('common.by')} {shopCreatorName(item.creator)}</div>
         <span className="font-bold text-sm flex items-center gap-1 mt-2" style={{ color: C.brownDk }}>
           <SparklesIcon className="h-3.5 w-3.5" /> {item.price}
@@ -545,18 +568,18 @@ function ProductCard({
         <button
           type="button"
           onClick={onBuy}
-          disabled={owned || !canAfford}
+          disabled={owned || !canAfford || soldOut}
           className="w-full px-3 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-70"
           style={{
             background: owned
               ? '#2f8f6b'
-              : !canAfford
+              : !canAfford || soldOut
                 ? C.card2
                 : `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`,
-            color: !canAfford && !owned ? C.text2 : '#fff',
+            color: (!canAfford || soldOut) && !owned ? C.text2 : '#fff',
           }}
         >
-          {owned ? t('common.owned') : !canAfford ? t('common.needCoinsShort') : t('common.get')}
+          {owned ? t('common.owned') : soldOut ? t('shop.soldOut') : !canAfford ? t('common.needCoinsShort') : t('common.get')}
         </button>
       </div>
     </motion.div>

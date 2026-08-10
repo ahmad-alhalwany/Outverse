@@ -1,7 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.core.management.base import BaseCommand
 
-from speculative.models import Character, DrawSession, FailedIdea, FutureMemory
+from speculative.models import Character, FailedIdea, FutureMemory
+from studio.models import DrawSession
 
 FAILED_IDEAS = [
     {

@@ -44,6 +44,7 @@ import {
   newPollOverlay,
   newQuestionOverlay,
   newLocationOverlay,
+  STORY_MAP_PRESETS,
   newMentionOverlay,
   newCountdownOverlay,
   type StoryFilterKey,
@@ -177,10 +178,28 @@ export function AddStoryModal({ onClose, onCreated }: { onClose: () => void; onC
   };
 
   const addLocation = () => {
-    const el = newLocationOverlay();
+    const el = newLocationOverlay('My location');
     setOverlays((prev) => [...prev, el]);
     setSelectedId(el.id);
     setTool('none');
+    // Attach device GPS when allowed — required for Story Map pins.
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setOverlays((prev) =>
+            prev.map((o) =>
+              o.id === el.id && o.type === 'location'
+                ? { ...o, lat: pos.coords.latitude, lng: pos.coords.longitude, label: o.label || 'My location' }
+                : o,
+            ),
+          );
+        },
+        () => {
+          /* user denied — they can pick a city preset below */
+        },
+        { enableHighAccuracy: false, timeout: 8000 },
+      );
+    }
   };
 
   const addCountdown = () => {
@@ -567,6 +586,29 @@ export function AddStoryModal({ onClose, onCreated }: { onClose: () => void; onC
                   maxLength={60}
                   autoFocus
                 />
+                <p className="story-studio-hint">
+                  {typeof selected.lat === 'number' && typeof selected.lng === 'number'
+                    ? `Pinned for Story Map · ${selected.lat.toFixed(3)}, ${selected.lng.toFixed(3)}`
+                    : 'Pick a city (or allow GPS) so this story appears on Story Map'}
+                </p>
+                <div className="story-studio-swatch-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                  {STORY_MAP_PRESETS.map((city) => (
+                    <button
+                      key={city.label}
+                      type="button"
+                      className="story-studio-capsule-chip"
+                      onClick={() =>
+                        updateSelected({
+                          label: city.label,
+                          lat: city.lat,
+                          lng: city.lng,
+                        })
+                      }
+                    >
+                      {city.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="story-studio-swatch-row">
                   <button type="button" className="story-studio-icon-btn story-studio-icon-btn--danger" onClick={deleteSelected} aria-label="Delete location">
                     <TrashIcon className="h-4 w-4" />

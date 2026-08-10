@@ -9,11 +9,15 @@ export type AuthUser = {
   avatar?: string | null;
   is_staff?: boolean;
   is_verified?: boolean;
+  is_shop_seller?: boolean;
   onboarding_completed?: boolean;
   interests?: string[];
 };
 const USER_KEY = 'cosmory_user';
 const TOKEN_KEY = 'cosmory_token';
+/** Pre-rebrand keys — migrate so existing local logins keep working. */
+const LEGACY_USER_KEY = 'outverse_user';
+const LEGACY_TOKEN_KEY = 'outverse_token';
 const CSRF_COOKIE_KEY = 'csrftoken';
 const SESSION_COOKIE_KEYS = ['sessionid', 'cosmory_session', 'authjs.session-token', '__Secure-authjs.session-token'];
 
@@ -27,13 +31,35 @@ function hasSessionCookie(): boolean {
   return SESSION_COOKIE_KEYS.some((key) => !!readCookie(key));
 }
 
+/** Move Outverse → Cosmory localStorage keys once per tab. */
+function migrateLegacyAuth() {
+  if (typeof window === 'undefined') return;
+  try {
+    const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
+    if (legacyToken && !localStorage.getItem(TOKEN_KEY)) {
+      localStorage.setItem(TOKEN_KEY, legacyToken);
+    }
+    if (legacyToken) localStorage.removeItem(LEGACY_TOKEN_KEY);
+
+    const legacyUser = localStorage.getItem(LEGACY_USER_KEY);
+    if (legacyUser && !localStorage.getItem(USER_KEY)) {
+      localStorage.setItem(USER_KEY, legacyUser);
+    }
+    if (legacyUser) localStorage.removeItem(LEGACY_USER_KEY);
+  } catch {
+    /* private mode / blocked storage */
+  }
+}
+
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null;
+  migrateLegacyAuth();
   return localStorage.getItem(TOKEN_KEY);
 }
 
 export function getUser(): AuthUser | null {
   if (typeof window === 'undefined') return null;
+  migrateLegacyAuth();
   const raw = localStorage.getItem(USER_KEY);
   if (!raw) return null;
   try {
@@ -48,27 +74,48 @@ export function getCurrentUserId(): number | null {
   return getUser()?.id ?? null;
 }
 
+/**
+ * API auth is Token-based only — a user object without a token cannot call
+ * protected endpoints (react, comment, etc.).
+ */
 export function isAuthenticated(): boolean {
-  return hasSessionCookie() || !!getUser();
+  return !!getToken();
+}
+
+/** Redirect to login when the visitor has no API token. Returns true if authed. */
+export function requireAuth(nextPath?: string): boolean {
+  if (typeof window === 'undefined') return false;
+  if (isAuthenticated()) return true;
+  const next = nextPath || `${window.location.pathname}${window.location.search}`;
+  window.location.assign(`/login?next=${encodeURIComponent(next)}`);
+  return false;
 }
 
 export function setAuth(token: string | null, user: AuthUser | null) {
   if (typeof window === 'undefined') return;
+  // token=null + user means "refresh profile fields, keep existing token"
+  // (used by refreshSession). Clearing auth requires clearAuth() / user=null.
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
+    localStorage.removeItem(LEGACY_TOKEN_KEY);
   }
   if (user) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
-  } else {
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(LEGACY_USER_KEY);
+    return;
   }
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LEGACY_USER_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export function clearAuth() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(LEGACY_USER_KEY);
+  localStorage.removeItem(LEGACY_TOKEN_KEY);
 }
 
 export function authHeaders(): Record<string, string> {
@@ -195,14 +242,15 @@ export async function logout() {
 
 /** Validate token and refresh user fields (e.g. is_staff) from the API. */
 export async function refreshSession(): Promise<AuthUser | null> {
-  // Avoid noisy 401s when the visitor has no session at all.
-  if (!getToken() && !hasSessionCookie() && !getUser()) {
+  // Avoid noisy 401s when the visitor has no API token.
+  if (!getToken()) {
     return null;
   }
   try {
     const res = await fetch(apiUrl('users/me/'), { headers: authHeaders(), credentials: 'include' });
     if (!res.ok) {
-      if (res.status === 401) clearAuth();
+      // SoftTokenAuthentication turns bad tokens into anonymous (403 on /me/).
+      if (res.status === 401 || res.status === 403) clearAuth();
       return null;
     }
     const data = await res.json();
@@ -216,6 +264,7 @@ export async function refreshSession(): Promise<AuthUser | null> {
       avatar: data.avatar,
       is_staff: data.is_staff,
       is_verified: data.is_verified,
+      is_shop_seller: data.is_shop_seller,
       onboarding_completed: data.onboarding_completed,
       interests: Array.isArray(data.interests) ? data.interests : [],
     };

@@ -124,11 +124,22 @@ export interface AdminFlagged {
   type: string;
   content: string;
   reporter: string;
+  reason?: string;
+  details?: string;
   status: 'pending' | 'approved' | 'rejected';
   created_at?: string;
 }
 
 export interface AdminVerificationRequest {
+  id: number;
+  user_id: number;
+  username: string;
+  reason: string;
+  links: string;
+  created_at: string;
+}
+
+export interface AdminSellerApplication {
   id: number;
   user_id: number;
   username: string;

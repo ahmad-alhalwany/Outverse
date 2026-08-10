@@ -1,5 +1,12 @@
 const cache = new Map<string, string>();
 
+export type GeocodeHit = {
+  lat: number;
+  lng: number;
+  zoom: number;
+  label: string;
+};
+
 export async function reverseGeocodeLabel(lat: number, lng: number): Promise<string | null> {
   const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
   if (cache.has(key)) return cache.get(key)!;
@@ -30,22 +37,32 @@ export async function reverseGeocodeLabel(lat: number, lng: number): Promise<str
 export async function searchLocation(
   query: string,
 ): Promise<{ lat: number; lng: number; zoom: number } | null> {
+  const hits = await searchLocationSuggestions(query, 1);
+  if (!hits[0]) return null;
+  return { lat: hits[0].lat, lng: hits[0].lng, zoom: hits[0].zoom };
+}
+
+export async function searchLocationSuggestions(
+  query: string,
+  limit = 5,
+): Promise<GeocodeHit[]> {
   const q = query.trim();
-  if (!q) return null;
+  if (!q) return [];
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`,
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=${limit}`,
       { headers: { Accept: 'application/json' } },
     );
-    if (!res.ok) return null;
+    if (!res.ok) return [];
     const data = await res.json();
-    if (!data[0]) return null;
-    return {
-      lat: parseFloat(data[0].lat),
-      lng: parseFloat(data[0].lon),
-      zoom: 12,
-    };
+    if (!Array.isArray(data)) return [];
+    return data.map((row: { lat: string; lon: string; display_name?: string }) => ({
+      lat: parseFloat(row.lat),
+      lng: parseFloat(row.lon),
+      zoom: 13,
+      label: (row.display_name || `${row.lat}, ${row.lon}`).split(',').slice(0, 3).join(',').trim(),
+    }));
   } catch {
-    return null;
+    return [];
   }
 }

@@ -68,6 +68,12 @@ def test_feed_feedback_see_less(api_client, alice, bob):
     assert FeedFeedback.objects.filter(user=alice, author=bob, feedback_type='see_less').exists()
     feed = api_client.get('/api/posts/')
     assert len(feed.data) == 0
+    undo = api_client.post(f'/api/posts/{post.id}/feedback/', {
+        'type': 'see_less',
+        'undo': True,
+    }, format='json')
+    assert undo.status_code == 200
+    assert not FeedFeedback.objects.filter(user=alice, author=bob, feedback_type='see_less').exists()
 
 
 @pytest.mark.django_db

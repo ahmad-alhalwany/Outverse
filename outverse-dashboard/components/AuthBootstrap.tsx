@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { isAuthenticated, refreshSession } from '@/lib/auth';
+import { getToken, isAuthenticated, refreshSession } from '@/lib/auth';
 import { initSentry, captureException, setUserContext } from '@/lib/sentry';
 
 const ONBOARDING_EXEMPT_PATHS = ['/onboarding', '/login', '/register', '/privacy', '/terms'];
@@ -24,6 +24,8 @@ export default function AuthBootstrap() {
     window.addEventListener('unhandledrejection', onUnhandledRejection);
     window.addEventListener('error', onError);
 
+    // Touch getToken() so legacy outverse_* keys migrate before any API calls.
+    getToken();
     if (!isAuthenticated()) return () => {
       window.removeEventListener('unhandledrejection', onUnhandledRejection);
       window.removeEventListener('error', onError);

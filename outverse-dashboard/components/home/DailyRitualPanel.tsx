@@ -99,7 +99,7 @@ export default function DailyRitualPanel() {
   }
 
   function handleAnswer() {
-    if (!ritual) return;
+    if (!ritual?.question) return;
     // Navigate to home create card with the question text prefilled via session storage.
     try {
       sessionStorage.setItem('pendingInspiration', JSON.stringify({
@@ -115,7 +115,7 @@ export default function DailyRitualPanel() {
     router.push('/');
   }
 
-  const completed = Boolean(ritual?.ritual.completed);
+  const completed = Boolean(ritual?.ritual?.completed);
   const streak = ritual?.streak ?? 0;
   const authed = Boolean(getToken());
 

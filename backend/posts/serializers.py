@@ -137,13 +137,26 @@ def vote_stats_for_post(post, user=None):
 class UserSerializer(serializers.ModelSerializer):
     is_following = serializers.SerializerMethodField()
     karma = serializers.SerializerMethodField()
+    display_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
             'id', 'username', 'first_name', 'last_name', 'avatar',
-            'badge_verified', 'is_following', 'karma',
+            'badge_verified', 'is_following', 'karma', 'display_name',
         ]
+
+    def get_display_name(self, obj):
+        from users.privacy import public_display_name
+        return public_display_name(obj)
+
+    def to_representation(self, instance):
+        from users.privacy import looks_like_email, public_username
+        data = super().to_representation(instance)
+        # Never expose an email-shaped username in nested public user payloads.
+        if looks_like_email(data.get('username')):
+            data['username'] = public_username(instance)
+        return data
 
     def get_karma(self, obj):
         profile = getattr(obj, 'profile', None)
@@ -323,11 +336,11 @@ class PostSerializer(serializers.ModelSerializer):
             u = r.user
             if viewer and u.id == viewer.id:
                 continue
-            name = (f"{u.first_name or ''} {u.last_name or ''}".strip() or u.username or '')
+            from users.privacy import public_display_name, public_username
             out.append({
                 'id': u.id,
-                'name': name,
-                'username': u.username,
+                'name': public_display_name(u),
+                'username': public_username(u),
                 'type': r.type,
             })
             if len(out) >= 2:

@@ -7,6 +7,7 @@ import { isAuthenticated } from '@/lib/auth';
 
 /**
  * Standalone web chat (responsive). Not a separate native app — links back to Cosmory only.
+ * Height is locked to the viewport so the message composer stays visible.
  */
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -23,8 +24,8 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   if (!ready) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center text-sm"
-        style={{ background: 'var(--cc-bg, #1a1410)', color: 'var(--cc-text-2, #a89a8e)' }}
+        className="h-dvh max-h-dvh flex items-center justify-center text-sm overflow-hidden"
+        style={{ background: 'var(--cc-cream, #F3F0FC)', color: 'var(--cc-text-2, #79709E)' }}
       >
         Loading chat…
       </div>
@@ -32,21 +33,21 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   }
 
   return (
-    <div className="chat-standalone min-h-screen flex flex-col">
+    <div className="chat-standalone h-dvh max-h-dvh overflow-hidden flex flex-col">
       <div
         className="flex items-center justify-between px-3 py-2 border-b text-xs shrink-0"
         style={{
-          borderColor: 'var(--cc-border, #3d2e24)',
-          background: 'var(--cc-panel, #2a2118)',
-          color: 'var(--cc-text-2, #a89a8e)',
+          borderColor: 'var(--cc-line, rgba(124, 58, 237, 0.16))',
+          background: 'var(--cc-panel, #E9E1FA)',
+          color: 'var(--cc-text-2, #79709E)',
         }}
       >
-        <Link href="/" className="font-semibold hover:underline" style={{ color: 'var(--cc-text, #f5ebe0)' }}>
+        <Link href="/" className="font-semibold hover:underline" style={{ color: 'var(--cc-text, #211B3D)' }}>
           ← Back to Cosmory
         </Link>
         <span>Standalone chat</span>
       </div>
-      <div className="flex-1 min-h-0">{children}</div>
+      <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
     </div>
   );
 }

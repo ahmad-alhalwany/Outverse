@@ -1,6 +1,6 @@
 from urllib.parse import parse_qs
 
-from django.conf import settings
+from channels.db import database_sync_to_async
 
 
 def _query_params(scope):
@@ -9,7 +9,7 @@ def _query_params(scope):
 
 
 def parse_user_id_from_token(scope):
-    """Resolve user id from `?token=` (DRF authtoken)."""
+    """Resolve user id from `?token=` (DRF authtoken). Sync — call via resolve_ws_user_id."""
     params = _query_params(scope)
     token_key = params.get('token', [None])[0]
     if not token_key:
@@ -22,8 +22,7 @@ def parse_user_id_from_token(scope):
         return None
 
 
+@database_sync_to_async
 def resolve_ws_user_id(scope):
-    uid = parse_user_id_from_token(scope)
-    if uid is not None:
-        return uid
-    return None
+    """Async-safe token lookup for websocket consumers."""
+    return parse_user_id_from_token(scope)

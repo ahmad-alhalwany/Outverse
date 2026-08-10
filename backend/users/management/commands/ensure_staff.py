@@ -51,6 +51,7 @@ class Command(BaseCommand):
         user.email = email
         user.set_password(password)
         user.is_staff = True
+        user.is_verified = True
         if not options['no_superuser']:
             user.is_superuser = True
         user.save()
@@ -58,7 +59,7 @@ class Command(BaseCommand):
         verb = 'Created' if created else 'Updated'
         self.stdout.write(
             self.style.SUCCESS(
-                f'{verb} @{username} (staff=True, superuser={user.is_superuser}). '
+                f'{verb} @{username} (staff=True, superuser={user.is_superuser}, verified=True). '
                 'Log in at /login then open /admin.'
             )
         )

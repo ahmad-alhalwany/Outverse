@@ -277,6 +277,7 @@ function CosmicChatPageContent() {
   const [memberPickerMode, setMemberPickerMode] = useState<'create' | 'invite' | null>(null);
   const [search, setSearch] = useState('');
   const [messageSearch, setMessageSearch] = useState('');
+  const [messageSearchOpen, setMessageSearchOpen] = useState(false);
   const [messageSearchResults, setMessageSearchResults] = useState<ChatMessage[] | null>(null);
   const [messageSearchLoading, setMessageSearchLoading] = useState(false);
   const [activePeer, setActivePeer] = useState<Friend | null>(null);
@@ -727,6 +728,7 @@ function CosmicChatPageContent() {
       setActivePromptRoom(promptMeta ?? null);
       setPeerTyping(false);
       setMessageSearch('');
+      setMessageSearchOpen(false);
       setMessageSearchResults(null);
       try {
         const res = await apiFetch(`chat/rooms/${room.id}/messages/`);
@@ -917,6 +919,7 @@ function CosmicChatPageContent() {
       setActivePromptRoom(null);
       setActivePeer(peer);
       setMessageSearch('');
+      setMessageSearchOpen(false);
       setMessageSearchResults(null);
       try {
         const startRes = await apiFetch('chat/conversations/start/', {
@@ -973,7 +976,9 @@ function CosmicChatPageContent() {
   }, [loadShared]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   }, [threadDisplayMessages]);
 
   useEffect(() => {
@@ -1374,6 +1379,7 @@ function CosmicChatPageContent() {
     setActiveRoomName('');
     setActivePromptRoom(null);
     setMessageSearch('');
+    setMessageSearchOpen(false);
     setMessageSearchResults(null);
   }
 
@@ -1402,7 +1408,7 @@ function CosmicChatPageContent() {
       <div className="cosmic-chat-grid" data-mobile-view={mobileThreadOpen ? 'thread' : 'list'}>
         <aside className="cosmic-chat-col cosmic-chat-col--list">
           <div className="cosmic-chat-col-head">{t('chat.friends')}</div>
-          <div className="relative px-1">
+          <div className="relative px-1 shrink-0">
             <MagnifyingGlassIcon className="h-4 w-4 absolute left-4 top-1/2 -translate-y-1/2 text-[var(--cc-text-2)]" />
             <input
               className="cosmic-chat-search"
@@ -1411,6 +1417,7 @@ function CosmicChatPageContent() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <div className="cosmic-chat-col-scroll">
           {requestConversations.length > 0 && (
             <div className="px-2 pt-2">
               <button
@@ -1461,7 +1468,7 @@ function CosmicChatPageContent() {
           <p className="text-[10px] uppercase tracking-wide px-3 pt-2 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
             Conversations
           </p>
-          <div className="flex-1 overflow-y-auto min-h-0 px-2 space-y-1">
+          <div className="px-2 space-y-1">
             {visibleConversations.map((conversation) => (
               <button
                 key={conversation.id}
@@ -1552,7 +1559,7 @@ function CosmicChatPageContent() {
           <p className="text-[10px] uppercase tracking-wide px-3 pt-2 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
             Friends
           </p>
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="pb-2">
             {filteredFriends.length === 0 ? (
               <p className="text-xs text-center py-6 px-2" style={{ color: 'var(--cc-text-2)' }}>
                 Follow creators to chat with them.
@@ -1578,6 +1585,7 @@ function CosmicChatPageContent() {
                 </button>
               ))
             )}
+          </div>
           </div>
           <div className="cosmic-chat-me-bar">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1673,38 +1681,60 @@ function CosmicChatPageContent() {
                     </button>
                   </div>
                 )}
+                <button
+                  type="button"
+                  className="cosmic-chat-icon-btn"
+                  title="Search in conversation"
+                  aria-pressed={messageSearchOpen}
+                  style={messageSearchOpen || messageSearch ? { color: 'var(--cc-brown)' } : undefined}
+                  onClick={() => {
+                    setMessageSearchOpen((v) => {
+                      if (v) {
+                        setMessageSearch('');
+                        setMessageSearchResults(null);
+                      }
+                      return !v;
+                    });
+                  }}
+                >
+                  <MagnifyingGlassIcon className="h-5 w-5" />
+                </button>
               </div>
 
-              <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--cc-line)' }}>
-                <div className="relative">
-                  <MagnifyingGlassIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--cc-text-2)]" />
-                  <input
-                    className="cosmic-chat-search w-full pl-9 pr-8"
-                    placeholder="Search in conversation…"
-                    value={messageSearch}
-                    onChange={(e) => setMessageSearch(e.target.value)}
-                  />
-                  {messageSearchLoading ? (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: 'var(--cc-text-2)' }}>
-                      …
-                    </span>
-                  ) : messageSearch ? (
-                    <button
-                      type="button"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-black/10"
-                      title="Clear search"
-                      onClick={() => setMessageSearch('')}
-                    >
-                      <XMarkIcon className="h-4 w-4" style={{ color: 'var(--cc-text-2)' }} />
-                    </button>
-                  ) : null}
+              {messageSearchOpen && (
+                <div className="cosmic-chat-thread-search">
+                  <div className="relative">
+                    <MagnifyingGlassIcon className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--cc-text-2)]" />
+                    <input
+                      className="cosmic-chat-search w-full pl-9 pr-8"
+                      style={{ margin: 0, width: '100%' }}
+                      placeholder="Search in conversation…"
+                      value={messageSearch}
+                      autoFocus
+                      onChange={(e) => setMessageSearch(e.target.value)}
+                    />
+                    {messageSearchLoading ? (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px]" style={{ color: 'var(--cc-text-2)' }}>
+                        …
+                      </span>
+                    ) : messageSearch ? (
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-black/10"
+                        title="Clear search"
+                        onClick={() => setMessageSearch('')}
+                      >
+                        <XMarkIcon className="h-4 w-4" style={{ color: 'var(--cc-text-2)' }} />
+                      </button>
+                    ) : null}
+                  </div>
+                  {messageSearch.trim() && (
+                    <p className="text-[10px] mt-1 px-1" style={{ color: 'var(--cc-text-2)' }}>
+                      {threadDisplayMessages.length} match{threadDisplayMessages.length === 1 ? '' : 'es'}
+                    </p>
+                  )}
                 </div>
-                {messageSearch.trim() && (
-                  <p className="text-[10px] mt-1 px-1" style={{ color: 'var(--cc-text-2)' }}>
-                    {threadDisplayMessages.length} match{threadDisplayMessages.length === 1 ? '' : 'es'}
-                  </p>
-                )}
-              </div>
+              )}
 
               {viewMode === 'room' && activePromptRoom && (
                 <div className="px-4 py-2 border-b border-surface text-xs" style={{ color: 'var(--cc-text-2)' }}>
@@ -2031,6 +2061,7 @@ function CosmicChatPageContent() {
                   e.target.value = '';
                 }}
               />
+              <div className="cosmic-chat-composer-dock">
               {uploadProgress && (
                 <div className="px-4 pt-3">
                   <div className="h-2 rounded-full bg-surface overflow-hidden">
@@ -2046,7 +2077,7 @@ function CosmicChatPageContent() {
               )}
               {replyingTo && (
                 <div
-                  className="mx-4 mt-3 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs border-l-2"
+                  className="mx-3 mt-2 flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-xs border-l-2"
                   style={{ background: 'var(--cc-panel)', borderColor: 'var(--cc-brown)' }}
                 >
                   <span className="flex items-center gap-1.5 min-w-0">
@@ -2218,6 +2249,7 @@ function CosmicChatPageContent() {
                   <span className="hidden sm:inline">Send</span>
                 </button>
               </form>
+              </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-sm" style={{ color: 'var(--cc-text-2)' }}>
@@ -2228,7 +2260,7 @@ function CosmicChatPageContent() {
 
         <aside className="cosmic-chat-col cosmic-chat-col--shared">
           <div className="cosmic-chat-col-head">{t('chat.sharedSpace')}</div>
-          <div className="flex-1 overflow-y-auto min-h-0">
+          <div className="cosmic-chat-col-scroll">
             <p className="text-[10px] uppercase tracking-wide px-3 pt-2 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
               Joint challenges
             </p>

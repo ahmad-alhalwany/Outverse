@@ -79,7 +79,7 @@ export default function AdminDashboardPage() {
               value={data.counts.pending_flags}
               delta={data.counts.pending_flags > 0 ? 'Needs review' : 'All clear'}
             />
-            <Kpi label="Today's orders" value={data.shop.orders_today} delta={`${data.shop.revenue_today} coins`} warm />
+            <Kpi label="Today's orders" value={data.shop.orders_today} delta={`${data.shop.revenue_today} Nova`} warm />
             <Kpi label="Completion rate" value={`${data.completion_rate}%`} delta="Lab challenges" warm />
             <Kpi label="Signals (reels)" value={data.counts.reels} />
             <Kpi label="Shop products" value={data.shop.active_products} delta={`${data.shop.featured_products} featured`} />

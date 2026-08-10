@@ -109,3 +109,20 @@ export async function fetchVerificationStatus(): Promise<{
   if (!res.ok) return null;
   return res.json();
 }
+
+export async function submitSellerApplication(reason: string, links: string[]): Promise<boolean> {
+  const res = await apiFetch('users/me/seller-application/', {
+    method: 'POST',
+    body: JSON.stringify({ reason, links }),
+  });
+  return res.ok;
+}
+
+export async function fetchSellerApplicationStatus(): Promise<{
+  is_shop_seller: boolean;
+  requests: { id: number; status: string; reason: string; review_note?: string }[];
+} | null> {
+  const res = await apiFetch('users/me/seller-application/');
+  if (!res.ok) return null;
+  return res.json();
+}

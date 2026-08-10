@@ -221,7 +221,13 @@ class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
             user, period=period, language=lang if lang in ('en', 'ar') else 'en',
         )
         if not ritual or not question:
-            return Response({'detail': 'No ritual prompt available.'}, status=404)
+            # Empty inventory is a normal empty state, not a missing route.
+            return Response({
+                'available': False,
+                'detail': 'No ritual prompt available.',
+                'ritual': None,
+                'question': None,
+            })
 
         return Response({
             'ritual': {

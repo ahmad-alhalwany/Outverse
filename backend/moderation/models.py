@@ -11,6 +11,9 @@ class FlaggedContent(models.Model):
         ('reel_comment', 'Reel comment'),
         ('story', 'Story'),
         ('live_chat', 'Live chat message'),
+        ('chat_message', 'Direct chat message'),
+        ('room_message', 'Room chat message'),
+        ('bottle', 'Emotion bottle'),
     ]
     STATUS_CHOICES = [
         ('pending', 'Pending'),
@@ -35,6 +38,19 @@ class FlaggedContent(models.Model):
     ai_scores = models.JSONField(default=dict, blank=True)
     ai_model = models.CharField(max_length=50, blank=True, default='')
     ai_checked_at = models.DateTimeField(null=True, blank=True)
+    reason = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+        choices=[
+            ('spam', 'Spam'),
+            ('harassment', 'Harassment'),
+            ('impersonation', 'Impersonation'),
+            ('hate', 'Hate speech'),
+            ('other', 'Other'),
+        ],
+    )
+    details = models.TextField(blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:

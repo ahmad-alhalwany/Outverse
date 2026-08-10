@@ -61,15 +61,30 @@ Use the signing secret in `STRIPE_WEBHOOK_SECRET`.
 
 ## 5. Scheduled jobs (cron sidecar)
 
-`docker-compose.prod.yml` starts a `cron` service that publishes due scheduled posts and premiere videos every minute, and sends email digests once daily (08:00 UTC by default).
+`docker-compose.prod.yml` starts a `cron` service that:
+
+- every minute: publishes due scheduled posts + premiere videos
+- once daily (08:00 UTC by default): email digests
+- once daily (06:00 UTC by default): generates the Lab AI daily challenge
 
 ```bash
 docker compose -f docker-compose.prod.yml logs -f cron
 # Optional: force a digest dry-run
 docker compose -f docker-compose.prod.yml exec cron python manage.py send_email_digests --dry-run
+docker compose -f docker-compose.prod.yml exec cron python manage.py generate_daily_challenge
 ```
 
-Tune digest time with `CRON_DIGEST_HOUR` / `CRON_DIGEST_MINUTE` in `.env`. See `docs/DEPLOYMENT.md`.
+Tune times in `.env` (UTC): `CRON_DIGEST_HOUR` / `CRON_DIGEST_MINUTE`, and
+`CRON_DAILY_CHALLENGE_HOUR` / `CRON_DAILY_CHALLENGE_MINUTE` / `CRON_DAILY_CHALLENGE_LANG`.
+
+On Windows without Docker cron:
+
+```powershell
+cd backend
+powershell -ExecutionPolicy Bypass -File .\scripts\register-daily-challenge-task.ps1 -Hour 6 -Minute 0
+```
+
+See `docs/DEPLOYMENT.md`.
 
 ## 6. Verify
 

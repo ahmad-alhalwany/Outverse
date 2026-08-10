@@ -2,8 +2,44 @@
 
 from __future__ import annotations
 
+import re
+
 from users.models import Follow
 from users.social import is_blocked_between
+
+_EMAIL_RE = re.compile(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+
+
+def looks_like_email(value: str | None) -> bool:
+    s = (value or '').strip()
+    return bool(s) and '@' in s and bool(_EMAIL_RE.match(s))
+
+
+def public_display_name(user, fallback: str = 'Traveler') -> str:
+    """Name safe to show to other people — never a full email address."""
+    if user is None:
+        return fallback
+    full = f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
+    if full and not looks_like_email(full):
+        return full
+    username = (getattr(user, 'username', None) or '').strip()
+    if username and not looks_like_email(username):
+        return username
+    if username and looks_like_email(username):
+        local = username.split('@', 1)[0].strip()
+        if local:
+            return local
+    return fallback
+
+
+def public_username(user) -> str:
+    """Handle for public UI; blank when username is an email."""
+    if user is None:
+        return ''
+    username = (getattr(user, 'username', None) or '').strip()
+    if not username or looks_like_email(username):
+        return ''
+    return username
 
 
 def _prefs(user):

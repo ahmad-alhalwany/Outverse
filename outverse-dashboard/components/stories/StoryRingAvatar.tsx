@@ -18,7 +18,7 @@ type Props = {
 
 const SIZES = {
   sm: { ring: 'w-14 h-14', inner: 'w-[52px] h-[52px]', text: 'text-[10px]' },
-  md: { ring: 'w-[4.5rem] h-[4.5rem] sm:w-20 sm:h-20', inner: 'w-[4.25rem] h-[4.25rem] sm:w-[4.65rem] sm:h-[4.65rem]', text: 'text-[11px]' },
+  md: { ring: 'w-20 h-20 sm:w-[5.25rem] sm:h-[5.25rem]', inner: 'w-[4.65rem] h-[4.65rem] sm:w-[4.9rem] sm:h-[4.9rem]', text: 'text-[11px]' },
   lg: { ring: 'w-[3.25rem] h-[3.25rem]', inner: 'w-12 h-12', text: 'text-[10px]' },
 };
 
@@ -44,7 +44,7 @@ export default function StoryRingAvatar({
 
   const ring = (
     <motion.div
-      whileHover={{ scale: 1.06 }}
+      whileHover={{ scale: 1.04 }}
       whileTap={{ scale: 0.96 }}
       className={`story-ring-outer relative rounded-full p-[3px] ${s.ring} ${isNew ? 'story-ring-new' : 'story-ring-seen'}${isCloseFriends ? ' story-ring-close-friends' : ''}`}
       style={moodRing ? { background: moodRing } : undefined}
@@ -85,7 +85,7 @@ export default function StoryRingAvatar({
   return (
     <button type="button" onClick={onClick} className="story-ring-btn-vertical group shrink-0 snap-start">
       {ring}
-      <span className={`${s.text} font-medium text-text-secondary max-w-[76px] truncate mt-1.5 group-hover:text-text transition`}>
+      <span className={`${s.text} font-medium text-text-secondary max-w-[88px] truncate mt-1.5 group-hover:text-text transition`}>
         {label}
       </span>
     </button>

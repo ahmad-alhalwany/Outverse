@@ -21,6 +21,11 @@ class Notification(models.Model):
         ('idea_rejected', 'Idea Rejected'),
         ('tip', 'Tip'),
         ('going_live', 'Going Live'),
+        ('forge_invite', 'Forge Invite'),
+        ('forge_pending', 'Forge Pending'),
+        ('forge_approved', 'Forge Approved'),
+        ('forge_rejected', 'Forge Rejected'),
+        ('studio_invite', 'Studio Invite'),
     ]
 
     recipient = models.ForeignKey(
@@ -62,6 +67,13 @@ class Notification(models.Model):
     idea = models.ForeignKey(
         'ideas.Idea',
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='+',
+    )
+    studio_session = models.ForeignKey(
+        'studio.DrawSession',
+        on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name='+',

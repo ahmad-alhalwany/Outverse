@@ -9,10 +9,16 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'outverse.settings')
 django_asgi_app = get_asgi_application()
 
 import chat.routing  # noqa: E402
+import narratives.routing  # noqa: E402
+import studio.routing  # noqa: E402
 
 application = ProtocolTypeRouter({
     'http': django_asgi_app,
     'websocket': AllowedHostsOriginValidator(
-        URLRouter(chat.routing.websocket_urlpatterns)
+        URLRouter(
+            chat.routing.websocket_urlpatterns
+            + narratives.routing.websocket_urlpatterns
+            + studio.routing.websocket_urlpatterns
+        )
     ),
 })

@@ -1,3 +1,4 @@
+import json
 import uuid
 
 from rest_framework import serializers
@@ -8,10 +9,29 @@ from .models import CollaborationRequest, Idea, IdeaComment, IdeaPledge
 
 
 def normalize_milestones(raw):
+    if isinstance(raw, str):
+        raw = raw.strip()
+        if not raw:
+            return []
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise serializers.ValidationError('milestones must be a JSON list.') from exc
     if not isinstance(raw, list):
         raise serializers.ValidationError('milestones must be a list.')
     normalized = []
     for item in raw:
+        if isinstance(item, str):
+            title = item.strip()
+            if not title:
+                continue
+            normalized.append({
+                'id': str(uuid.uuid4()),
+                'title': title,
+                'done': False,
+                'due_date': None,
+            })
+            continue
         if not isinstance(item, dict):
             raise serializers.ValidationError('Each milestone must be an object.')
         title = (item.get('title') or '').strip()
@@ -28,6 +48,24 @@ def normalize_milestones(raw):
             'due_date': due_date,
         })
     return normalized
+
+
+def parse_string_list(value, *, field_name):
+    if value is None or value == '':
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            return [part.strip() for part in text.split(',') if part.strip()]
+        if isinstance(parsed, list):
+            return [str(item).strip() for item in parsed if str(item).strip()]
+    raise serializers.ValidationError(f'{field_name} must be a list.')
 
 
 class IdeaUserSerializer(serializers.ModelSerializer):
@@ -50,12 +88,14 @@ class IdeaSerializer(serializers.ModelSerializer):
     is_owner = serializers.SerializerMethodField()
     collab_project_id = serializers.SerializerMethodField()
     silent_unlocked = serializers.SerializerMethodField()
+    cover_image = serializers.ImageField(required=False, allow_null=True, write_only=True)
+    cover_url = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Idea
         fields = [
             'id', 'title', 'description', 'owner', 'owner_id',
-            'category', 'cover_url', 'status', 'roles_needed', 'tags',
+            'category', 'cover_url', 'cover_image', 'status', 'roles_needed', 'tags',
             'target_date', 'milestones',
             'funding_goal', 'funding_raised', 'supporters',
             'collaborators', 'collaborators_count',
@@ -65,8 +105,38 @@ class IdeaSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['created_at', 'updated_at']
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        data['cover_url'] = self._resolved_cover_url(instance)
+        return data
+
+    def _resolved_cover_url(self, obj):
+        if obj.cover_image:
+            url = obj.cover_image.url
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return obj.cover_url or ''
+
     def validate_milestones(self, value):
         return normalize_milestones(value)
+
+    def validate_roles_needed(self, value):
+        return parse_string_list(value, field_name='roles_needed')
+
+    def validate_tags(self, value):
+        return parse_string_list(value, field_name='tags')
+
+    def validate_funding_goal(self, value):
+        if value in ('', None):
+            return None
+        return value
+
+    def validate_target_date(self, value):
+        if value in ('', None):
+            return None
+        return value
 
     def get_supporters(self, obj):
         return obj.votes.count()

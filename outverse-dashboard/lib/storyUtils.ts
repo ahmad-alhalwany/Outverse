@@ -316,14 +316,20 @@ export async function removeCloseFriend(friendId: number): Promise<boolean> {
 
 /** Share an existing post as a new story: fetches the post's image as a
  * blob and re-uploads it, linking back via shared_post_id. */
-export async function sharePostToStory(postId: number, imageUrl: string): Promise<boolean> {
+export async function sharePostToStory(
+  postId: number,
+  imageUrl: string,
+  opts?: { text?: string; audience?: 'everyone' | 'close_friends' },
+): Promise<boolean> {
   try {
     const blob = await fetch(imageUrl).then((r) => r.blob());
     const form = new FormData();
     form.append('image', blob, 'shared-post.jpg');
+    form.append('text', (opts?.text || '').slice(0, 200));
     form.append('overlays', '[]');
     form.append('drawing', '[]');
     form.append('shared_post_id', String(postId));
+    form.append('audience', opts?.audience || 'everyone');
     const res = await apiFetch('stories/', { method: 'POST', body: form });
     return res.ok;
   } catch {
@@ -335,13 +341,14 @@ export async function sharePostToStory(postId: number, imageUrl: string): Promis
 export async function shareReelToStory(
   reelId: number,
   videoUrl: string,
-  caption?: string,
+  opts?: { caption?: string; text?: string; audience?: 'everyone' | 'close_friends' },
 ): Promise<boolean> {
   try {
     const blob = await fetch(videoUrl).then((r) => r.blob());
     const form = new FormData();
     form.append('video', blob, 'shared-reel.mp4');
-    form.append('text', caption?.slice(0, 200) || '');
+    const caption = (opts?.text ?? opts?.caption ?? '').slice(0, 200);
+    form.append('text', caption);
     form.append(
       'overlays',
       JSON.stringify([
@@ -359,6 +366,7 @@ export async function shareReelToStory(
       ]),
     );
     form.append('drawing', '[]');
+    form.append('audience', opts?.audience || 'everyone');
     const res = await apiFetch('stories/', { method: 'POST', body: form });
     return res.ok;
   } catch {

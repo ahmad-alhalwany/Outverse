@@ -55,7 +55,9 @@ class IdeaViewSet(viewsets.ModelViewSet):
     serializer_class = IdeaSerializer
 
     def get_permissions(self):
-        if self.action in {"list", "retrieve", "comments", "constellation", "crew"} and self.request.method == "GET":
+        if self.action in {
+            "list", "retrieve", "comments", "constellation", "crew", "featured",
+        } and self.request.method == "GET":
             return [AllowAny()]
         return [IsAuthenticated()]
 

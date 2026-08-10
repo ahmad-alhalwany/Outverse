@@ -5,8 +5,8 @@ import Link from 'next/link';
 import WorldShell from '@/components/world/WorldShell';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { apiFetch, apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
-import { getToken } from '@/lib/auth';
+import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
+import { getToken, getUser } from '@/lib/auth';
 import { fetchDailyRitual, completeDailyRitual } from '@/lib/ritualApi';
 import { relayQuestion } from '@/lib/differentiatorApi';
 import InspirationRelayList from '@/components/lab/InspirationRelayList';
@@ -26,9 +26,8 @@ import {
   ShareIcon,
   BookmarkIcon,
   InformationCircleIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline';
-
-const BASE = apiUrl('challenges');
 
 const PALETTES = {
   light: {
@@ -112,6 +111,15 @@ type Challenge = {
   difficulty: string;
   cover_url: string;
   is_daily: boolean;
+  is_ai_generated?: boolean;
+  is_owner?: boolean;
+  created_by?: {
+    id?: number;
+    username: string;
+    first_name?: string;
+    last_name?: string;
+    avatar?: string | null;
+  } | null;
   end_date: string;
   participants: number;
 };
@@ -211,6 +219,7 @@ function WeirdnessLabContent() {
   const [ritualQuestionId, setRitualQuestionId] = useState<number | null>(null);
   const [relayUsers, setRelayUsers] = useState<RelayUser[]>([]);
   const [completingRitual, setCompletingRitual] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
 
   const countdown = useCountdown(daily?.end_date);
 
@@ -235,7 +244,7 @@ function WeirdnessLabContent() {
 
   const loadArchive = useCallback(
     async (page: number, append: boolean) => {
-      const res = await fetch(`${BASE}/archive/?type=${category}&page=${page}&page_size=12`);
+      const res = await apiFetch(`challenges/archive/?type=${category}&page=${page}&page_size=12`);
       if (!res.ok) {
         throw new Error('archive failed');
       }
@@ -257,13 +266,23 @@ function WeirdnessLabContent() {
     setLoading(true);
     setLoadError(false);
     try {
-      const [dRes, sRes] = await Promise.all([fetch(`${BASE}/daily/`), fetch(`${BASE}/stats/`)]);
+      // Ensure today's bright AI daily exists, then load stats + archive.
+      const [dRes, sRes] = await Promise.all([
+        apiFetchJson('challenges/ensure-daily/', { method: 'POST', json: { lang: 'en' } }),
+        apiFetch('challenges/stats/'),
+      ]);
       let ok = true;
       if (dRes.ok) {
         const d = await dRes.json();
         setDaily(d && d.id ? d : null);
       } else {
-        ok = false;
+        const fallback = await apiFetch('challenges/daily/');
+        if (fallback.ok) {
+          const d = await fallback.json();
+          setDaily(d && d.id ? d : null);
+        } else {
+          ok = false;
+        }
       }
       if (sRes.ok) {
         setStats(await sRes.json());
@@ -325,7 +344,7 @@ function WeirdnessLabContent() {
     if (Number.isNaN(num)) return;
     void (async () => {
       try {
-        const res = await fetch(`${BASE}/${num}/`);
+        const res = await apiFetch(`challenges/${num}/`);
         if (res.ok) {
           const data = await res.json();
           if (data?.id) setViewChallenge(data);
@@ -503,6 +522,16 @@ function WeirdnessLabContent() {
               </div>
 
               <h2 className="lab-question">{daily.title}</h2>
+              <p className="text-sm mt-2 mb-3 opacity-80" style={{ color: '#E9E1FA' }}>
+                {daily.is_ai_generated
+                  ? '✨ Crafted by Cosmory AI — bright ideas only, no darkness.'
+                  : '✨ Today’s bright Lab prompt.'}
+              </p>
+              {daily.description ? (
+                <p className="text-sm mb-4 opacity-75" style={{ color: '#E9E1FA' }}>
+                  {daily.description}
+                </p>
+              ) : null}
 
               <textarea
                 value={response}
@@ -585,7 +614,18 @@ function WeirdnessLabContent() {
         )}
 
         <div className="lab-archive-head">
-          <h3 className="lab-section-title">Previous Challenges</h3>
+          <h3 className="lab-section-title">Community Challenges</h3>
+          {getToken() ? (
+            <button
+              type="button"
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold text-white"
+              style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
+            >
+              <PlusIcon className="h-4 w-4" />
+              Publish challenge
+            </button>
+          ) : null}
         </div>
 
         <div className="relative mb-4">
@@ -651,6 +691,19 @@ function WeirdnessLabContent() {
           />
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {showCreate && (
+          <CreateChallengeModal
+            onClose={() => setShowCreate(false)}
+            onCreated={(challenge) => {
+              setShowCreate(false);
+              setArchive((prev) => [challenge, ...prev]);
+              setViewChallenge(challenge);
+              router.replace(`/lab?challenge=${challenge.id}`);
+            }}
+          />
+        )}
+      </AnimatePresence>
     </WorldShell>
   );
 }
@@ -682,6 +735,8 @@ function ChallengeViewModal({
   onSubmitted: (challengeId: number, participants: number) => void;
 }) {
   const C = useLabColors();
+  const me = getUser();
+  const isOwner = Boolean(ch.is_owner || me?.is_staff || (me?.id && ch.created_by?.id === me.id));
   const [response, setResponse] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -689,6 +744,7 @@ function ChallengeViewModal({
   const [submissions, setSubmissions] = useState<ChallengeSubmission[]>([]);
   const [loadingSubmissions, setLoadingSubmissions] = useState(true);
   const [submissionsError, setSubmissionsError] = useState(false);
+  const [moderatingId, setModeratingId] = useState<number | null>(null);
 
   const loadSubmissions = useCallback(async () => {
     setLoadingSubmissions(true);
@@ -709,6 +765,22 @@ function ChallengeViewModal({
     void loadSubmissions();
   }, [loadSubmissions]);
 
+  async function moderate(submissionId: number, approve: boolean) {
+    setModeratingId(submissionId);
+    try {
+      const res = await apiFetchJson(`challenges/${ch.id}/submissions/${submissionId}/approve/`, {
+        method: 'PATCH',
+        json: { is_approved: approve },
+      });
+      if (res.ok) await loadSubmissions();
+      else setError('Could not update submission.');
+    } catch {
+      setError('Could not update submission.');
+    } finally {
+      setModeratingId(null);
+    }
+  }
+
   async function submitEntry() {
     if (!response.trim()) {
       setError('Write something first ✍️');
@@ -723,7 +795,13 @@ function ChallengeViewModal({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Submit failed');
+        const msg = data.error || 'Submit failed';
+        // Already submitted — refresh list so their entry is visible instead of looking "missing".
+        if (typeof msg === 'string' && /already submitted/i.test(msg)) {
+          setSubmitted(true);
+          await loadSubmissions();
+        }
+        throw new Error(msg);
       }
       setSubmitted(true);
       setResponse('');
@@ -758,7 +836,7 @@ function ChallengeViewModal({
           className="h-32 shrink-0 bg-cover bg-center"
           style={{
             background: ch.cover_url
-              ? `url(${ch.cover_url}) center/cover`
+              ? `url(${mediaUrl(ch.cover_url)}) center/cover`
               : `linear-gradient(135deg, ${C.card}, ${C.card2})`,
           }}
         />
@@ -781,6 +859,11 @@ function ChallengeViewModal({
                 Today&apos;s daily
               </span>
             )}
+            {(ch.is_ai_generated || ch.is_daily) && (
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee' }}>
+                AI · bright only
+              </span>
+            )}
             {ch.difficulty && (
               <span
                 className="px-2.5 py-1 rounded-full text-xs"
@@ -793,6 +876,14 @@ function ChallengeViewModal({
           <h2 className="text-lg font-bold mt-2" style={{ color: C.text }}>
             {ch.title}
           </h2>
+          <p className="text-xs mt-1" style={{ color: C.text2 }}>
+            By{' '}
+            {ch.is_daily || ch.is_ai_generated
+              ? 'Cosmory AI'
+              : ch.created_by
+                ? displayName(ch.created_by)
+                : 'Community'}
+          </p>
           <p className="text-sm mt-2 leading-relaxed" style={{ color: C.text2 }}>
             {ch.description || 'No description for this challenge.'}
           </p>
@@ -818,7 +909,9 @@ function ChallengeViewModal({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-3">
             {submitted && (
               <span className="text-sm font-medium" style={{ color: C.successText }}>
-                Submitted! 🎉
+                {ch.is_daily || ch.is_ai_generated
+                  ? 'Submitted! 🎉'
+                  : 'Submitted — waiting for the author to approve.'}
               </span>
             )}
             <button
@@ -842,6 +935,14 @@ function ChallengeViewModal({
                 {submissions.length} shown
               </span>
             </div>
+            <p className="text-xs mb-3" style={{ color: C.text2 }}>
+              {isOwner && !ch.is_daily
+                ? 'You own this challenge — approve or hide entries below.'
+                : 'Community entries appear after the challenge author approves them.'}{' '}
+              <Link href="/lab/history" className="font-semibold underline" style={{ color: C.brownDk }}>
+                Lab history
+              </Link>
+            </p>
             {loadingSubmissions ? (
               <p className="text-sm" style={{ color: C.text2 }}>
                 Loading submissions…
@@ -892,14 +993,48 @@ function ChallengeViewModal({
                               <CheckBadgeIcon className="h-3.5 w-3.5" />
                               Approved
                             </span>
-                          ) : null}
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                              style={{ background: 'rgba(251, 191, 36, 0.18)', color: '#fbbf24' }}
+                            >
+                              Pending review
+                            </span>
+                          )}
                         </div>
                         <p className="mt-1 text-sm whitespace-pre-wrap" style={{ color: C.text2 }}>
                           {submission.content}
                         </p>
-                        <p className="mt-2 text-xs" style={{ color: C.text2 }}>
-                          {formatDate(submission.submitted_at || submission.created_at)}
-                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <p className="text-xs" style={{ color: C.text2 }}>
+                            {formatDate(submission.submitted_at || submission.created_at)}
+                          </p>
+                          {isOwner && !ch.is_daily ? (
+                            <div className="ml-auto flex gap-2">
+                              {!submission.is_approved ? (
+                                <button
+                                  type="button"
+                                  disabled={moderatingId === submission.id}
+                                  onClick={() => void moderate(submission.id, true)}
+                                  className="rounded-full px-3 py-1 text-[11px] font-bold text-white disabled:opacity-60"
+                                  style={{ background: C.brown }}
+                                >
+                                  Approve
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={moderatingId === submission.id}
+                                  onClick={() => void moderate(submission.id, false)}
+                                  className="rounded-full px-3 py-1 text-[11px] font-semibold disabled:opacity-60"
+                                  style={{ background: C.card2, color: C.text2 }}
+                                >
+                                  Hide
+                                </button>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -907,6 +1042,218 @@ function ChallengeViewModal({
               </div>
             )}
           </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function CreateChallengeModal({
+  onClose,
+  onCreated,
+}: {
+  onClose: () => void;
+  onCreated: (challenge: Challenge) => void;
+}) {
+  const C = useLabColors();
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [type, setType] = useState('writing');
+  const [difficulty, setDifficulty] = useState('easy');
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  function onCoverChange(file: File | null) {
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    setCoverFile(file);
+    setCoverPreview(file ? URL.createObjectURL(file) : '');
+  }
+
+  async function submit() {
+    if (!title.trim()) {
+      setError('Add a title for your challenge.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const end = new Date();
+      end.setDate(end.getDate() + 14);
+      const form = new FormData();
+      form.append('title', title.trim());
+      form.append('description', description.trim());
+      form.append('type', type);
+      form.append('difficulty', difficulty);
+      form.append('end_date', end.toISOString());
+      if (coverFile) form.append('cover_image', coverFile);
+      const res = await apiFetch('challenges/', { method: 'POST', body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const fieldErr =
+          typeof data.cover_image?.[0] === 'string'
+            ? data.cover_image[0]
+            : typeof data.detail === 'string'
+              ? data.detail
+              : data.error;
+        throw new Error(fieldErr || 'Could not publish challenge.');
+      }
+      onCreated((await res.json()) as Challenge);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not publish challenge.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      style={{ background: C.overlay, backdropFilter: 'blur(3px)' }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.94, y: 12 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.94 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-2xl p-5 max-h-[90vh] overflow-y-auto"
+        style={{ background: C.cream, border: `1px solid ${C.line}` }}
+      >
+        <h2 className="text-lg font-bold" style={{ color: C.text }}>
+          Publish a community challenge
+        </h2>
+        <p className="text-sm mt-1 mb-4" style={{ color: C.text2 }}>
+          You moderate the entries. Keep it bright and creative.
+        </p>
+        <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
+          Title
+        </label>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={120}
+          className="w-full rounded-xl px-3 py-2.5 text-sm outline-none mb-3"
+          style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+          placeholder="e.g. Invent a festival for kindness"
+        />
+        <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
+          Description
+        </label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={3}
+          maxLength={500}
+          className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none mb-3"
+          style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+          placeholder="What should people create?"
+        />
+        <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
+          Cover image <span className="font-normal opacity-70">(optional)</span>
+        </label>
+        <div
+          className="mb-3 rounded-xl overflow-hidden"
+          style={{ border: `1px dashed ${C.line}`, background: C.white }}
+        >
+          {coverPreview ? (
+            <div className="relative h-36 bg-center bg-cover" style={{ backgroundImage: `url(${coverPreview})` }}>
+              <button
+                type="button"
+                onClick={() => onCoverChange(null)}
+                className="absolute top-2 right-2 rounded-lg px-2 py-1 text-xs font-semibold"
+                style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center gap-1 h-28 cursor-pointer px-4 text-center">
+              <span className="text-sm font-semibold" style={{ color: C.brown }}>
+                Upload image
+              </span>
+              <span className="text-xs" style={{ color: C.text2 }}>
+                JPG, PNG, WebP or GIF · max 5MB
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  if (file && file.size > 5 * 1024 * 1024) {
+                    setError('Cover image must be 5MB or smaller.');
+                    e.target.value = '';
+                    return;
+                  }
+                  setError('');
+                  onCoverChange(file);
+                }}
+              />
+            </label>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
+              Type
+            </label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+            >
+              {CATEGORIES.filter((c) => c.key !== 'all').map((c) => (
+                <option key={c.key} value={c.key}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
+              Difficulty
+            </label>
+            <select
+              value={difficulty}
+              onChange={(e) => setDifficulty(e.target.value)}
+              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
+              style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+            >
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+        </div>
+        {error ? (
+          <p className="text-sm mb-3" style={{ color: '#c0392b' }}>
+            {error}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl px-4 py-2 text-sm font-semibold"
+            style={{ background: C.card2, color: C.text2 }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void submit()}
+            className="rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
+            style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
+          >
+            {busy ? 'Publishing…' : 'Publish'}
+          </button>
         </div>
       </motion.div>
     </motion.div>
@@ -949,7 +1296,7 @@ function ArchiveCard({
     >
       <div
         className="lab-archive-image"
-        style={{ background: ch.cover_url ? `url(${ch.cover_url}) center/cover` : `linear-gradient(135deg, ${C.card}, ${C.card2})` }}
+        style={{ background: ch.cover_url ? `url(${mediaUrl(ch.cover_url)}) center/cover` : `linear-gradient(135deg, ${C.card}, ${C.card2})` }}
       />
       <div className="p-4">
         <h4 className="font-semibold mt-1 leading-snug text-[1.05rem]" style={{ color: C.text }}>

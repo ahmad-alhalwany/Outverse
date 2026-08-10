@@ -64,6 +64,7 @@ import ReelCommentsSheet from './ReelCommentsSheet';
 import ReelRemixBadge from './ReelRemixBadge';
 import ReelOverlays, { useReelClock } from './ReelOverlays';
 import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
+import ReportDialog, { type ReportReason } from '@/components/ReportDialog';
 
 interface ReelLikeResult {
   liked: boolean;
@@ -107,6 +108,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
   const [muted, setMuted] = useState(true);
 
   const [burst, setBurst] = useState(0);
@@ -470,25 +472,23 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
 
 
-  const reportReel = async () => {
-    if (!me || isOwner) return;
-    if (!(await confirm(t('reels.confirmReportReel'), { confirmLabel: 'Report' }))) return;
+  const submitReelReport = async (reason: ReportReason, details: string) => {
+    if (!me || isOwner) return false;
     try {
       const res = await apiFetchJson('moderation/flagged/', {
         method: 'POST',
         json: {
           type: 'reel',
+          object_id: reel.id,
           content: `reel:${reel.id} @${reelAuthorName(reel.user)}: ${(reel.caption || '').slice(0, 200)}`,
+          reason,
+          details,
           reporter: me.username,
         },
       });
-      if (res.ok) {
-        window.alert('Report submitted successfully.');
-      } else {
-        window.alert('Could not submit the report. Please try again.');
-      }
+      return res.ok;
     } catch {
-      window.alert('Could not submit the report. Please try again.');
+      return false;
     }
   };
 
@@ -576,13 +576,9 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
   };
 
   const formatCount = (n: number) => {
-
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-
     if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-
-    return n > 0 ? String(n) : '—';
-
+    return String(n);
   };
 
 
@@ -739,46 +735,27 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
 
       <div className="reel-slide__side">
-
         <Link href={`/profile/${reel.user.id}`} className="reel-slide__avatar-link">
-
           <span className="reel-slide__avatar-ring">
-
             {avatar ? (
-
               // eslint-disable-next-line @next/next/no-img-element
-
-              <Image src={avatar} alt={`${reelAuthorName(reel.user)} avatar`} width={56} height={56} className="reel-slide__avatar" unoptimized />
-
+              <Image src={avatar} alt={`${reelAuthorName(reel.user)} avatar`} width={40} height={40} className="reel-slide__avatar" unoptimized />
             ) : (
-
               <span className="reel-slide__avatar-fallback">{mood.emoji}</span>
-
             )}
-
           </span>
-
         </Link>
 
         <button
-
           type="button"
-
           className={`reel-slide__action${saved ? ' reel-slide__action--liked' : ''}`}
-
           onClick={toggleSave}
-
           aria-label="Save reel"
-
+          title="Save"
         >
-
-          <BookmarkIcon className="h-7 w-7" />
-
+          <BookmarkIcon />
           <span>{saved ? 'Saved' : 'Save'}</span>
-
         </button>
-
-
 
         <div className="reel-slide__action reel-slide__action--react">
           <PostReactions
@@ -790,35 +767,28 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
             reactionCounts={reactionCounts}
             onReaction={(emoji) => void handleReelReaction(emoji)}
           />
-          {!Object.keys(reactionCounts).length && (
-            <span className="reel-slide__react-count">{formatCount(likes)}</span>
-          )}
+          <span className="reel-slide__react-count">{formatCount(likes)}</span>
         </div>
 
-
-
         <button
-
           type="button"
-
           className="reel-slide__action"
-
           onClick={() => setCommentsOpen(true)}
-
           aria-label={t('reels.commentsTitle')}
-
+          title={t('reels.commentsTitle')}
         >
-
-          <ChatBubbleLeftIcon className="h-7 w-7" />
-
+          <ChatBubbleLeftIcon />
           <span>{formatCount(commentsCount)}</span>
-
         </button>
 
-
-
-        <button type="button" className="reel-slide__action" onClick={() => setShareOpen(true)}>
-          <ShareIcon className="h-7 w-7" />
+        <button
+          type="button"
+          className="reel-slide__action"
+          onClick={() => setShareOpen(true)}
+          aria-label={t('reels.share')}
+          title={t('reels.share')}
+        >
+          <ShareIcon />
           <span>{shares > 0 ? formatCount(shares) : t('reels.share')}</span>
         </button>
 
@@ -827,8 +797,9 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
             href={`/reels/create?remix_of=${reel.id}`}
             className="reel-slide__action"
             aria-label={t('reels.remix')}
+            title={t('reels.remixHint')}
           >
-            <ArrowPathRoundedSquareIcon className="h-7 w-7" />
+            <ArrowPathRoundedSquareIcon />
             <span>{t('reels.remix')}</span>
           </Link>
         )}
@@ -838,8 +809,9 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
             href={`/reels/create?stitch_of=${reel.id}`}
             className="reel-slide__action"
             aria-label={t('reels.weave')}
+            title={t('reels.weaveHint')}
           >
-            <ScissorsIcon className="h-7 w-7" />
+            <ScissorsIcon />
             <span>{t('reels.weave')}</span>
           </Link>
         )}
@@ -851,9 +823,10 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
             onClick={() => void handleShareToFeed()}
             disabled={crosspostBusy || crossposted}
             aria-label={t('reels.shareToFeed')}
+            title={t('reels.shareToFeed')}
           >
-            <RectangleStackIcon className="h-7 w-7" />
-            <span>{crossposted ? t('reels.sharedToFeed') : t('reels.shareToFeed')}</span>
+            <RectangleStackIcon />
+            <span>{crossposted ? t('reels.sharedToFeedShort') : t('reels.shareToFeedShort')}</span>
           </button>
         )}
 
@@ -862,8 +835,9 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
           className="reel-slide__action"
           onClick={() => setMuted((m) => !m)}
           aria-label={muted ? t('reels.unmute') : t('reels.mute')}
+          title={muted ? t('reels.unmute') : t('reels.mute')}
         >
-          {muted ? <SpeakerXMarkIcon className="h-7 w-7" /> : <SpeakerWaveIcon className="h-7 w-7" />}
+          {muted ? <SpeakerXMarkIcon /> : <SpeakerWaveIcon />}
         </button>
 
         {isOwner ? (
@@ -873,8 +847,9 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
               className="reel-slide__action"
               onClick={() => setEditOpen(true)}
               aria-label={t('reels.editReel')}
+              title={t('reels.editReel')}
             >
-              <PencilSquareIcon className="h-7 w-7" />
+              <PencilSquareIcon />
               <span>{t('reels.editReel')}</span>
             </button>
             <button
@@ -891,17 +866,19 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
                 })();
               }}
               aria-label="Generate captions"
+              title="Captions"
             >
-              <span style={{ fontSize: 22 }}>CC</span>
-              <span>Captions</span>
+              <span style={{ fontSize: 11, fontWeight: 800 }}>CC</span>
+              <span>CC</span>
             </button>
             <button
               type="button"
               className="reel-slide__action reel-slide__action--danger"
               onClick={deleteReel}
               aria-label={t('reels.deleteReel')}
+              title={t('reels.deleteReel')}
             >
-              <TrashIcon className="h-7 w-7" />
+              <TrashIcon />
               <span>{t('reels.deleteReel')}</span>
             </button>
           </>
@@ -912,17 +889,19 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
               className="reel-slide__action"
               onClick={() => void dimSignal()}
               aria-label={t('reels.dimSignal')}
+              title={t('reels.dimSignal')}
             >
-              <EyeSlashIcon className="h-7 w-7" />
-              <span>{t('reels.dimSignal')}</span>
+              <EyeSlashIcon />
+              <span>{t('reels.dimSignalShort')}</span>
             </button>
             <button
               type="button"
               className="reel-slide__action"
-              onClick={reportReel}
+              onClick={() => setReportOpen(true)}
               aria-label={t('reels.reportReel')}
+              title={t('reels.reportReel')}
             >
-              <FlagIcon className="h-7 w-7" />
+              <FlagIcon />
               <span>{t('reels.reportReel')}</span>
             </button>
           </>
@@ -1052,10 +1031,14 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
             contentType="reel"
             authorName={reelAuthorName(reel.user)}
             storyMediaUrl={mediaUrl(reel.video) || reel.video}
-            onShareToStory={async () => {
+            onShareToStory={async (draft) => {
               const video = mediaUrl(reel.video) || reel.video;
               if (!video) return false;
-              return shareReelToStory(reel.id, video, reel.caption || undefined);
+              return shareReelToStory(reel.id, video, {
+                caption: reel.caption || undefined,
+                text: draft?.text,
+                audience: draft?.audience,
+              });
             }}
             onRecordShare={recordShare}
             onClose={() => setShareOpen(false)}
@@ -1131,6 +1114,12 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
           </motion.div>
         )}
       </AnimatePresence>
+      <ReportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        title={t('social.reportWhyReel')}
+        onSubmit={submitReelReport}
+      />
     </section>
 
   );

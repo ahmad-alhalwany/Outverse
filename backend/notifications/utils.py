@@ -17,7 +17,10 @@ VERB_PREF_MAP = {
     'idea_apply': 'comments',
     'idea_accepted': 'comments',
     'idea_rejected': 'comments',
-    'going_live': 'follows',
+    'forge_invite': 'comments',
+    'forge_pending': 'comments',
+    'forge_approved': 'comments',
+    'forge_rejected': 'comments',
 }
 
 
@@ -41,6 +44,7 @@ def create_notification(
     reel=None,
     story=None,
     idea=None,
+    studio_session=None,
     text='',
     notification_type='',
 ):
@@ -60,6 +64,7 @@ def create_notification(
         reel=reel,
         story=story,
         idea=idea,
+        studio_session=studio_session,
         text=text or '',
     )
     actor_payload = None
@@ -88,6 +93,7 @@ def create_notification(
             'reel': note.reel_id,
             'story': note.story_id,
             'idea': note.idea_id,
+            'studio_session': note.studio_session_id,
             'actor_id': actor_id,
             'actor': actor_payload,
             'is_read': False,

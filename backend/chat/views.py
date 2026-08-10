@@ -584,8 +584,11 @@ class SendMessageView(ChatAuthView):
         )
 
 
-class ChatConfigView(ChatAuthView):
-    """WebRTC ICE/TURN + dev server hints."""
+class ChatConfigView(APIView):
+    """WebRTC ICE/TURN + websocket path templates (public, no secrets)."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get(self, request):
         import os

@@ -24,6 +24,7 @@ const NAV = [
   { href: '/admin/achievements', labelKey: 'admin.navAchievements', icon: '🏆' },
   { href: '/admin/moderation', labelKey: 'admin.navModeration', icon: '🚩' },
   { href: '/admin/verification', labelKey: 'admin.navVerification', icon: '✅' },
+  { href: '/admin/seller-applications', labelKey: 'admin.navSellerApplications', icon: '🛍️' },
   { href: '/admin/chat', labelKey: 'admin.navChat', icon: '💬' },
   { href: '/admin/health', labelKey: 'admin.navHealth', icon: '💻' },
   { href: '/admin/audit', labelKey: 'admin.navAudit', icon: '📜' },

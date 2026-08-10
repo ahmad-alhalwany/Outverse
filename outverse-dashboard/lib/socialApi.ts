@@ -39,10 +39,11 @@ export type FeedFeedbackType = 'not_interested' | 'see_less' | 'hide_post';
 export async function sendFeedFeedback(
   postId: number,
   type: FeedFeedbackType,
+  undo = false,
 ): Promise<boolean> {
   const res = await apiFetch(`posts/${postId}/feedback/`, {
     method: 'POST',
-    body: JSON.stringify({ type }),
+    body: JSON.stringify({ type, undo }),
   });
   return res.ok;
 }

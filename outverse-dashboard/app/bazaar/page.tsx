@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
-import { apiFetchJson, mediaUrl } from '@/lib/api';
+import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
 import { coachIdea, type IdeaCoachResult } from '@/lib/aiCoachApi';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
@@ -419,7 +419,7 @@ function BazaarContent() {
                         onClick={() => openIdea(f)}
                         className="flex items-center gap-3 w-full text-left hover:opacity-80"
                       >
-                        <div className="w-10 h-10 rounded-lg shrink-0 bg-center bg-cover" style={{ background: f.cover_url ? `url(${f.cover_url})` : C.card }} />
+                        <div className="w-10 h-10 rounded-lg shrink-0 bg-center bg-cover" style={{ background: f.cover_url ? `url(${mediaUrl(f.cover_url)})` : C.card }} />
                         <div className="min-w-0">
                           <div className="text-sm font-medium truncate" style={{ color: C.text }}>{f.title}</div>
                           <div className="text-xs flex items-center gap-1" style={{ color: C.text2 }}>
@@ -582,7 +582,7 @@ function FeaturedHero({ idea, onOpen }: { idea: BazaarIdea; onOpen: () => void }
           className="sm:col-span-2 h-44 sm:h-auto min-h-[11rem] bg-center bg-cover"
           style={{
             background: idea.cover_url
-              ? `url(${idea.cover_url}) center/cover`
+              ? `url(${mediaUrl(idea.cover_url)}) center/cover`
               : `linear-gradient(135deg, ${C.brown}, ${C.brownDk})`,
           }}
         />
@@ -659,7 +659,7 @@ function IdeaCard({
       >
       <div
         className={isList ? 'w-32 sm:w-44 shrink-0 bg-center bg-cover' : 'h-40 bg-center bg-cover w-full'}
-        style={{ background: idea.cover_url ? `url(${idea.cover_url}) center/cover` : `linear-gradient(135deg, ${C.card}, ${C.card2})` }}
+        style={{ background: idea.cover_url ? `url(${mediaUrl(idea.cover_url)}) center/cover` : `linear-gradient(135deg, ${C.card}, ${C.card2})` }}
       />
       <div className={isList ? 'p-4 flex flex-col flex-1 min-w-0' : 'p-4 flex flex-col flex-1'}>
         <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -907,7 +907,8 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('technology');
-  const [coverUrl, setCoverUrl] = useState('');
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState('');
   const [goal, setGoal] = useState('');
   const [roles, setRoles] = useState('');
   const [tags, setTags] = useState('');
@@ -917,6 +918,12 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [error, setError] = useState('');
   const [coachBusy, setCoachBusy] = useState(false);
   const [coachResult, setCoachResult] = useState<IdeaCoachResult | null>(null);
+
+  function onCoverChange(file: File | null) {
+    if (coverPreview) URL.revokeObjectURL(coverPreview);
+    setCoverFile(file);
+    setCoverPreview(file ? URL.createObjectURL(file) : '');
+  }
 
   async function handleCoach() {
     if (!title.trim() && !description.trim()) return;
@@ -939,29 +946,52 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
     setError('');
     setSaving(true);
     try {
-      const res = await apiFetchJson('ideas/', {
-        method: 'POST',
-        json: {
-          title: title.trim(),
-          description: description.trim(),
-          category,
-          cover_url: coverUrl.trim(),
-          funding_goal: goal ? parseInt(goal, 10) : null,
-          roles_needed: roles
+      const form = new FormData();
+      form.append('title', title.trim());
+      form.append('description', description.trim());
+      form.append('category', category);
+      if (goal) form.append('funding_goal', goal);
+      form.append(
+        'roles_needed',
+        JSON.stringify(
+          roles
             ? roles.split(',').map((r) => r.trim()).filter(Boolean)
             : [],
-          tags: tags
+        ),
+      );
+      form.append(
+        'tags',
+        JSON.stringify(
+          tags
             ? tags.split(',').map((r) => r.trim()).filter(Boolean)
             : [],
-          target_date: targetDate || null,
-          milestones: milestones.length ? milestones : undefined,
-        },
-      });
-      if (!res.ok) throw new Error('create failed');
+        ),
+      );
+      if (targetDate) form.append('target_date', targetDate);
+      if (milestones.length) {
+        form.append(
+          'milestones',
+          JSON.stringify(milestones.map((title) => ({ title }))),
+        );
+      }
+      if (coverFile) form.append('cover_image', coverFile);
+      const res = await apiFetch('ideas/', { method: 'POST', body: form });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const fieldErr =
+          typeof data.cover_image?.[0] === 'string'
+            ? data.cover_image[0]
+            : typeof data.detail === 'string'
+              ? data.detail
+              : null;
+        throw new Error(fieldErr || 'create failed');
+      }
       onCreated();
       onClose();
-    } catch {
-      setError('Could not create the idea. Check the connection.');
+    } catch (err) {
+      setError(err instanceof Error && err.message !== 'create failed'
+        ? err.message
+        : 'Could not create the idea. Check the connection.');
     } finally {
       setSaving(false);
     }
@@ -1053,8 +1083,50 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
           </div>
         </div>
 
-        <label className="text-sm font-medium mt-3 block" style={{ color: C.text2 }}>Cover image URL</label>
-        <input value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder="https://…  (optional)" />
+        <label className="text-sm font-medium mt-3 block" style={{ color: C.text2 }}>
+          Cover image <span className="font-normal opacity-70">(optional)</span>
+        </label>
+        <div
+          className="mt-1 mb-3 rounded-xl overflow-hidden"
+          style={{ border: `1px dashed ${C.line}`, background: C.white }}
+        >
+          {coverPreview ? (
+            <div className="relative h-36 bg-center bg-cover" style={{ backgroundImage: `url(${coverPreview})` }}>
+              <button
+                type="button"
+                onClick={() => onCoverChange(null)}
+                className="absolute top-2 right-2 rounded-lg px-2 py-1 text-xs font-semibold"
+                style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <label className="flex flex-col items-center justify-center gap-1 h-28 cursor-pointer px-4 text-center">
+              <span className="text-sm font-semibold" style={{ color: C.brown }}>
+                Upload image
+              </span>
+              <span className="text-xs" style={{ color: C.text2 }}>
+                JPG, PNG, WebP or GIF · max 5MB
+              </span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  if (file && file.size > 5 * 1024 * 1024) {
+                    setError('Cover image must be 5MB or smaller.');
+                    e.target.value = '';
+                    return;
+                  }
+                  setError('');
+                  onCoverChange(file);
+                }}
+              />
+            </label>
+          )}
+        </div>
 
         <label className="text-sm font-medium" style={{ color: C.text2 }}>Roles needed (comma separated)</label>
         <input value={roles} onChange={(e) => setRoles(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder="Writer, Designer, Developer" />

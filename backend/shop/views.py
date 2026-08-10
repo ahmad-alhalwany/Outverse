@@ -3,6 +3,7 @@ from django.db import transaction
 from django.db.models import F, Sum, Count, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -29,8 +30,49 @@ class ShopItemViewSet(viewsets.ModelViewSet):
         if self.action in ('wallet', 'purchase', 'transactions', 'my_sales', 'update_fulfillment'):
             return [IsAuthenticated()]
         if self.action in ('create', 'update', 'partial_update', 'destroy'):
-            return [IsAdminUser()]
+            return [IsAuthenticated()]
         return [AllowAny()]
+
+    def perform_create(self, serializer):
+        # DRF's BooleanField treats a key missing from multipart data as False
+        # (the HTML "unchecked checkbox" convention), not "use the model
+        # default" — without this, every multipart create would silently
+        # save as is_available=False since the upload form never sends it.
+        user = self.request.user
+        requested_type = serializer.validated_data.get('type') or 'digital'
+        if requested_type in ('digital', 'physical') and not (user.is_staff or user.is_shop_seller):
+            raise PermissionDenied('Apply to become a seller to list digital or physical products.')
+        extra = {'creator': user, 'is_available': True}
+        if not user.is_staff:
+            extra['is_featured'] = False
+        serializer.save(**extra)
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        instance = serializer.instance
+        if not (user.is_staff or instance.creator_id == user.id):
+            raise PermissionDenied('You can only edit your own products.')
+        requested_type = serializer.validated_data.get('type')
+        if (
+            requested_type in ('digital', 'physical')
+            and instance.type not in ('digital', 'physical')
+            and not (user.is_staff or user.is_shop_seller)
+        ):
+            raise PermissionDenied('Apply to become a seller to list digital or physical products.')
+        extra = {}
+        if not user.is_staff:
+            extra['is_featured'] = instance.is_featured
+        # Same multipart BooleanField quirk as perform_create: preserve the
+        # existing value unless the client actually sent the field.
+        if 'is_available' not in self.request.data:
+            extra['is_available'] = instance.is_available
+        serializer.save(**extra)
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        if not (user.is_staff or instance.creator_id == user.id):
+            raise PermissionDenied('You can only delete your own products.')
+        instance.delete()
 
     def get_queryset(self):
         user = getattr(self.request, 'user', None)
@@ -75,7 +117,7 @@ class ShopItemViewSet(viewsets.ModelViewSet):
         transactions = (
             Transaction.objects.filter(user_id=user.id, status='completed')
             .select_related('item')
-            .order_by('-created_at')
+            .order_by('-timestamp')
         )
         owned_ids = []
         owned_items = []
@@ -118,6 +160,11 @@ class ShopItemViewSet(viewsets.ModelViewSet):
         shipping_address = (request.data.get('shipping_address') or '').strip()
         with transaction.atomic():
             item = ShopItem.objects.select_for_update().get(pk=pk)
+            if item.stock is not None and item.stock <= 0:
+                return Response(
+                    {'error': 'This item is out of stock.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if item.type == 'physical' and not shipping_address:
                 return Response(
                     {'error': 'A shipping address is required for physical items.'},
@@ -151,9 +198,12 @@ class ShopItemViewSet(viewsets.ModelViewSet):
                 shipping_address=shipping_address if item.type == 'physical' else '',
                 fulfillment_status='pending' if item.type == 'physical' else 'not_applicable',
             )
-            ShopItem.objects.filter(pk=item.pk).update(sales_count=F('sales_count') + 1)
+            update_fields = {'sales_count': F('sales_count') + 1}
+            if item.stock is not None:
+                update_fields['stock'] = F('stock') - 1
+            ShopItem.objects.filter(pk=item.pk).update(**update_fields)
             profile.refresh_from_db(fields=['points'])
-            item.refresh_from_db(fields=['sales_count'])
+            item.refresh_from_db(fields=['sales_count', 'stock'])
         try:
             from .spending import update_spender_tier
             update_spender_tier(user)

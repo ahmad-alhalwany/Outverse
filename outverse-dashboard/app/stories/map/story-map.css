@@ -1,0 +1,292 @@
+/* Story Map — clear cosmic atlas (high contrast, readable map) */
+
+.story-map-page {
+  --sm-bg: #0c0a1a;
+  --sm-surface: #17132e;
+  --sm-raised: #221c42;
+  --sm-raised-2: #2c2554;
+  --sm-border: rgba(196, 181, 253, 0.35);
+  --sm-border-soft: rgba(196, 181, 253, 0.18);
+  --sm-text: #ffffff;
+  --sm-muted: #c4b5fd;
+  --sm-quiet: #9ca3af;
+  --sm-violet: #8b5cf6;
+  --sm-violet-bright: #a78bfa;
+  --sm-cyan: #22d3ee;
+  --sm-amber: #fbbf24;
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse 70% 45% at 50% -5%, rgba(139, 92, 246, 0.28), transparent 60%),
+    radial-gradient(ellipse 40% 30% at 100% 20%, rgba(34, 211, 238, 0.12), transparent 50%),
+    var(--sm-bg);
+  color: var(--sm-text);
+}
+
+.story-map-shell {
+  position: relative;
+  z-index: 1;
+}
+
+.story-map-back {
+  color: var(--sm-muted);
+}
+.story-map-back:hover {
+  color: var(--sm-cyan);
+}
+
+.story-map-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.14);
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a5f3fc;
+}
+
+.story-map-title {
+  color: #fff;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 24px rgba(139, 92, 246, 0.35);
+}
+
+.story-map-subtitle {
+  color: #d4d0ea;
+  max-width: 36rem;
+  line-height: 1.5;
+}
+
+.story-map-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.story-map-stat {
+  border-radius: 999px;
+  background: var(--sm-raised);
+  border: 1px solid var(--sm-border);
+  padding: 0.45rem 0.95rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #e9e5ff;
+}
+.story-map-stat strong {
+  color: var(--sm-cyan);
+  margin-left: 0.25rem;
+}
+
+.story-map-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.35rem;
+  border: 2px solid rgba(167, 139, 250, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(34, 211, 238, 0.15),
+    0 20px 50px rgba(0, 0, 0, 0.5);
+  background: #0a0818;
+}
+
+.story-map-frame .leaflet-container {
+  background: #e8eef5 !important;
+  font-family: inherit;
+}
+
+.story-map-list {
+  border-radius: 1.35rem;
+  background: var(--sm-surface);
+  border: 1px solid var(--sm-border);
+  padding: 1.15rem 1.2rem 1.25rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.story-map-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--sm-border-soft);
+}
+
+.story-map-list-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.story-map-count {
+  border-radius: 999px;
+  background: linear-gradient(100deg, #7c3aed, #0891b2);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.story-map-card {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+  border-radius: 1rem;
+  background: var(--sm-raised);
+  border: 1px solid var(--sm-border-soft);
+  padding: 0.85rem;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  text-decoration: none !important;
+}
+.story-map-card:hover {
+  transform: translateY(-3px);
+  background: var(--sm-raised-2);
+  border-color: rgba(34, 211, 238, 0.55);
+}
+
+.story-map-thumb {
+  height: 4.5rem;
+  width: 4.5rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: 0.9rem;
+  border: 2px solid rgba(251, 191, 36, 0.4);
+  background: linear-gradient(145deg, #5b21b6, #0e7490);
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+}
+
+.story-map-author {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.story-map-loc {
+  margin: 0.25rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #67e8f9;
+}
+
+.story-map-time {
+  margin: 0.35rem 0 0;
+  font-size: 0.7rem;
+  color: var(--sm-quiet);
+}
+
+.story-map-pin-wrapper {
+  background: transparent !important;
+  border: none !important;
+}
+
+.story-map-pin {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #fbbf24 0%, #f59e0b 35%, #7c3aed 100%);
+  border: 3px solid #fff;
+  box-shadow:
+    0 0 0 3px rgba(34, 211, 238, 0.65),
+    0 8px 20px rgba(0, 0, 0, 0.45);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.story-map-pin::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 999px;
+  border: 2px solid rgba(34, 211, 238, 0.7);
+  animation: story-map-pulse 2s ease-out infinite;
+}
+
+@keyframes story-map-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.story-map-popup .leaflet-popup-content-wrapper {
+  background: #1a1440 !important;
+  color: #fff !important;
+  border: 2px solid rgba(34, 211, 238, 0.5) !important;
+  border-radius: 1rem !important;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55) !important;
+  padding: 0 !important;
+}
+
+.story-map-popup .leaflet-popup-tip {
+  background: #1a1440 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.story-map-popup .leaflet-popup-content {
+  margin: 0.9rem 1rem !important;
+  min-width: 210px;
+}
+
+.story-map-popup-cta {
+  display: inline-flex;
+  margin-top: 0.8rem;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c3aed, #0891b2);
+  padding: 0.45rem 0.95rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #fff !important;
+  text-decoration: none !important;
+}
+
+.story-map-empty {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 450;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 10, 26, 0.45);
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+}
+
+.story-map-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  background: linear-gradient(100deg, #7c3aed, #2563eb);
+  padding: 0.55rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #fff !important;
+  text-decoration: none !important;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+}
+.story-map-cta:hover {
+  filter: brightness(1.08);
+}

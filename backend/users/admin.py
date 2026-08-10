@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, Profile, VerificationRequest
+from .models import SellerApplication, User, Profile, VerificationRequest
 
 @admin.register(User)
 class UserAdmin(BaseUserAdmin):
@@ -19,6 +19,13 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(VerificationRequest)
 class VerificationRequestAdmin(admin.ModelAdmin):
+    list_display = ('user', 'status', 'created_at')
+    list_filter = ('status',)
+    search_fields = ('user__username', 'reason')
+
+
+@admin.register(SellerApplication)
+class SellerApplicationAdmin(admin.ModelAdmin):
     list_display = ('user', 'status', 'created_at')
     list_filter = ('status',)
     search_fields = ('user__username', 'reason')

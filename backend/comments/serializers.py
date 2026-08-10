@@ -7,6 +7,13 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'first_name', 'last_name', 'avatar']
 
+    def to_representation(self, instance):
+        from users.privacy import looks_like_email, public_username
+        data = super().to_representation(instance)
+        if looks_like_email(data.get('username')):
+            data['username'] = public_username(instance)
+        return data
+
 class CommentReactionSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     

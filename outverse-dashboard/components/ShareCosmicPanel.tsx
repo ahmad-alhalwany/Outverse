@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   ArrowPathRoundedSquareIcon,
   LinkIcon,
@@ -29,6 +30,8 @@ import {
   fetchMyCommunities,
   type Community,
 } from '@/lib/communityApi';
+import { BrandShareIcon } from './share/BrandShareIcons';
+import ShareToStoryConfirm, { type StoryShareDraft } from './ShareToStoryConfirm';
 
 interface ShareFriend {
   id: number;
@@ -43,7 +46,7 @@ interface ShareCosmicPanelProps {
   contentType?: ShareContentType;
   authorName?: string;
   storyMediaUrl?: string | null;
-  onShareToStory?: () => Promise<boolean>;
+  onShareToStory?: (draft?: StoryShareDraft) => Promise<boolean>;
   onClose: () => void;
   onRecordShare?: (channel: ShareChannel) => void | Promise<void>;
   dmMessage?: string;
@@ -63,6 +66,7 @@ export default function ShareCosmicPanel({
   dmMessage,
 }: ShareCosmicPanelProps) {
   const { t } = useLocale();
+  const [mounted, setMounted] = useState(false);
   const [copied, setCopied] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
   const [recordedChannels, setRecordedChannels] = useState<Set<ShareChannel>>(new Set());
@@ -79,6 +83,7 @@ export default function ShareCosmicPanel({
   const [crossEchoDone, setCrossEchoDone] = useState<number | null>(null);
   const [canNativeShare, setCanNativeShare] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [storyConfirmOpen, setStoryConfirmOpen] = useState(false);
 
   const shareText = useMemo(
     () => cosmicShareText(postTitle, contentType),
@@ -92,6 +97,10 @@ export default function ShareCosmicPanel({
       await onRecordShare?.(channel);
     }
   };
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     setCanNativeShare(typeof navigator !== 'undefined' && 'share' in navigator);
@@ -136,14 +145,17 @@ export default function ShareCosmicPanel({
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') {
+        if (crossEchoOpen) setCrossEchoOpen(false);
+        else onClose();
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
     };
-  }, [onClose]);
+  }, [onClose, crossEchoOpen]);
 
   const copyLink = async (channel: ShareChannel = 'copy') => {
     try {
@@ -205,14 +217,20 @@ export default function ShareCosmicPanel({
     }
   };
 
-  const broadcastToStory = async () => {
+  const openStoryConfirm = () => {
+    if (!onShareToStory || !storyMediaUrl || !getUser()) return;
+    setStoryConfirmOpen(true);
+  };
+
+  const broadcastToStory = async (draft: StoryShareDraft) => {
     if (!onShareToStory || storyBusy) return;
     setStoryBusy(true);
     try {
-      const ok = await onShareToStory();
+      const ok = await onShareToStory(draft);
       if (ok) {
         setStoryDone(true);
         setActionError('');
+        setStoryConfirmOpen(false);
         await trackShare('story');
         setTimeout(() => setStoryDone(false), 2200);
       } else {
@@ -272,193 +290,179 @@ export default function ShareCosmicPanel({
   const canStory = Boolean(onShareToStory && storyMediaUrl && getUser());
   const canCrossEcho = Boolean(postId && communitiesLoaded && communities.length > 0);
 
-  return (
-    <motion.div
-      className="cosmic-share-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('feed.shareTitle')}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
+  if (!mounted) return null;
+
+  return createPortal(
+    <AnimatePresence>
       <motion.div
-        className="cosmic-share-backdrop"
+        className="cosmic-share-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('feed.shareTitle')}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        onClick={onClose}
-      />
-      <motion.div
-        className="cosmic-share-sheet cosmic-share-sheet--wide"
-        initial={{ opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 24 }}
-        transition={{ type: 'spring', stiffness: 420, damping: 30 }}
       >
-        <div className="cosmic-share-sheet__glow" aria-hidden />
         <button
           type="button"
+          className="cosmic-share-backdrop"
+          aria-label={t('common.close')}
           onClick={onClose}
-          className="absolute top-3 right-3 p-1.5 rounded-full text-text-secondary hover:text-text hover:bg-surface/50 transition"
-          aria-label={t('inspiration.close')}
+        />
+
+        <motion.div
+          className="cosmic-share-sheet cosmic-share-sheet--wide"
+          initial={{ opacity: 0, y: 36, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.98 }}
+          transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+          onClick={(e) => e.stopPropagation()}
         >
-          <XMarkIcon className="h-5 w-5" />
-        </button>
-
-        <div className="cosmic-share__bottle" aria-hidden>
-          <motion.svg
-            width="72"
-            height="100"
-            viewBox="0 0 100 200"
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ type: 'spring', delay: 0.1 }}
-          >
-            <ellipse cx="50" cy="185" rx="14" ry="8" fill="url(#shareFlame)" opacity="0.8" />
-            <defs>
-              <radialGradient id="shareFlame">
-                <stop offset="0%" stopColor="#fde047" />
-                <stop offset="100%" stopColor="#f97316" />
-              </radialGradient>
-              <linearGradient id="shareBody" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#a78bfa" />
-                <stop offset="100%" stopColor="#6a00ff" />
-              </linearGradient>
-            </defs>
-            <rect x="32" y="55" width="36" height="90" rx="18" fill="url(#shareBody)" />
-            <ellipse cx="50" cy="95" rx="8" ry="9" fill="rgba(255,255,255,0.9)" />
-            <ellipse cx="50" cy="42" rx="18" ry="10" fill="#c4b5fd" />
-          </motion.svg>
-        </div>
-
-        <h2 className="cosmic-share-sheet__title">{t('feed.shareTitle')}</h2>
-        <p className="cosmic-share-sheet__sub">
-          {shareCount > 0 ? t('feed.shareCount', { count: String(shareCount) }) : ''}
-          {t('feed.shareSubtitle')}
-        </p>
-        {actionError && (
-          <p className="mt-1 text-xs font-medium text-red-400" role="alert">
-            {actionError}
-          </p>
-        )}
-
-        <div className="cosmic-share__copy-row">
-          <input readOnly className="cosmic-share__url" value={postUrl} aria-label="Share link" />
-          <button type="button" className="cosmic-share__copy-btn" onClick={() => void copyLink('copy')}>
-            {copied ? t('feed.copied') : t('feed.copy')}
-          </button>
-        </div>
-
-        <div className="cosmic-share__quick">
-          {canStory && (
+          <header className="cosmic-share-sheet__header">
+            <div className="min-w-0">
+              <h2 className="cosmic-share-sheet__title">{t('feed.shareTitle')}</h2>
+              <p className="cosmic-share-sheet__sub">
+                {shareCount > 0 ? `${t('feed.shareCount', { count: String(shareCount) })} · ` : ''}
+                {t('feed.shareSubtitle')}
+              </p>
+            </div>
             <button
               type="button"
-              className="cosmic-share__quick-btn"
-              disabled={storyBusy}
-              onClick={() => void broadcastToStory()}
+              onClick={onClose}
+              className="cosmic-share-sheet__close"
+              aria-label={t('common.close')}
             >
-              <SparklesIcon className="h-5 w-5" />
-              {storyDone ? t('feed.shareStoryDone') : storyBusy ? t('feed.shareStoryBusy') : t('feed.shareToStory')}
+              <XMarkIcon className="h-5 w-5" />
             </button>
-          )}
-          <button
-            type="button"
-            className="cosmic-share__quick-btn"
-            disabled={cardBusy}
-            onClick={() => void saveShareCard()}
-          >
-            <ArrowDownTrayIcon className="h-5 w-5" />
-            {cardBusy ? t('feed.shareCardBusy') : t('feed.shareCard')}
-          </button>
-          <button type="button" className="cosmic-share__quick-btn" onClick={() => void copyEmbed()}>
-            <CodeBracketIcon className="h-5 w-5" />
-            {embedCopied ? t('feed.copied') : t('feed.shareEmbed')}
-          </button>
-          {canCrossEcho && (
-            <button
-              type="button"
-              className="cosmic-share__quick-btn"
-              onClick={() => setCrossEchoOpen(true)}
-            >
-              <ArrowPathRoundedSquareIcon className="h-5 w-5" />
-              Cross-Echo
-            </button>
-          )}
-          {storyMediaUrl && (
-            <span className="cosmic-share__media-hint">
-              <PhotoIcon className="h-4 w-4" />
-              {t('feed.shareMediaHint')}
-            </span>
-          )}
-        </div>
+          </header>
 
-        {friends.length > 0 && (
-          <div className="mt-4">
-            <p className="text-xs font-semibold text-text-secondary mb-2 flex items-center gap-1">
-              <ChatBubbleLeftRightIcon className="h-4 w-4" />
-              {t('feed.shareToDm')}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {friends.map((f) => (
+          <div className="cosmic-share-sheet__body">
+            {actionError && (
+              <p className="mb-3 text-xs font-medium text-red-400" role="alert">
+                {actionError}
+              </p>
+            )}
+
+            <div className="cosmic-share__copy-row">
+              <input readOnly className="cosmic-share__url" value={postUrl} aria-label="Share link" />
+              <button type="button" className="cosmic-share__copy-btn" onClick={() => void copyLink('copy')}>
+                {copied ? t('feed.copied') : t('feed.copy')}
+              </button>
+            </div>
+
+            <div className="cosmic-share__quick">
+              {canStory && (
                 <button
-                  key={f.id}
                   type="button"
-                  disabled={sendingTo === f.id}
-                  className="text-xs rounded-full px-3 py-1.5 bg-surface hover:bg-vault/10 transition disabled:opacity-50"
-                  onClick={() => void shareToFriend(f.id)}
+                  className="cosmic-share__quick-btn"
+                  disabled={storyBusy}
+                  onClick={openStoryConfirm}
                 >
-                  {dmSent === f.id ? '✓ ' : ''}
-                  {f.name}
+                  <SparklesIcon className="h-5 w-5" />
+                  {storyDone ? t('feed.shareStoryDone') : t('feed.shareToStory')}
                 </button>
+              )}
+              <button
+                type="button"
+                className="cosmic-share__quick-btn"
+                disabled={cardBusy}
+                onClick={() => void saveShareCard()}
+              >
+                <ArrowDownTrayIcon className="h-5 w-5" />
+                {cardBusy ? t('feed.shareCardBusy') : t('feed.shareCard')}
+              </button>
+              <button type="button" className="cosmic-share__quick-btn" onClick={() => void copyEmbed()}>
+                <CodeBracketIcon className="h-5 w-5" />
+                {embedCopied ? t('feed.copied') : t('feed.shareEmbed')}
+              </button>
+              {canCrossEcho && (
+                <button
+                  type="button"
+                  className="cosmic-share__quick-btn"
+                  onClick={() => setCrossEchoOpen(true)}
+                >
+                  <ArrowPathRoundedSquareIcon className="h-5 w-5" />
+                  Cross-Echo
+                </button>
+              )}
+              {storyMediaUrl && (
+                <span className="cosmic-share__media-hint">
+                  <PhotoIcon className="h-4 w-4" />
+                  {t('feed.shareMediaHint')}
+                </span>
+              )}
+            </div>
+
+            {friends.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-2 flex items-center gap-1 text-xs font-semibold text-text-secondary">
+                  <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                  {t('feed.shareToDm')}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {friends.map((f) => (
+                    <button
+                      key={f.id}
+                      type="button"
+                      disabled={sendingTo === f.id}
+                      className="rounded-full bg-surface px-3 py-1.5 text-xs transition hover:bg-vault/10 disabled:opacity-50"
+                      onClick={() => void shareToFriend(f.id)}
+                    >
+                      {dmSent === f.id ? '✓ ' : ''}
+                      {f.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="cosmic-share__platforms-label">{t('feed.sharePlatforms')}</p>
+            <div className="cosmic-share__grid cosmic-share__grid--8">
+              {platforms.map((p) => (
+                <a
+                  key={p.id}
+                  href={p.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="cosmic-share__platform"
+                  style={{ ['--brand' as string]: p.color }}
+                  onClick={() => void trackShare(p.id)}
+                >
+                  <span className="cosmic-share__platform-badge" style={{ background: p.color }}>
+                    <BrandShareIcon id={p.id} />
+                  </span>
+                  <span className="cosmic-share__platform-name">{p.name}</span>
+                </a>
               ))}
             </div>
-          </div>
-        )}
 
-        <p className="cosmic-share__platforms-label">{t('feed.sharePlatforms')}</p>
-        <div className="cosmic-share__grid cosmic-share__grid--8">
-          {platforms.map((p) => (
-            <a
-              key={p.id}
-              href={p.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="cosmic-share__platform"
-              style={{ borderColor: `${p.color}33` }}
-              onClick={() => void trackShare(p.id)}
+            <button
+              type="button"
+              onClick={() => void nativeShare()}
+              className="mt-4 flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border-0 py-3 text-sm font-semibold text-white"
+              style={{ background: 'linear-gradient(135deg, #6a00ff, #0891b2)' }}
             >
-              <span className="cosmic-share__platform-icon">{p.icon}</span>
-              {p.name}
-            </a>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          onClick={() => void nativeShare()}
-          className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl font-semibold text-sm text-white border-0 cursor-pointer"
-          style={{ background: 'linear-gradient(135deg, #6a00ff, #0891b2)' }}
-        >
-          <ShareIcon className="h-5 w-5" />
-          {canNativeShare ? t('feed.shareDevice') : t('feed.shareCopyInstead')}
-        </button>
-        <button
-          type="button"
-          onClick={() => void copyLink('copy')}
-          className="mt-2 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-text-secondary hover:text-text transition"
-        >
-          <LinkIcon className="h-4 w-4" />
-          {t('feed.copyLinkOnly')}
-        </button>
+              <ShareIcon className="h-5 w-5" />
+              {canNativeShare ? t('feed.shareDevice') : t('feed.shareCopyInstead')}
+            </button>
+            <button
+              type="button"
+              onClick={() => void copyLink('copy')}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-text-secondary transition hover:text-text"
+            >
+              <LinkIcon className="h-4 w-4" />
+              {t('feed.copyLinkOnly')}
+            </button>
+          </div>
+        </motion.div>
 
         {crossEchoOpen && (
           <div
-            className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 px-4"
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-black/60 px-4"
             onClick={() => setCrossEchoOpen(false)}
           >
             <div
-              className="w-full max-w-sm rounded-3xl border border-surface bg-background p-4 shadow-2xl"
+              className="w-full max-w-sm rounded-3xl border border-white/10 bg-[var(--card-bg,#1a1630)] p-4 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="mb-3 flex items-start justify-between gap-3">
@@ -471,20 +475,20 @@ export default function ShareCosmicPanel({
                 <button
                   type="button"
                   onClick={() => setCrossEchoOpen(false)}
-                  className="rounded-full p-1 text-text-secondary hover:bg-surface hover:text-text"
-                  aria-label="Close Cross-Echo picker"
+                  className="rounded-full p-1.5 text-text-secondary hover:bg-white/10 hover:text-text"
+                  aria-label={t('common.close')}
                 >
                   <XMarkIcon className="h-5 w-5" />
                 </button>
               </div>
-              <div className="space-y-2">
+              <div className="max-h-64 space-y-2 overflow-y-auto">
                 {communities.map((community) => (
                   <button
                     key={community.id}
                     type="button"
                     disabled={crossEchoBusy != null}
                     onClick={() => void sendCrossEcho(community)}
-                    className="flex w-full items-center justify-between gap-3 rounded-2xl bg-surface px-4 py-3 text-left text-sm font-semibold text-text transition hover:bg-vault/10 disabled:opacity-60"
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl bg-white/5 px-4 py-3 text-left text-sm font-semibold text-text transition hover:bg-vault/15 disabled:opacity-60"
                   >
                     <span className="min-w-0">
                       <span className="block truncate">{community.name}</span>
@@ -505,14 +509,27 @@ export default function ShareCosmicPanel({
               <button
                 type="button"
                 onClick={() => setCrossEchoOpen(false)}
-                className="mt-3 w-full rounded-xl py-2.5 text-sm font-semibold text-text-secondary hover:bg-surface"
+                className="mt-3 w-full rounded-xl py-2.5 text-sm font-semibold text-text-secondary hover:bg-white/5"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
         )}
+
+        <ShareToStoryConfirm
+          open={storyConfirmOpen}
+          mediaUrl={storyMediaUrl || ''}
+          mediaKind={contentType === 'reel' ? 'video' : 'image'}
+          initialText={postTitle.slice(0, 200)}
+          busy={storyBusy}
+          onClose={() => {
+            if (!storyBusy) setStoryConfirmOpen(false);
+          }}
+          onConfirm={broadcastToStory}
+        />
       </motion.div>
-    </motion.div>
+    </AnimatePresence>,
+    document.body,
   );
 }

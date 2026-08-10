@@ -21,6 +21,7 @@ import {
   toggleVaultMapStyle,
   type VaultMapStyle,
 } from '@/lib/vaultMapStyle';
+import type { RegionMood } from '@/lib/vaultRegionMood';
 
 export type { VaultMapStyle };
 
@@ -47,6 +48,7 @@ type VaultColors = {
 
 type Props = {
   markers: VaultMapMarker[];
+  regions?: RegionMood[];
   variant: 'light' | 'dark';
   colors: VaultColors;
   height?: number | string;
@@ -58,10 +60,15 @@ type Props = {
   onFlyTargetChange?: (t: { lat: number; lng: number; zoom: number } | null) => void;
   mapStyle?: VaultMapStyle;
   onMapStyleChange?: (s: VaultMapStyle) => void;
+  pickMode?: boolean;
+  onPickLocation?: (lat: number, lng: number) => void;
+  pickPreview?: { lat: number; lng: number } | null;
+  onCancelPick?: () => void;
 };
 
 export default function EmotionVaultMap({
   markers,
+  regions = [],
   variant,
   colors: C,
   height = 480,
@@ -73,6 +80,10 @@ export default function EmotionVaultMap({
   onFlyTargetChange,
   mapStyle: controlledMapStyle,
   onMapStyleChange,
+  pickMode = false,
+  onPickLocation,
+  pickPreview = null,
+  onCancelPick,
 }: Props) {
   const [internalQuery, setInternalQuery] = useState('');
   const query = controlledQuery ?? internalQuery;
@@ -80,8 +91,6 @@ export default function EmotionVaultMap({
   const [internalFly, setInternalFly] = useState<{ lat: number; lng: number; zoom: number } | null>(null);
   const flyTarget = controlledFly ?? internalFly;
   const setFlyTarget = onFlyTargetChange ?? setInternalFly;
-  // Starts as 'street' on both server and first client paint (hydration-safe),
-  // then syncs to the persisted preference once mounted.
   const [internalMapStyle, setInternalMapStyle] = useState<VaultMapStyle>('street');
   const mapStyle = controlledMapStyle ?? internalMapStyle;
   const setMapStyle = onMapStyleChange ?? setInternalMapStyle;
@@ -130,26 +139,48 @@ export default function EmotionVaultMap({
 
   return (
     <div
-      className={`vault-map-panel relative rounded-2xl overflow-hidden${isCosmic ? ' vault-map-panel--cosmic' : ''}`}
+      className={`vault-map-panel relative rounded-2xl overflow-hidden${isCosmic ? ' vault-map-panel--cosmic' : ''}${pickMode ? ' vault-map-panel--picking' : ''}`}
       style={{
         height,
         border: `1px solid ${isCosmic ? 'rgba(120, 140, 255, 0.25)' : C.line}`,
         boxShadow: isCosmic
           ? '0 4px 32px rgba(60, 40, 120, 0.35), inset 0 0 80px rgba(20, 10, 50, 0.2)'
           : '0 4px 24px rgba(0,0,0,0.08)',
+        cursor: pickMode ? 'crosshair' : undefined,
       }}
     >
       <MapInner
         markers={markers}
+        regions={regions}
         variant={variant}
         mapStyle={mapStyle}
         flyTarget={flyTarget}
         onMapReady={onMapReady}
         className="h-full w-full"
+        pickMode={pickMode}
+        onPickLocation={onPickLocation}
+        pickPreview={pickPreview}
       />
 
       {isCosmic && <CosmicStarfieldOverlay />}
 
+      {pickMode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[600] pointer-events-auto">
+          <div
+            className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold shadow-lg"
+            style={{ background: C.brownDk, color: '#fff' }}
+          >
+            Tap the map to place your bottle
+            {onCancelPick && (
+              <button type="button" onClick={onCancelPick} className="underline opacity-90 text-xs font-medium">
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!pickMode && (
       <div className="absolute top-4 left-4 right-4 z-[500] flex flex-wrap items-center gap-2 pointer-events-auto">
         <button
           type="button"
@@ -197,6 +228,7 @@ export default function EmotionVaultMap({
         </button>
         </div>
       </div>
+      )}
 
       <div className="vault-map-zoom-stack absolute bottom-[7.5rem] lg:bottom-4 right-4 z-[500] flex flex-col gap-1.5">
         <button
@@ -220,6 +252,7 @@ export default function EmotionVaultMap({
         </button>
       </div>
 
+      {!pickMode && (
       <div className="vault-map-actions absolute bottom-4 right-4 z-[500] flex flex-col gap-2 w-44 sm:w-52 pointer-events-auto">
           <button
             type="button"
@@ -240,14 +273,15 @@ export default function EmotionVaultMap({
             Catch bottle
           </button>
       </div>
+      )}
 
-      {markers.length === 0 && (
+      {markers.length === 0 && !pickMode && (
         <div className="absolute inset-0 z-[400] pointer-events-none flex items-center justify-center p-8">
           <p
             className="text-sm font-medium text-center px-4 py-2 rounded-full shadow-sm max-w-xs"
             style={{ background: `${C.white}ee`, color: C.text2 }}
           >
-            Throw a bottle with location — it drifts on the map for 24 hours
+            Throw a bottle with a place — colored moods appear on the map for 24 hours
           </p>
         </div>
       )}

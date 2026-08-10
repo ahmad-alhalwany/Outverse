@@ -37,7 +37,21 @@ const nextConfig = {
     const mediaSrc = isDev
       ? "media-src 'self' blob: http://localhost:8000 http://127.0.0.1:8000 https:"
       : "media-src 'self' blob: https:";
-    const connectSrc = `connect-src 'self' https://api.cosmory.app https://cosmory.app https://fonts.googleapis.com https://fonts.gstatic.com https://www.google-analytics.com wss://*.cosmory.app${devConnectSrc}`;
+    const connectSrc = [
+      "connect-src 'self'",
+      'https://api.cosmory.app',
+      'https://cosmory.app',
+      'https://fonts.googleapis.com',
+      'https://fonts.gstatic.com',
+      'https://www.google-analytics.com',
+      'https://accounts.google.com',
+      'https://nominatim.openstreetmap.org',
+      'wss://*.cosmory.app',
+      devConnectSrc.trim(),
+    ].filter(Boolean).join(' ');
+    const scriptSrc =
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://www.googletagmanager.com https://accounts.google.com";
+    const frameSrc = "frame-src 'self' https://accounts.google.com";
     return [
       {
         source: '/:path*',
@@ -53,13 +67,13 @@ const nextConfig = {
                       key: 'Content-Security-Policy',
                       value: [
                         "default-src 'self'",
-                        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://www.googletagmanager.com",
-                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                        scriptSrc,
+                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
                         imgSrc,
                         mediaSrc,
                         "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com data:",
                         connectSrc,
-                        "frame-src 'self'",
+                        frameSrc,
                         "object-src 'none'",
                         "base-uri 'self'",
                         "form-action 'self'",
@@ -69,13 +83,13 @@ const nextConfig = {
                       key: 'Content-Security-Policy-Report-Only',
                       value: [
                         "default-src 'self'",
-                        "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com https://www.googletagmanager.com",
-                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+                        scriptSrc,
+                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com",
                         imgSrc,
                         mediaSrc,
                         "font-src 'self' https://fonts.gstatic.com https://fonts.googleapis.com data:",
                         connectSrc,
-                        "frame-src 'self'",
+                        frameSrc,
                         "object-src 'none'",
                         "base-uri 'self'",
                         "form-action 'self'",

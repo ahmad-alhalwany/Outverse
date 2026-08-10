@@ -1,8 +1,8 @@
 """Generate creative prompts with an optional LLM provider.
 
 The generator is **best-effort**: if no provider is configured or the
-request fails, callers fall back to the curated question bank. Set
-``OPENAI_API_KEY`` or ``ANTHROPIC_API_KEY`` in the environment to enable.
+request fails, callers fall back to the curated question bank. Set one of:
+``NVIDIA_API_KEY`` (NIM), ``OPENAI_API_KEY``, or ``ANTHROPIC_API_KEY``.
 
 Generated questions are persisted to the Question table with
 ``is_generated=True`` so they appear in the same dedup + rotation logic
@@ -30,8 +30,16 @@ SYSTEM_PROMPT = (
     "Maximum 30 words. No quotation marks. No preamble."
 )
 
+NVIDIA_CHAT_URL = os.environ.get(
+    'NVIDIA_API_BASE',
+    'https://integrate.api.nvidia.com/v1',
+).rstrip('/') + '/chat/completions'
+
 
 def _provider() -> str | None:
+    # Prefer NVIDIA when present (Cosmory local default free path).
+    if os.environ.get('NVIDIA_API_KEY'):
+        return 'nvidia'
     if os.environ.get('OPENAI_API_KEY'):
         return 'openai'
     if os.environ.get('ANTHROPIC_API_KEY'):
@@ -70,16 +78,22 @@ def _build_user_prompt(
     return " ".join(parts)
 
 
-def _call_openai(system: str, user_prompt: str, *, max_tokens: int = 80, temperature: float = 0.9) -> str | None:
-    key = os.environ.get('OPENAI_API_KEY')
-    if not key:
-        return None
+def _openai_compatible_chat(
+    *,
+    url: str,
+    api_key: str,
+    model: str,
+    system: str,
+    user_prompt: str,
+    max_tokens: int,
+    temperature: float,
+) -> str | None:
     try:
         res = requests.post(
-            'https://api.openai.com/v1/chat/completions',
-            headers={'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'},
+            url,
+            headers={'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'},
             json={
-                'model': os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'),
+                'model': model,
                 'messages': [
                     {'role': 'system', 'content': system},
                     {'role': 'user', 'content': user_prompt},
@@ -87,13 +101,44 @@ def _call_openai(system: str, user_prompt: str, *, max_tokens: int = 80, tempera
                 'temperature': temperature,
                 'max_tokens': max_tokens,
             },
-            timeout=18,
+            timeout=45,
         )
         res.raise_for_status()
         text = res.json()['choices'][0]['message']['content'].strip()
         return text or None
     except Exception:
         return None
+
+
+def _call_nvidia(system: str, user_prompt: str, *, max_tokens: int = 80, temperature: float = 0.9) -> str | None:
+    key = os.environ.get('NVIDIA_API_KEY')
+    if not key:
+        return None
+    model = os.environ.get('NVIDIA_MODEL', 'meta/llama-3.1-8b-instruct')
+    return _openai_compatible_chat(
+        url=NVIDIA_CHAT_URL,
+        api_key=key,
+        model=model,
+        system=system,
+        user_prompt=user_prompt,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+
+
+def _call_openai(system: str, user_prompt: str, *, max_tokens: int = 80, temperature: float = 0.9) -> str | None:
+    key = os.environ.get('OPENAI_API_KEY')
+    if not key:
+        return None
+    return _openai_compatible_chat(
+        url='https://api.openai.com/v1/chat/completions',
+        api_key=key,
+        model=os.environ.get('OPENAI_MODEL', 'gpt-4o-mini'),
+        system=system,
+        user_prompt=user_prompt,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
 
 
 def _call_anthropic(system: str, user_prompt: str, *, max_tokens: int = 80, temperature: float = 0.9) -> str | None:
@@ -115,7 +160,7 @@ def _call_anthropic(system: str, user_prompt: str, *, max_tokens: int = 80, temp
                 'system': system,
                 'messages': [{'role': 'user', 'content': user_prompt}],
             },
-            timeout=18,
+            timeout=45,
         )
         res.raise_for_status()
         blocks = res.json().get('content', [])
@@ -127,9 +172,12 @@ def _call_anthropic(system: str, user_prompt: str, *, max_tokens: int = 80, temp
 
 def llm_text(system: str, user_prompt: str, *, max_tokens: int = 80, temperature: float = 0.9) -> str | None:
     """Call the configured provider; return None if unavailable."""
-    if _provider() == 'openai':
+    provider = _provider()
+    if provider == 'nvidia':
+        return _call_nvidia(system, user_prompt, max_tokens=max_tokens, temperature=temperature)
+    if provider == 'openai':
         return _call_openai(system, user_prompt, max_tokens=max_tokens, temperature=temperature)
-    if _provider() == 'anthropic':
+    if provider == 'anthropic':
         return _call_anthropic(system, user_prompt, max_tokens=max_tokens, temperature=temperature)
     return None
 
@@ -152,10 +200,7 @@ def generate_question(
         avoid=avoid,
         preferred_categories=preferred_categories,
     )
-    if _provider() == 'openai':
-        text = _call_openai(SYSTEM_PROMPT, user_prompt)
-    else:
-        text = _call_anthropic(SYSTEM_PROMPT, user_prompt)
+    text = llm_text(SYSTEM_PROMPT, user_prompt)
     if not text:
         return None
     # Clean common wrappers
@@ -228,11 +273,7 @@ def deepen_draft(*, draft_text: str, language: str = 'en', interests: Iterable[s
 
     if _provider() is not None:
         buddy_prompt = _build_buddy_prompt(draft, language, interests)
-        text = (
-            _call_openai(BUDDY_SYSTEM_PROMPT, buddy_prompt)
-            if _provider() == 'openai'
-            else _call_anthropic(BUDDY_SYSTEM_PROMPT, buddy_prompt)
-        )
+        text = llm_text(BUDDY_SYSTEM_PROMPT, buddy_prompt)
         if text:
             text = text.strip().strip('"').strip("'").strip('«').strip('»').strip()
             if len(text) > 200:

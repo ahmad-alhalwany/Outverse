@@ -1112,6 +1112,19 @@ class PostViewSet(viewsets.ModelViewSet):
         valid = {c for c, _ in FeedFeedback.FEEDBACK_TYPES}
         if feedback_type not in valid:
             return Response({'error': 'Invalid feedback type.'}, status=400)
+
+        undo = bool(request.data.get('undo'))
+        if undo:
+            qs = FeedFeedback.objects.filter(user=user, feedback_type=feedback_type)
+            if feedback_type in ('not_interested', 'hide_post'):
+                qs = qs.filter(post=post)
+            else:
+                qs = qs.filter(author_id=post.user_id)
+            obj = qs.order_by('-id').first()
+            if obj:
+                obj.delete()
+            return Response({'ok': True, 'type': feedback_type, 'undone': True})
+
         FeedFeedback.objects.create(
             user=user,
             post=post if feedback_type in ('not_interested', 'hide_post') else None,

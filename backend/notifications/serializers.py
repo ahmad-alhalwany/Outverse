@@ -33,7 +33,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = [
-            'id', 'actor', 'verb', 'type', 'post', 'reel', 'story', 'idea', 'text',
+            'id', 'actor', 'verb', 'type', 'post', 'reel', 'story', 'idea', 'studio_session', 'text',
             'is_read', 'created_at',
         ]
 

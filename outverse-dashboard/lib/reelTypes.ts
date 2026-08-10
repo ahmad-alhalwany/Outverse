@@ -1,4 +1,5 @@
 import type { ReactionType } from './reactions';
+import { publicDisplayName, looksLikeEmail } from './publicDisplayName';
 
 export type ReelMood = 'cosmic' | 'pulse' | 'void' | 'spark' | 'dream';
 
@@ -151,8 +152,7 @@ export interface ReelCommentItem {
 }
 
 export function reelAuthorName(u: ReelUser): string {
-  const full = `${u.first_name || ''} ${u.last_name || ''}`.trim();
-  return full || u.username || 'Traveler';
+  return publicDisplayName(u, 'Traveler');
 }
 
 export const REEL_MOOD_META: Record<

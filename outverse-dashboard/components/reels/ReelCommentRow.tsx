@@ -18,6 +18,7 @@ import RelativeTime from '@/components/RelativeTime';
 import MentionText from '@/components/MentionText';
 import { useLocale } from '../LocaleProvider';
 import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
+import ReportDialog, { type ReportReason } from '@/components/ReportDialog';
 
 function CommentBody({ c }: { c: ReelCommentItem }) {
   return (
@@ -69,6 +70,7 @@ export default function ReelCommentRow({
   const [editText, setEditText] = useState(comment.text);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
+  const [reportOpen, setReportOpen] = useState(false);
 
   const flashError = (msg: string) => {
     setActionError(msg);
@@ -96,25 +98,24 @@ export default function ReelCommentRow({
     }
   };
 
-  const report = async () => {
-    if (!me) return;
-    if (!(await confirm(t('reels.confirmReport'), { confirmLabel: 'Report' }))) return;
-    setBusy(true);
+  const submitReport = async (reason: ReportReason, details: string) => {
+    if (!me) return false;
+    const snippet = (comment.text || '').slice(0, 200);
     try {
-      const snippet = (comment.text || '').slice(0, 200);
       const res = await apiFetchJson('moderation/flagged/', {
         method: 'POST',
         json: {
           type: 'reel_comment',
+          object_id: comment.id,
           content: `reel:${reelId} comment:${comment.id} @${comment.user.username}: ${snippet}`,
+          reason,
+          details,
           reporter: me.username,
         },
       });
-      if (!res.ok) flashError(t('reels.actionFailed'));
+      return res.ok;
     } catch {
-      flashError(t('reels.actionFailed'));
-    } finally {
-      setBusy(false);
+      return false;
     }
   };
 
@@ -337,7 +338,7 @@ export default function ReelCommentRow({
           <button
             type="button"
             className="reel-comments-sheet__action-icon"
-            onClick={report}
+            onClick={() => setReportOpen(true)}
             title={t('reels.reportComment')}
             disabled={busy}
           >
@@ -362,6 +363,12 @@ export default function ReelCommentRow({
         </div>
       )}
       </div>
+      <ReportDialog
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        title={t('social.reportWhyComment')}
+        onSubmit={submitReport}
+      />
     </div>
   );
 }

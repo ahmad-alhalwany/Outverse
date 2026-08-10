@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -19,7 +19,7 @@ import RelativeTime from '../../components/RelativeTime';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import { polishVaultTone } from '@/lib/aiCoachApi';
-import { searchLocation } from '@/lib/geocode';
+import { searchLocation, searchLocationSuggestions, reverseGeocodeLabel, type GeocodeHit } from '@/lib/geocode';
 import { formatBottleTimeLeft } from '@/utils/bottleTime';
 import {
   DEMO_BOTTLES,
@@ -29,6 +29,7 @@ import {
   moodSummaryRows,
   shouldUseVaultDemo,
 } from '@/lib/vaultDemoData';
+import { computeRegionMoods } from '@/lib/vaultRegionMood';
 import { getUser } from '@/lib/auth';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { apiUrl } from '@/lib/api';
@@ -139,6 +140,8 @@ function EmotionVaultContent() {
   const searchParams = useSearchParams();
   const [throwOpen, setThrowOpen] = useState(false);
   const [catchOpen, setCatchOpen] = useState(false);
+  const [mapPickMode, setMapPickMode] = useState(false);
+  const [pickedLocation, setPickedLocation] = useState<{ lat: number; lng: number; label: string } | null>(null);
   const [previewBottle, setPreviewBottle] = useState<ApiBottle | null>(null);
   const [previewMissing, setPreviewMissing] = useState(false);
   const [myActive, setMyActive] = useState<ApiBottle[]>([]);
@@ -206,10 +209,10 @@ function EmotionVaultContent() {
               color: em.color,
               emoji: em.emoji,
               label: em.label,
+              emotion: b.emotion_type,
               expiresAt: b.expires_at,
               isMine: b.is_mine,
               message: b.message,
-              senderName: b.sender_username,
             };
           });
         setMarkers(gotMarkers);
@@ -372,6 +375,34 @@ function EmotionVaultContent() {
     Array.from({ length: 30 }, (_, i) => ({ day: i + 1, date: '', emotion: null }));
   const insights = dashboard?.insights ?? [];
   const thrown = dashboard?.thrown ?? 0;
+  const regionMoods = useMemo(
+    () =>
+      computeRegionMoods(
+        markers.map((m) => ({
+          id: m.id,
+          lat: m.lat,
+          lng: m.lng,
+          emotion: m.emotion || m.label,
+          emoji: m.emoji,
+          color: m.color,
+          label: m.label,
+        })),
+      ),
+    [markers],
+  );
+
+  const startMapPick = useCallback(() => {
+    setThrowOpen(false);
+    setMapPickMode(true);
+  }, []);
+
+  const handleMapPicked = useCallback(async (lat: number, lng: number) => {
+    const label = (await reverseGeocodeLabel(lat, lng)) || `${lat.toFixed(3)}, ${lng.toFixed(3)}`;
+    setPickedLocation({ lat, lng, label });
+    setMapPickMode(false);
+    setFlyTarget({ lat, lng, zoom: 14 });
+    setThrowOpen(true);
+  }, []);
   const caught = dashboard?.caught ?? 0;
   const currentMood = dashboard?.current_mood ? emotionMeta(dashboard.current_mood) : null;
   const happyDays = timeline.filter((t) => t.emotion && POSITIVE_MOODS.has(t.emotion)).length;
@@ -476,6 +507,7 @@ function EmotionVaultContent() {
           <div className="lg:col-span-6 order-1 lg:order-2" id="map">
             <EmotionVaultMap
               markers={markers}
+              regions={regionMoods}
               variant={theme === 'dark' ? 'dark' : 'light'}
               colors={vaultColors}
               height={520}
@@ -487,11 +519,18 @@ function EmotionVaultContent() {
               onFlyTargetChange={setFlyTarget}
               mapStyle={mapStyle}
               onMapStyleChange={setMapStyle}
+              pickMode={mapPickMode}
+              onPickLocation={(lat, lng) => void handleMapPicked(lat, lng)}
+              pickPreview={pickedLocation}
+              onCancelPick={() => {
+                setMapPickMode(false);
+                setThrowOpen(true);
+              }}
             />
 
             {markers.length > 0 && (
               <p className="text-xs mt-2 text-center" style={{ color: C.text2 }}>
-                🍶 {markers.length} drifting {markers.length === 1 ? 'bottle' : 'bottles'} on the map · each vanishes after 24 hours
+                🍶 {markers.length} drifting {markers.length === 1 ? 'bottle' : 'bottles'} · colored rings show how each area feels
               </p>
             )}
 
@@ -640,9 +679,7 @@ function EmotionVaultContent() {
                       {m.emoji} {m.label}
                     </span>
                     <span className="flex items-center gap-2">
-                      {b.sender_username && (
-                        <span className="text-xs" style={{ color: 'var(--vault-muted)' }}>@{b.sender_username}</span>
-                      )}
+                      <span className="text-xs" style={{ color: 'var(--vault-muted)' }}>Anonymous</span>
                       <RelativeTime date={b.created_at} className="text-xs" style={{ color: 'var(--vault-muted)' }} />
                     </span>
                   </div>
@@ -653,8 +690,22 @@ function EmotionVaultContent() {
         </div>
 
       <AnimatePresence>
-        {throwOpen && (
-          <ThrowBottleModal ideaId={searchParams.get('idea_id')} onClose={() => setThrowOpen(false)} onThrown={loadData} />
+        {(throwOpen || mapPickMode) && (
+          <ThrowBottleModal
+            open={throwOpen}
+            ideaId={searchParams.get('idea_id')}
+            initialLocation={pickedLocation}
+            onRequestMapPick={startMapPick}
+            onLocationChange={setPickedLocation}
+            onClose={() => {
+              setThrowOpen(false);
+              setMapPickMode(false);
+            }}
+            onThrown={() => {
+              setPickedLocation(null);
+              void loadData();
+            }}
+          />
         )}
       </AnimatePresence>
       <AnimatePresence>
@@ -681,7 +732,22 @@ function EmotionVaultContent() {
               }
             }}
             onClose={closeBottlePreview}
-            onCatch={() => {
+            onCatch={async () => {
+              if (!previewBottle) return;
+              const res = await apiFetchJson('bottles/catch/', {
+                method: 'POST',
+                json: { bottle_id: previewBottle.id },
+              });
+              if (res.ok) {
+                closeBottlePreview();
+                void loadData();
+                return;
+              }
+              if (res.status === 404) {
+                closeBottlePreview();
+                void loadData();
+                return;
+              }
               closeBottlePreview();
               setCatchOpen(true);
             }}
@@ -746,7 +812,7 @@ function MonthlySummary({ insights, happyPct }: { insights: Insight[]; happyPct:
 
   return (
     <div className="vault-card">
-      <h3 className="vault-card__title">Monthly Summary</h3>
+      <h3 className="vault-card__title">Mood Insights</h3>
       {rows.map((row) => (
         <div key={row.key}>
           <div className="vault-summary-row">
@@ -813,16 +879,71 @@ function getLocation(): Promise<{ lat: number; lng: number } | null> {
   });
 }
 
-function ThrowBottleModal({ onClose, onThrown, ideaId }: { onClose: () => void; onThrown: () => void; ideaId?: string | null }) {
+function ThrowBottleModal({
+  open,
+  onClose,
+  onThrown,
+  ideaId,
+  initialLocation,
+  onRequestMapPick,
+  onLocationChange,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onThrown: () => void;
+  ideaId?: string | null;
+  initialLocation?: { lat: number; lng: number; label: string } | null;
+  onRequestMapPick: () => void;
+  onLocationChange: (loc: { lat: number; lng: number; label: string } | null) => void;
+}) {
   const C = useVaultColors();
   const [message, setMessage] = useState(ideaId ? `A spark from Bazaar idea #${ideaId}…` : '');
   const [emotion, setEmotion] = useState('mystery');
-  const [shareLocation, setShareLocation] = useState(true);
+  const [location, setLocation] = useState<{ lat: number; lng: number; label: string } | null>(
+    initialLocation ?? null,
+  );
+  const [placeQuery, setPlaceQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<GeocodeHit[]>([]);
+  const [searchingPlace, setSearchingPlace] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [throwing, setThrowing] = useState(false);
   const [polishing, setPolishing] = useState(false);
   const [polishNote, setPolishNote] = useState('');
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    if (initialLocation) setLocation(initialLocation);
+  }, [initialLocation]);
+
+  function applyLocation(next: { lat: number; lng: number; label: string } | null) {
+    setLocation(next);
+    onLocationChange(next);
+  }
+
+  async function useMyGps() {
+    setLocating(true);
+    setError('');
+    const loc = await getLocation();
+    setLocating(false);
+    if (!loc) {
+      setError('Could not read GPS. Search a place or tap Pick on map.');
+      return;
+    }
+    const label = (await reverseGeocodeLabel(loc.lat, loc.lng)) || 'My location';
+    applyLocation({ ...loc, label });
+  }
+
+  async function runPlaceSearch() {
+    const q = placeQuery.trim();
+    if (!q) return;
+    setSearchingPlace(true);
+    setError('');
+    const hits = await searchLocationSuggestions(q, 5);
+    setSearchingPlace(false);
+    setSuggestions(hits);
+    if (!hits.length) setError('No places found. Try another search.');
+  }
 
   async function handlePolish() {
     if (!message.trim()) return;
@@ -841,17 +962,20 @@ function ThrowBottleModal({ onClose, onThrown, ideaId }: { onClose: () => void; 
       setError('Write a message before sending it to the cosmos.');
       return;
     }
+    if (!location) {
+      setError('Choose where this bottle appears — GPS, search, or pick on the map.');
+      return;
+    }
     setError('');
     setThrowing(true);
     try {
-      const loc = shareLocation ? await getLocation() : null;
       const res = await apiFetchJson('bottles/throw/', {
         method: 'POST',
         json: {
           message: message.trim(),
           emotion_type: emotion,
-          location_lat: loc?.lat ?? null,
-          location_lng: loc?.lng ?? null,
+          location_lat: location.lat,
+          location_lng: location.lng,
         },
       });
       if (!res.ok) throw new Error('throw failed');
@@ -865,7 +989,7 @@ function ThrowBottleModal({ onClose, onThrown, ideaId }: { onClose: () => void; 
     }
   }
 
-  return (
+  return open || done ? (
     <ModalShell onClose={onClose}>
       {done ? (
         <div className="text-center py-8">
@@ -907,17 +1031,89 @@ function ThrowBottleModal({ onClose, onThrown, ideaId }: { onClose: () => void; 
             className="w-full rounded-xl p-3 outline-none resize-none"
             style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
           />
-          <div className="flex items-center justify-between mt-2">
-            <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: C.text2 }}>
-              <input type="checkbox" checked={shareLocation} onChange={(e) => setShareLocation(e.target.checked)} />
-              📍 Share location — appears on the map for 24 hours
-            </label>
-            <span className="text-xs" style={{ color: C.text2 }}>{message.length}/500</span>
+
+          <div className="mt-3 rounded-xl p-3" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
+            <p className="text-xs font-semibold mb-2" style={{ color: C.text }}>
+              📍 Where should this bottle appear?
+            </p>
+            <div className="flex flex-wrap gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => void useMyGps()}
+                disabled={locating}
+                className="rounded-full px-3 py-1.5 text-xs font-semibold"
+                style={{ background: C.white, color: C.brown, border: `1px solid ${C.line}` }}
+              >
+                {locating ? 'Locating…' : 'Use my GPS'}
+              </button>
+              <button
+                type="button"
+                onClick={onRequestMapPick}
+                className="rounded-full px-3 py-1.5 text-xs font-semibold text-white"
+                style={{ background: C.brownDk }}
+              >
+                Pick on map
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={placeQuery}
+                onChange={(e) => setPlaceQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void runPlaceSearch())}
+                placeholder="Search city, street, landmark…"
+                className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+                style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+              />
+              <button
+                type="button"
+                onClick={() => void runPlaceSearch()}
+                disabled={searchingPlace}
+                className="rounded-xl px-3 py-2 text-xs font-semibold text-white"
+                style={{ background: C.brown }}
+              >
+                {searchingPlace ? '…' : 'Find'}
+              </button>
+            </div>
+            {suggestions.length > 0 && (
+              <ul className="mt-2 max-h-28 overflow-y-auto rounded-xl" style={{ background: C.white, border: `1px solid ${C.line}` }}>
+                {suggestions.map((hit) => (
+                  <li key={`${hit.lat}-${hit.lng}-${hit.label}`}>
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-xs hover:opacity-80"
+                      style={{ color: C.text, borderBottom: `1px solid ${C.line}` }}
+                      onClick={() => {
+                        applyLocation({ lat: hit.lat, lng: hit.lng, label: hit.label });
+                        setSuggestions([]);
+                        setPlaceQuery(hit.label);
+                      }}
+                    >
+                      {hit.label}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {location ? (
+              <p className="text-xs mt-2 font-medium" style={{ color: C.brown }}>
+                Selected: {location.label}
+                <button
+                  type="button"
+                  className="ml-2 underline opacity-80"
+                  onClick={() => applyLocation(null)}
+                >
+                  Clear
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs mt-2" style={{ color: C.text2 }}>
+                Required to show on the map for 24 hours.
+              </p>
+            )}
           </div>
+
           <div className="flex items-center justify-between mt-2">
-            {polishNote ? (
-              <span className="text-xs" style={{ color: C.text2 }}>✨ {polishNote}</span>
-            ) : <span />}
+            <span className="text-xs" style={{ color: C.text2 }}>{message.length}/500</span>
             <button
               type="button"
               onClick={() => void handlePolish()}
@@ -928,6 +1124,9 @@ function ThrowBottleModal({ onClose, onThrown, ideaId }: { onClose: () => void; 
               {polishing ? '✨ Polishing…' : '✨ Polish tone'}
             </button>
           </div>
+          {polishNote ? (
+            <p className="text-xs mt-1" style={{ color: C.text2 }}>✨ {polishNote}</p>
+          ) : null}
           {error && <div className="text-sm mt-2" style={{ color: '#c0392b' }}>{error}</div>}
           <button
             type="submit"
@@ -940,7 +1139,7 @@ function ThrowBottleModal({ onClose, onThrown, ideaId }: { onClose: () => void; 
         </form>
       )}
     </ModalShell>
-  );
+  ) : null;
 }
 
 function BottlePreviewModal({
@@ -958,10 +1157,21 @@ function BottlePreviewModal({
   linkCopied: boolean;
   onCopyLink: () => void;
   onClose: () => void;
-  onCatch: () => void;
+  onCatch: () => void | Promise<void>;
 }) {
   const C = useVaultColors();
   const m = bottle ? emotionMeta(bottle.emotion_type) : null;
+  const [opening, setOpening] = useState(false);
+
+  async function handleOpen() {
+    if (opening) return;
+    setOpening(true);
+    try {
+      await onCatch();
+    } finally {
+      setOpening(false);
+    }
+  }
 
   return (
     <ModalShell onClose={onClose}>
@@ -996,9 +1206,7 @@ function BottlePreviewModal({
               {placeLabel}
             </p>
           )}
-          {bottle.sender_username && (
-            <p className="text-xs mt-2" style={{ color: C.text2 }}>from @{bottle.sender_username}</p>
-          )}
+          <p className="text-xs mt-2" style={{ color: C.text2 }}>From an anonymous traveler</p>
           {bottle.message && (
             <p className="text-sm mt-4 leading-relaxed whitespace-pre-wrap" style={{ color: C.text }}>
               {bottle.message}
@@ -1025,11 +1233,12 @@ function BottlePreviewModal({
             {!bottle.is_mine && (
               <button
                 type="button"
-                onClick={onCatch}
-                className="flex-1 min-w-[8rem] py-2 rounded-xl text-xs font-semibold text-white"
+                onClick={() => void handleOpen()}
+                disabled={opening}
+                className="flex-1 min-w-[8rem] py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-60"
                 style={{ background: C.brownDk }}
               >
-                Catch a bottle
+                {opening ? 'Opening…' : 'Open this bottle'}
               </button>
             )}
           </div>

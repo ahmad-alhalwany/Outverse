@@ -7,7 +7,7 @@ from chat.ws_auth import resolve_ws_user_id
 
 class NotificationConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
-        self.user_id = resolve_ws_user_id(self.scope)
+        self.user_id = await resolve_ws_user_id(self.scope)
         if not self.user_id:
             await self.close(code=4001)
             return

@@ -79,6 +79,7 @@ for _code, (_internal, _name) in NVIDIA_SAFETY_CATEGORIES.items():
 # Content types that map to FlaggedContent.CONTENT_TYPES
 VALID_CONTENT_TYPES = frozenset({
     'post', 'comment', 'reel', 'reel_comment', 'story', 'live_chat',
+    'chat_message', 'room_message', 'bottle',
 })
 
 

@@ -123,7 +123,7 @@ export default function CreatorHubPage() {
                 <p className="text-2xl font-bold">{summary?.subscriber_count ?? 0}</p>
               </div>
               <div className="rounded-2xl border border-surface bg-surface/40 p-4">
-                <p className="text-xs text-text-secondary">Coins earned</p>
+                <p className="text-xs text-text-secondary">Nova earned</p>
                 <p className="text-2xl font-bold">{summary?.total_coins_earned ?? 0} ✨</p>
               </div>
             </div>

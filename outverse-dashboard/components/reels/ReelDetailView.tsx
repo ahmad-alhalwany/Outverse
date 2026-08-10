@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import { getUser } from '@/lib/auth';
-import { reelPagePath } from '@/lib/fetchReel';
 import type { ReelItem } from '@/lib/reelTypes';
 import type { ReactionType } from '@/lib/reactions';
 import { useLocale } from '../LocaleProvider';
 import ReelSlide from './ReelSlide';
+import FeedUndoToast from '../FeedUndoToast';
 
 interface ReelDetailViewProps {
   reelId: string;
@@ -23,6 +23,8 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
   const [loading, setLoading] = useState(true);
   const [missing, setMissing] = useState(false);
   const [reactionError, setReactionError] = useState('');
+  const [dimUndoId, setDimUndoId] = useState<number | null>(null);
+  const [dimBusy, setDimBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,7 +51,10 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
   }, [load]);
 
   const handleLike = async (id: number, reaction: ReactionType = 'spark') => {
-    if (!getUser()) return null;
+    if (!getUser()) {
+      setReactionError(t('reels.reactionError'));
+      return null;
+    }
     try {
       const res = await apiFetchJson(`reels/${id}/react/`, {
         method: 'POST',
@@ -57,7 +62,12 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
       });
       if (res.ok) {
         setReactionError('');
-        return res.json();
+        return (await res.json()) as {
+          liked: boolean;
+          likes_count: number;
+          reaction_counts?: Record<string, number>;
+          my_reaction?: ReactionType | null;
+        };
       }
       setReactionError(t('reels.reactionError'));
     } catch {
@@ -78,6 +88,28 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
     router.push('/reels');
   };
 
+  const handleDimmed = (id: number) => {
+    setDimUndoId(id);
+    setReel(null);
+    setMissing(false);
+  };
+
+  const undoDim = async () => {
+    if (dimUndoId == null || dimBusy) return;
+    setDimBusy(true);
+    try {
+      const res = await apiFetchJson(`reels/${dimUndoId}/dim/`, { method: 'POST' });
+      if (res.ok) {
+        setDimUndoId(null);
+        await load();
+      }
+    } catch {
+      /* keep toast */
+    } finally {
+      setDimBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!reactionError) return;
     const timer = setTimeout(() => setReactionError(''), 3000);
@@ -91,6 +123,27 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
           <span className="reels-feed__orb" />
           <p>{t('reels.loading')}</p>
         </div>
+      </div>
+    );
+  }
+
+  if (dimUndoId != null && !reel) {
+    return (
+      <div className="reels-app reels-feed--empty">
+        <p>{t('reels.dimmed')}</p>
+        <Link href="/reels" className="mt-4 text-cyan-400 text-sm font-semibold">
+          {t('reels.back')}
+        </Link>
+        <FeedUndoToast
+          message={t('reels.dimmed')}
+          undoLabel={t('social.undoFeedback')}
+          busy={dimBusy}
+          onUndo={() => void undoDim()}
+          onDismiss={() => {
+            setDimUndoId(null);
+            router.push('/reels');
+          }}
+        />
       </div>
     );
   }
@@ -128,6 +181,7 @@ export default function ReelDetailView({ reelId }: ReelDetailViewProps) {
           onLike={handleLike}
           onView={handleView}
           onDeleted={handleDeleted}
+          onDimmed={handleDimmed}
         />
       </div>
     </div>

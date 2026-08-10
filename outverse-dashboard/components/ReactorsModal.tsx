@@ -17,6 +17,7 @@ import {
   type ReactorRow,
 } from '@/lib/reactionsApi';
 import { mediaUrl } from '@/lib/api';
+import { publicDisplayName, looksLikeEmail } from '@/lib/publicDisplayName';
 
 type Props = {
   open: boolean;
@@ -127,9 +128,10 @@ export default function ReactorsModal({
               ) : (
                 rows.map((row) => {
                   const avatar = mediaUrl(row.user.avatar) || row.user.avatar;
-                  const name =
-                    [row.user.first_name, row.user.last_name].filter(Boolean).join(' ') ||
-                    row.user.username;
+                  const name = publicDisplayName(row.user);
+                  const handle = looksLikeEmail(row.user.username)
+                    ? null
+                    : row.user.username;
                   return (
                     <div key={`${row.user.id}-${row.created_at}`} className="reactors-modal__row">
                       {avatar ? (
@@ -148,7 +150,9 @@ export default function ReactorsModal({
                       )}
                       <div className="min-w-0 flex-1">
                         <p className="reactors-modal__name">{name}</p>
-                        <p className="reactors-modal__meta">@{row.user.username}</p>
+                        {handle ? (
+                          <p className="reactors-modal__meta">@{handle}</p>
+                        ) : null}
                       </div>
                       <span className="reactors-modal__emoji" title={t(reactionLabelKey(row.type))}>
                         {EMOJI_BY_REACTION_TYPE[row.type]}

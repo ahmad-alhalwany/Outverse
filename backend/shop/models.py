@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 from outverse.upload_validators import validate_image_upload
 
@@ -8,6 +9,16 @@ class ShopItem(models.Model):
     ITEM_TYPES = [
         ('digital', 'Digital'),
         ('physical', 'Physical'),
+        ('idea', 'Idea'),
+    ]
+    IDEA_KINDS = [
+        ('', 'Plain idea'),
+        ('cursed_prompt', 'Cursed Prompt'),
+        ('alternate_you', 'Alternate You'),
+        ('blind_drop', 'Blind Drop'),
+        ('constellation_pack', 'Constellation Pack'),
+        ('bottle', 'Idea in a Bottle'),
+        ('reverse_commission', 'Reverse Commission'),
     ]
     CATEGORY_CHOICES = [
         ('art', 'Art'),
@@ -26,6 +37,11 @@ class ShopItem(models.Model):
         max_length=20, choices=CATEGORY_CHOICES, default='art'
     )
     image = models.ImageField(upload_to='shop_items/', null=True, blank=True, validators=[validate_image_upload])
+    stock = models.PositiveIntegerField(null=True, blank=True, help_text='Leave empty for unlimited stock')
+    idea_kind = models.CharField(max_length=20, choices=IDEA_KINDS, blank=True, default='')
+    unlock_at = models.DateTimeField(
+        null=True, blank=True, help_text="Only used when idea_kind='bottle' — content stays hidden until this time"
+    )
     cover_url = models.URLField(blank=True)
     download_url = models.URLField(
         blank=True,
@@ -49,6 +65,10 @@ class ShopItem(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def is_unlocked(self) -> bool:
+        return self.unlock_at is None or timezone.now() >= self.unlock_at
 
 
 class Transaction(models.Model):

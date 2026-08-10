@@ -29,6 +29,13 @@ export default function CreateReelPage() {
   const { t, locale } = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // Defer query-param UI until after mount to avoid SSR/client hydration mismatch
+  // (useSearchParams can disagree between server HTML and the first client paint).
+  const [paramsReady, setParamsReady] = useState(false);
+  useEffect(() => {
+    setParamsReady(true);
+  }, []);
+
   const remixOfParam = searchParams.get('remix_of');
   const remixOfId = remixOfParam && /^\d+$/.test(remixOfParam) ? Number(remixOfParam) : null;
   const stitchOfParam = searchParams.get('stitch_of');
@@ -40,6 +47,15 @@ export default function CreateReelPage() {
     inspirationQuestionParam && /^\d+$/.test(inspirationQuestionParam)
       ? Number(inspirationQuestionParam)
       : null;
+
+  const modeRemixId = paramsReady ? remixOfId : null;
+  const modeStitchId = paramsReady ? stitchOfId : null;
+  const pageTitle =
+    modeStitchId != null
+      ? t('reels.createWeaveTitle')
+      : modeRemixId != null
+        ? t('reels.createRemixTitle')
+        : t('reels.createTitle');
   const [video, setVideo] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
@@ -309,26 +325,32 @@ export default function CreateReelPage() {
         </Link>
         <h1 className="reels-create__title">
           <ReelsIcon size={22} active />
-          {t('reels.createTitle')}
+          {pageTitle}
         </h1>
       </header>
 
       <form onSubmit={submit} className="reels-create__form">
-        {remixOfId != null && (
-          <ReelRemixBadge
-            remixOfId={remixOfId}
-            linkToReel
-            labelKey="reels.remixing"
-            className="reels-create__remix-banner"
-          />
+        {modeRemixId != null && (
+          <>
+            <ReelRemixBadge
+              remixOfId={modeRemixId}
+              linkToReel
+              labelKey="reels.remixing"
+              className="reels-create__remix-banner"
+            />
+            <p className="reels-create__mode-hint">{t('reels.createRemixHint')}</p>
+          </>
         )}
-        {stitchOfId != null && (
-          <ReelRemixBadge
-            remixOfId={stitchOfId}
-            linkToReel
-            labelKey="reels.weaving"
-            className="reels-create__remix-banner"
-          />
+        {modeStitchId != null && (
+          <>
+            <ReelRemixBadge
+              remixOfId={modeStitchId}
+              linkToReel
+              labelKey="reels.weaving"
+              className="reels-create__remix-banner"
+            />
+            <p className="reels-create__mode-hint">{t('reels.createWeaveHint')}</p>
+          </>
         )}
 
         <ReelCameraRecorder onRecorded={onFile} />

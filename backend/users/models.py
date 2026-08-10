@@ -34,6 +34,9 @@ class User(AbstractUser):
     spender_tier = models.CharField(
         max_length=10, choices=SPENDER_TIER_CHOICES, default='none', db_index=True,
     )
+    # Gates listing digital/physical Shop products — granted via SellerApplication
+    # approval. `idea`-type listings stay open to every user regardless of this flag.
+    is_shop_seller = models.BooleanField(default=False, db_index=True)
 
     def __str__(self):
         return self.username
@@ -258,6 +261,39 @@ class VerificationRequest(models.Model):
 
     def __str__(self):
         return f"verification {self.user_id} ({self.status})"
+
+
+class SellerApplication(models.Model):
+    STATUS = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='seller_applications',
+    )
+    reason = models.TextField()
+    links = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS, default='pending', db_index=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='seller_application_reviews',
+    )
+    review_note = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"seller application {self.user_id} ({self.status})"
+
 
 class GDPRExportRequest(models.Model):
     STATUS_CHOICES = [

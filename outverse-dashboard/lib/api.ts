@@ -59,7 +59,20 @@ export async function apiFetch(path: string, init: RequestInit = {}): Promise<Re
   }
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
   const url = path.startsWith('http') ? path : apiUrl(path);
-  return fetch(url, { ...init, headers, credentials: 'include' });
+  try {
+    return await fetch(url, { ...init, headers, credentials: 'include' });
+  } catch (err) {
+    // Backend down / reload / CORS network failure — return a soft Response
+    // so callers checking `res.ok` don't crash the Next.js error overlay.
+    if (typeof console !== 'undefined') {
+      console.warn('[apiFetch] network error', url, err);
+    }
+    return new Response(JSON.stringify({ detail: 'Network error. Is the API running?' }), {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }
 
 /** JSON POST/PATCH/DELETE with auth */
@@ -77,10 +90,21 @@ export async function apiFetchJson(
   }
   Object.entries(authHeaders()).forEach(([k, v]) => headers.set(k, v));
   const url = path.startsWith('http') ? path : apiUrl(path);
-  return fetch(url, {
-    ...rest,
-    headers,
-    credentials: 'include',
-    body: json !== undefined ? JSON.stringify(json) : rest.body,
-  });
+  try {
+    return await fetch(url, {
+      ...rest,
+      headers,
+      credentials: 'include',
+      body: json !== undefined ? JSON.stringify(json) : rest.body,
+    });
+  } catch (err) {
+    if (typeof console !== 'undefined') {
+      console.warn('[apiFetchJson] network error', url, err);
+    }
+    return new Response(JSON.stringify({ detail: 'Network error. Is the API running?' }), {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
 }

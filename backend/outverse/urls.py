@@ -45,6 +45,7 @@ urlpatterns = [
     path('api/collab/', include('collab.urls')),
     path('api/subscriptions/', include('subscriptions.urls')),
     path('api/speculative/', include('speculative.urls')),
+    path('api/studio/', include('studio.urls')),
     path('api/', include('saved.urls')),
     path('api/', include('notes.urls')),
     path('api/communities/', include('communities.urls')),

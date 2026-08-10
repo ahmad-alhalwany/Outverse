@@ -1,6 +1,8 @@
 from django.conf import settings
 from django.db import models
 
+from outverse.upload_validators import validate_image_upload
+
 
 class Idea(models.Model):
     STATUS_CHOICES = [
@@ -44,6 +46,12 @@ class Idea(models.Model):
         max_length=20, choices=CATEGORY_CHOICES, default='other'
     )
     cover_url = models.URLField(blank=True)
+    cover_image = models.ImageField(
+        upload_to='ideas/covers/',
+        blank=True,
+        null=True,
+        validators=[validate_image_upload],
+    )
     roles_needed = models.JSONField(default=list, blank=True)
     funding_goal = models.PositiveIntegerField(null=True, blank=True)
     funding_raised = models.PositiveIntegerField(default=0)

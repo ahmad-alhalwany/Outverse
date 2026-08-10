@@ -7,6 +7,7 @@ import type { ReelItem } from '@/lib/reelTypes';
 import type { ReactionType } from '@/lib/reactions';
 import ReelSlide from './ReelSlide';
 import ReelsFeedProgress from './ReelsFeedProgress';
+import FeedUndoToast from '../FeedUndoToast';
 import { useLocale } from '../LocaleProvider';
 
 interface ReelsFeedProps {
@@ -21,6 +22,8 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
   const [loading, setLoading] = useState(true);
   const [activeIdx, setActiveIdx] = useState(0);
   const [reactionError, setReactionError] = useState('');
+  const [dimUndoId, setDimUndoId] = useState<number | null>(null);
+  const [dimBusy, setDimBusy] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const slideRefs = useRef<(HTMLElement | null)[]>([]);
 
@@ -78,17 +81,11 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
     return () => observer.disconnect();
   }, [reels.length]);
 
-  useEffect(() => {
-    if (!focusId || loading || reels.length === 0) return;
-    const idx = reels.findIndex((r) => r.id === focusId);
-    if (idx < 0) return;
-    const el = slideRefs.current[idx];
-    if (el) el.scrollIntoView({ behavior: 'smooth' });
-    setActiveIdx(idx);
-  }, [focusId, loading, reels]);
-
   const handleLike = async (id: number, reaction: ReactionType = 'spark') => {
-    if (!getUser()) return null;
+    if (!getUser()) {
+      setReactionError(t('reels.reactionError'));
+      return null;
+    }
     try {
       const res = await apiFetchJson(`reels/${id}/react/`, {
         method: 'POST',
@@ -96,7 +93,12 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
       });
       if (res.ok) {
         setReactionError('');
-        return res.json();
+        return (await res.json()) as {
+          liked: boolean;
+          likes_count: number;
+          reaction_counts?: Record<string, number>;
+          my_reaction?: ReactionType | null;
+        };
       }
       setReactionError(t('reels.reactionError'));
     } catch {
@@ -110,7 +112,28 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
   };
 
   const handleDimmed = (id: number) => {
+    setDimUndoId(id);
     setReels((prev) => prev.filter((reel) => reel.id !== id));
+  };
+
+  const undoDim = async () => {
+    if (dimUndoId == null || dimBusy) return;
+    setDimBusy(true);
+    try {
+      const res = await apiFetchJson(`reels/${dimUndoId}/dim/`, { method: 'POST' });
+      if (res.ok) {
+        setDimUndoId(null);
+        await load();
+      }
+    } catch {
+      /* keep toast so user can retry */
+    } finally {
+      setDimBusy(false);
+    }
+  };
+
+  const dismissDimUndo = () => {
+    setDimUndoId(null);
   };
 
   const handleView = async (id: number) => {
@@ -146,6 +169,15 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
         </p>
         <p>{t('reels.emptyTitle')}</p>
         <p className="text-sm opacity-70 mt-2">{t('reels.emptyHint')}</p>
+        {dimUndoId != null && (
+          <FeedUndoToast
+            message={t('reels.dimmed')}
+            undoLabel={t('social.undoFeedback')}
+            busy={dimBusy}
+            onUndo={() => void undoDim()}
+            onDismiss={dismissDimUndo}
+          />
+        )}
       </div>
     );
   }
@@ -159,33 +191,42 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
       )}
       <ReelsFeedProgress total={reels.length} activeIndex={activeIdx} />
       <div ref={containerRef} className="reels-feed">
-      {reels.map((reel, i) => {
-        const isActive = i === activeIdx;
-        return (
-          <div
-            key={reel.id}
-            ref={(el) => {
-              slideRefs.current[i] = el;
-            }}
-            className="reels-feed__snap"
-          >
-            {isActive || i === activeIdx + 1 || i === activeIdx - 1 ? (
-              <ReelSlide
-                reel={reel}
-                active={isActive}
-                onLike={handleLike}
-                onView={handleView}
-                onDeleted={load}
-                onSavedChange={handleSavedChange}
-                onDimmed={handleDimmed}
-              />
-            ) : (
-              <div className="reels-feed__placeholder" />
-            )}
-          </div>
-        );
-      })}
+        {reels.map((reel, i) => {
+          const isActive = i === activeIdx;
+          return (
+            <div
+              key={reel.id}
+              ref={(el) => {
+                slideRefs.current[i] = el;
+              }}
+              className="reels-feed__snap"
+            >
+              {isActive || i === activeIdx + 1 || i === activeIdx - 1 ? (
+                <ReelSlide
+                  reel={reel}
+                  active={isActive}
+                  onLike={handleLike}
+                  onView={handleView}
+                  onDeleted={load}
+                  onSavedChange={handleSavedChange}
+                  onDimmed={handleDimmed}
+                />
+              ) : (
+                <div className="reels-feed__placeholder" />
+              )}
+            </div>
+          );
+        })}
       </div>
+      {dimUndoId != null && (
+        <FeedUndoToast
+          message={t('reels.dimmed')}
+          undoLabel={t('social.undoFeedback')}
+          busy={dimBusy}
+          onUndo={() => void undoDim()}
+          onDismiss={dismissDimUndo}
+        />
+      )}
     </div>
   );
 }
