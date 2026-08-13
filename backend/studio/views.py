@@ -13,6 +13,7 @@ from .serializers import (
     DrawSessionDetailSerializer,
     DrawSessionListSerializer,
 )
+from .ws_utils import delete_media, next_z_index, reorder_layer, update_media_transform
 
 
 class DrawSessionViewSet(viewsets.ModelViewSet):
@@ -24,14 +25,19 @@ class DrawSessionViewSet(viewsets.ModelViewSet):
         return DrawSessionListSerializer
 
     def get_permissions(self):
-        if self.action in ('create', 'update', 'partial_update', 'destroy', 'add_media', 'add_stroke', 'invite'):
+        if self.action in (
+            'create', 'update', 'partial_update', 'destroy',
+            'add_media', 'add_stroke', 'invite', 'media_item', 'reorder_media',
+        ):
             return [IsAuthenticated()]
         return [AllowAny()]
 
     def get_queryset(self):
         qs = super().get_queryset()
         if self.action == 'retrieve':
-            qs = qs.prefetch_related('strokes__user', 'media__user', 'participants__user')
+            qs = qs.prefetch_related(
+                'strokes__user', 'media__user', 'shapes__user', 'texts__user', 'participants__user',
+            )
         return qs
 
     def perform_create(self, serializer):
@@ -51,11 +57,45 @@ class DrawSessionViewSet(viewsets.ModelViewSet):
             y=float(request.data.get('y', 40)),
             width=float(request.data.get('width', 200)),
             height=float(request.data.get('height', 200)),
+            z_index=next_z_index(session.id),
         )
         return Response(
             CanvasMediaSerializer(media, context={'request': request}).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @action(detail=True, methods=['delete', 'patch'], url_path=r'media/(?P<media_id>\d+)')
+    def media_item(self, request, pk=None, media_id=None):
+        """Solo mode's fallback for deleting/moving a photo — no socket involved."""
+        session = self.get_object()
+        if request.method == 'DELETE':
+            ok = delete_media(session.id, media_id, request.user.id)
+            if not ok:
+                return Response({'error': 'Not found or not allowed.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        media = CanvasMedia.objects.filter(pk=media_id, session_id=session.id).first()
+        if not media:
+            return Response({'error': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        payload = update_media_transform(
+            session.id, media_id,
+            float(request.data.get('x', media.x)), float(request.data.get('y', media.y)),
+            float(request.data.get('width', media.width)), float(request.data.get('height', media.height)),
+            float(request.data.get('rotation', media.rotation)),
+            request.data.get('filter'),
+        )
+        return Response(payload)
+
+    @action(detail=True, methods=['post'], url_path=r'media/(?P<media_id>\d+)/reorder')
+    def reorder_media(self, request, pk=None, media_id=None):
+        session = self.get_object()
+        direction = request.data.get('direction')
+        if direction not in ('front', 'back'):
+            return Response({'error': 'direction must be "front" or "back".'}, status=status.HTTP_400_BAD_REQUEST)
+        new_z = reorder_layer(session.id, 'media', media_id, direction)
+        if new_z is None:
+            return Response({'error': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'z_index': new_z})
 
     @action(detail=True, methods=['post'], url_path='strokes')
     def add_stroke(self, request, pk=None):

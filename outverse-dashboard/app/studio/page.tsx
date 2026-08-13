@@ -38,6 +38,11 @@ type ShapeItem = {
   x: number; y: number; width: number; height: number; rotation: number; z_index: number;
   color: string; stroke_width: number;
 };
+type TextItem = {
+  id: number; user: StudioUser; text: string;
+  x: number; y: number; width: number; height: number; rotation: number; z_index: number;
+  color: string; font_size: number;
+};
 type ChatMsg = { user: StudioUser; text: string };
 type FollowingUser = { id: number; username: string; avatar: string | null };
 type Session = { id: number; title: string; host: { id?: number; username: string }; mode: 'solo' | 'live'; is_live: boolean };
@@ -45,11 +50,15 @@ type SessionDetail = Session & {
   strokes: Stroke[];
   media: MediaItem[];
   shapes: ShapeItem[];
+  texts: TextItem[];
   participants: { user: StudioUser }[];
 };
 
+type SelectionKind = 'media' | 'shape' | 'text';
+type Selection = { kind: SelectionKind; id: number };
+
 type DragState = {
-  target: 'media' | 'shape';
+  target: SelectionKind;
   id: number;
   mode: 'move' | 'resize' | 'rotate';
   startX: number;
@@ -89,6 +98,7 @@ function StudioPageInner() {
   const [strokes, setStrokes] = useState<Stroke[]>([]);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [shapes, setShapes] = useState<ShapeItem[]>([]);
+  const [texts, setTexts] = useState<TextItem[]>([]);
   const [participants, setParticipants] = useState<StudioUser[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
 
@@ -100,8 +110,9 @@ function StudioPageInner() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
 
-  const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
+  const [selected, setSelected] = useState<Selection | null>(null);
   const [placingShape, setPlacingShape] = useState<StudioShapeKind | null>(null);
+  const [placingText, setPlacingText] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -175,6 +186,29 @@ function StudioPageInner() {
       case 'shape.transformed':
         setShapes((prev) => prev.map((s) => (s.id === event.id ? { ...s, x: event.x, y: event.y, width: event.width, height: event.height, rotation: event.rotation } : s)));
         break;
+      case 'shape.deleted':
+        setShapes((prev) => prev.filter((s) => s.id !== event.id));
+        setSelected((prev) => (prev?.kind === 'shape' && prev.id === event.id ? null : prev));
+        break;
+      case 'text.added':
+        setTexts((prev) => (prev.some((tx) => tx.id === event.id) ? prev : [...prev, { ...event }]));
+        break;
+      case 'text.transformed':
+        setTexts((prev) => prev.map((tx) => (tx.id === event.id ? { ...tx, x: event.x, y: event.y, width: event.width, height: event.height, rotation: event.rotation, text: event.text, color: event.color, font_size: event.font_size } : tx)));
+        break;
+      case 'text.deleted':
+        setTexts((prev) => prev.filter((tx) => tx.id !== event.id));
+        setSelected((prev) => (prev?.kind === 'text' && prev.id === event.id ? null : prev));
+        break;
+      case 'media.deleted':
+        setMediaItems((prev) => prev.filter((m) => m.id !== event.id));
+        setSelected((prev) => (prev?.kind === 'media' && prev.id === event.id ? null : prev));
+        break;
+      case 'layer.reordered':
+        if (event.kind === 'media') setMediaItems((prev) => prev.map((m) => (m.id === event.id ? { ...m, z_index: event.z_index } : m)));
+        else if (event.kind === 'shape') setShapes((prev) => prev.map((s) => (s.id === event.id ? { ...s, z_index: event.z_index } : s)));
+        else setTexts((prev) => prev.map((tx) => (tx.id === event.id ? { ...tx, z_index: event.z_index } : tx)));
+        break;
       case 'chat.message':
         setChatMessages((prev) => [...prev.slice(-49), { user: event.user, text: event.text }]);
         break;
@@ -182,6 +216,8 @@ function StudioPageInner() {
         setStrokes([]);
         setMediaItems([]);
         setShapes([]);
+        setTexts([]);
+        setSelected(null);
         break;
       default:
         break;
@@ -209,10 +245,12 @@ function StudioPageInner() {
     setStrokes(data.strokes || []);
     setMediaItems((data.media || []).map((m) => ({ ...m, image: m.image ? mediaUrl(m.image) : null })));
     setShapes(data.shapes || []);
+    setTexts(data.texts || []);
     setParticipants((data.participants || []).map((p) => p.user));
     setChatMessages([]);
-    setSelectedMediaId(null);
+    setSelected(null);
     setPlacingShape(null);
+    setPlacingText(false);
     setInviteOpen(false);
   }
 
@@ -227,22 +265,30 @@ function StudioPageInner() {
     setStrokes([]);
     setMediaItems([]);
     setShapes([]);
+    setTexts([]);
     setParticipants([]);
     setChatMessages([]);
-    setSelectedMediaId(null);
+    setSelected(null);
     setPlacingShape(null);
+    setPlacingText(false);
     setInviteOpen(false);
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     if (!user || !active) return;
-    setSelectedMediaId(null);
+    setSelected(null);
     if (placingShape) {
       const point = getCanvasPoint(canvasRef.current!, event.clientX, event.clientY);
       const w = placingShape === 'line' ? 160 : 120;
       const h = placingShape === 'line' ? 4 : 120;
       send('shape.add', { kind: placingShape, x: point.x - w / 2, y: point.y - h / 2, width: w, height: h, color, stroke_width: brushWidth });
       setPlacingShape(null);
+      return;
+    }
+    if (placingText) {
+      const point = getCanvasPoint(canvasRef.current!, event.clientX, event.clientY);
+      send('text.add', { x: point.x - 100, y: point.y - 30, color, font_size: 24 });
+      setPlacingText(false);
       return;
     }
     setDrawing(true);
@@ -316,9 +362,9 @@ function StudioPageInner() {
     }
   }
 
-  function startDrag(target: 'media' | 'shape', item: { id: number; x: number; y: number; width: number; height: number; rotation: number }, mode: 'move' | 'resize' | 'rotate', event: React.PointerEvent) {
+  function startDrag(target: SelectionKind, item: { id: number; x: number; y: number; width: number; height: number; rotation: number }, mode: 'move' | 'resize' | 'rotate', event: React.PointerEvent) {
     event.stopPropagation();
-    if (target === 'media') setSelectedMediaId(item.id);
+    setSelected({ kind: target, id: item.id });
     let centerX = 0;
     let centerY = 0;
     let startAngle = 0;
@@ -330,7 +376,11 @@ function StudioPageInner() {
       startAngle = Math.atan2(event.clientY - centerY, event.clientX - centerX) * (180 / Math.PI);
     }
     dragRef.current = { target, id: item.id, mode, startX: event.clientX, startY: event.clientY, item, centerX, centerY, startAngle };
-    (event.target as Element).setPointerCapture(event.pointerId);
+    try {
+      (event.target as Element).setPointerCapture(event.pointerId);
+    } catch {
+      /* pointer already released — drag still tracked via dragRef */
+    }
   }
 
   function onContainerPointerMove(event: React.PointerEvent) {
@@ -358,21 +408,34 @@ function StudioPageInner() {
 
     if (drag.target === 'media') {
       setMediaItems((prev) => prev.map((m) => (m.id === drag.id ? nextGeometry(m) : m)));
-    } else {
+    } else if (drag.target === 'shape') {
       setShapes((prev) => prev.map((s) => (s.id === drag.id ? nextGeometry(s) : s)));
+    } else {
+      setTexts((prev) => prev.map((tx) => (tx.id === drag.id ? nextGeometry(tx) : tx)));
     }
   }
 
-  function onContainerPointerUp() {
+  async function onContainerPointerUp() {
     const drag = dragRef.current;
-    if (!drag) return;
+    if (!drag || !active) return;
     dragRef.current = null;
     if (drag.target === 'media') {
       const item = mediaItems.find((m) => m.id === drag.id);
-      if (item) send('media.transform', { id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter: item.filter });
-    } else {
+      if (!item) return;
+      if (isLive) {
+        send('media.transform', { id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter: item.filter });
+      } else {
+        await apiFetchJson(`studio/sessions/${active.id}/media/${item.id}/`, {
+          method: 'PATCH',
+          json: { x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter: item.filter },
+        });
+      }
+    } else if (drag.target === 'shape') {
       const item = shapes.find((s) => s.id === drag.id);
       if (item) send('shape.transform', { id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation });
+    } else {
+      const item = texts.find((tx) => tx.id === drag.id);
+      if (item) send('text.transform', { id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, text: item.text, color: item.color, font_size: item.font_size });
     }
   }
 
@@ -381,6 +444,45 @@ function StudioPageInner() {
     setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, filter } : m)));
     const item = mediaItems.find((m) => m.id === id);
     if (item) send('media.transform', { id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter });
+  }
+
+  function updateText(id: number, patch: Partial<Pick<TextItem, 'text' | 'font_size'>>) {
+    setTexts((prev) => prev.map((tx) => (tx.id === id ? { ...tx, ...patch } : tx)));
+    const item = texts.find((tx) => tx.id === id);
+    if (!item) return;
+    const next = { ...item, ...patch };
+    send('text.transform', { id, x: next.x, y: next.y, width: next.width, height: next.height, rotation: next.rotation, text: next.text, color: next.color, font_size: next.font_size });
+  }
+
+  function deleteSelected() {
+    if (!selected || !active) return;
+    const { kind, id } = selected;
+    setSelected(null);
+    if (kind === 'media') {
+      setMediaItems((prev) => prev.filter((m) => m.id !== id));
+      void apiFetch(`studio/sessions/${active.id}/media/${id}/`, { method: 'DELETE' }).then(() => {
+        if (isLive) send('media.deleted', { id });
+      });
+    } else if (kind === 'shape') {
+      send('shape.delete', { id });
+    } else {
+      send('text.delete', { id });
+    }
+  }
+
+  function reorderSelected(direction: 'front' | 'back') {
+    if (!selected || !active) return;
+    const { kind, id } = selected;
+    if (isLive) {
+      send('layer.reorder', { kind, id, direction });
+      return;
+    }
+    if (kind !== 'media') return;
+    void apiFetchJson(`studio/sessions/${active.id}/media/${id}/reorder/`, { method: 'POST', json: { direction } }).then(async (res) => {
+      if (!res.ok) return;
+      const data = await res.json();
+      setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, z_index: data.z_index } : m)));
+    });
   }
 
   async function openInvite() {
@@ -609,7 +711,7 @@ function StudioPageInner() {
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => setPlacingShape((v) => (v === 'rectangle' ? null : 'rectangle'))}
+                        onClick={() => { setPlacingText(false); setPlacingShape((v) => (v === 'rectangle' ? null : 'rectangle')); }}
                         title={t('studio.shapeRectangle')}
                         className="w-7 h-7 rounded-lg flex items-center justify-center"
                         style={{ background: placingShape === 'rectangle' ? C.brownDk : C.white }}
@@ -618,7 +720,7 @@ function StudioPageInner() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPlacingShape((v) => (v === 'circle' ? null : 'circle'))}
+                        onClick={() => { setPlacingText(false); setPlacingShape((v) => (v === 'circle' ? null : 'circle')); }}
                         title={t('studio.shapeCircle')}
                         className="w-7 h-7 rounded-lg flex items-center justify-center"
                         style={{ background: placingShape === 'circle' ? C.brownDk : C.white }}
@@ -627,12 +729,21 @@ function StudioPageInner() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPlacingShape((v) => (v === 'line' ? null : 'line'))}
+                        onClick={() => { setPlacingText(false); setPlacingShape((v) => (v === 'line' ? null : 'line')); }}
                         title={t('studio.shapeLine')}
                         className="w-7 h-7 rounded-lg flex items-center justify-center"
                         style={{ background: placingShape === 'line' ? C.brownDk : C.white }}
                       >
                         <span className="w-3.5 h-0.5" style={{ background: placingShape === 'line' ? '#fff' : C.text }} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setPlacingShape(null); setPlacingText((v) => !v); }}
+                        title={t('studio.textTool')}
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-sm font-bold"
+                        style={{ background: placingText ? C.brownDk : C.white, color: placingText ? '#fff' : C.text }}
+                      >
+                        T
                       </button>
                     </div>
                   </>
@@ -651,26 +762,53 @@ function StudioPageInner() {
               </div>
             )}
 
-            {isLive && selectedMediaId && (() => {
-              const item = mediaItems.find((m) => m.id === selectedMediaId);
-              if (!item) return null;
-              const { brightness, contrast, saturate } = parseFilter(item.filter || '');
+            {selected && (() => {
+              const mediaSel = selected.kind === 'media' ? mediaItems.find((m) => m.id === selected.id) : null;
+              const textSel = selected.kind === 'text' ? texts.find((tx) => tx.id === selected.id) : null;
+              if (selected.kind === 'media' && !mediaSel) return null;
+              if (selected.kind === 'text' && !textSel) return null;
+              const filterVals = mediaSel ? parseFilter(mediaSel.filter || '') : null;
               return (
                 <div className="flex flex-wrap items-center gap-3 mb-3 p-2.5 rounded-2xl text-xs" style={{ background: C.card2, color: C.text }}>
-                  <span className="font-semibold">{t('studio.filters')}</span>
-                  <label className="flex items-center gap-1.5">
-                    {t('studio.brightness')}
-                    <input type="range" min={0.5} max={1.5} step={0.05} value={brightness} onChange={(e) => updateFilter(item.id, Number(e.target.value), contrast, saturate)} className="w-16" />
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    {t('studio.contrast')}
-                    <input type="range" min={0.5} max={1.5} step={0.05} value={contrast} onChange={(e) => updateFilter(item.id, brightness, Number(e.target.value), saturate)} className="w-16" />
-                  </label>
-                  <label className="flex items-center gap-1.5">
-                    {t('studio.saturate')}
-                    <input type="range" min={0} max={2} step={0.1} value={saturate} onChange={(e) => updateFilter(item.id, brightness, contrast, Number(e.target.value))} className="w-16" />
-                  </label>
-                  <button type="button" onClick={() => setSelectedMediaId(null)} className="ms-auto px-2 py-1 rounded-lg" style={{ background: C.white, color: C.text }}>×</button>
+                  {mediaSel && isLive && filterVals && (
+                    <>
+                      <span className="font-semibold">{t('studio.filters')}</span>
+                      <label className="flex items-center gap-1.5">
+                        {t('studio.brightness')}
+                        <input type="range" min={0.5} max={1.5} step={0.05} value={filterVals.brightness} onChange={(e) => updateFilter(mediaSel.id, Number(e.target.value), filterVals.contrast, filterVals.saturate)} className="w-16" />
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        {t('studio.contrast')}
+                        <input type="range" min={0.5} max={1.5} step={0.05} value={filterVals.contrast} onChange={(e) => updateFilter(mediaSel.id, filterVals.brightness, Number(e.target.value), filterVals.saturate)} className="w-16" />
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        {t('studio.saturate')}
+                        <input type="range" min={0} max={2} step={0.1} value={filterVals.saturate} onChange={(e) => updateFilter(mediaSel.id, filterVals.brightness, filterVals.contrast, Number(e.target.value))} className="w-16" />
+                      </label>
+                    </>
+                  )}
+                  {textSel && (
+                    <>
+                      <input
+                        value={textSel.text}
+                        onChange={(e) => updateText(textSel.id, { text: e.target.value })}
+                        className="px-2 py-1 rounded-lg flex-1 min-w-[120px]"
+                        style={{ background: C.white, color: C.text }}
+                      />
+                      <label className="flex items-center gap-1.5 shrink-0">
+                        Aa
+                        <input type="range" min={12} max={64} value={textSel.font_size} onChange={(e) => updateText(textSel.id, { font_size: Number(e.target.value) })} className="w-16" />
+                      </label>
+                    </>
+                  )}
+                  <div className="flex items-center gap-1 ms-auto shrink-0">
+                    <button type="button" onClick={() => reorderSelected('back')} title={t('studio.sendToBack')} className="px-2 py-1 rounded-lg" style={{ background: C.white, color: C.text }}>⬇</button>
+                    <button type="button" onClick={() => reorderSelected('front')} title={t('studio.bringToFront')} className="px-2 py-1 rounded-lg" style={{ background: C.white, color: C.text }}>⬆</button>
+                    <button type="button" onClick={deleteSelected} title={t('studio.deleteItem')} className="px-2 py-1 rounded-lg" style={{ background: C.white, color: '#c0392b' }}>
+                      <TrashIcon className="h-3.5 w-3.5" />
+                    </button>
+                    <button type="button" onClick={() => setSelected(null)} className="px-2 py-1 rounded-lg" style={{ background: C.white, color: C.text }}>×</button>
+                  </div>
                 </div>
               );
             })()}
@@ -681,7 +819,7 @@ function StudioPageInner() {
               ref={containerRef}
               className="relative w-full touch-none select-none"
               onPointerMove={onContainerPointerMove}
-              onPointerUp={onContainerPointerUp}
+              onPointerUp={() => void onContainerPointerUp()}
             >
               <canvas
                 ref={canvasRef}
@@ -692,7 +830,7 @@ function StudioPageInner() {
                 onPointerUp={() => void handlePointerUp()}
                 onPointerLeave={() => void handlePointerUp()}
                 className="w-full rounded-2xl touch-none block"
-                style={{ background: C.white, border: `1px solid ${C.line}`, cursor: user ? (placingShape ? 'copy' : 'crosshair') : 'default' }}
+                style={{ background: C.white, border: `1px solid ${C.line}`, cursor: user ? (placingShape || placingText ? 'copy' : 'crosshair') : 'default' }}
               />
               {mediaItems.map((item) => (
                 <div
@@ -704,8 +842,9 @@ function StudioPageInner() {
                     top: `${(item.y / CANVAS_H) * 100}%`,
                     width: `${(item.width / CANVAS_W) * 100}%`,
                     height: `${(item.height / CANVAS_H) * 100}%`,
-                    border: `2px solid ${selectedMediaId === item.id ? C.brownDk : C.brown}`,
+                    border: `2px solid ${selected?.kind === 'media' && selected.id === item.id ? C.brownDk : C.brown}`,
                     transform: `rotate(${item.rotation}deg)`,
+                    zIndex: item.z_index,
                   }}
                 >
                   {item.image && (
@@ -741,6 +880,8 @@ function StudioPageInner() {
                     background: shape.kind === 'line' ? shape.color : 'transparent',
                     border: shape.kind === 'line' ? undefined : `${shape.stroke_width}px solid ${shape.color}`,
                     borderRadius: shape.kind === 'circle' ? '50%' : shape.kind === 'rectangle' ? 6 : 0,
+                    zIndex: shape.z_index,
+                    outline: selected?.kind === 'shape' && selected.id === shape.id ? `2px dashed ${C.brownDk}` : undefined,
                   }}
                 >
                   <span
@@ -750,6 +891,38 @@ function StudioPageInner() {
                   />
                   <span
                     onPointerDown={(e) => startDrag('shape', shape, 'rotate', e)}
+                    title={t('studio.rotate')}
+                    className="absolute -top-2 -right-2 w-3 h-3 rounded-full cursor-grab"
+                    style={{ background: C.brownDk, border: `2px solid ${C.white}` }}
+                  />
+                </div>
+              ))}
+              {isLive && texts.map((item) => (
+                <div
+                  key={item.id}
+                  onPointerDown={(e) => startDrag('text', item, 'move', e)}
+                  className="absolute cursor-move flex items-center px-1 whitespace-nowrap overflow-hidden"
+                  style={{
+                    left: `${(item.x / CANVAS_W) * 100}%`,
+                    top: `${(item.y / CANVAS_H) * 100}%`,
+                    width: `${(item.width / CANVAS_W) * 100}%`,
+                    height: `${(item.height / CANVAS_H) * 100}%`,
+                    transform: `rotate(${item.rotation}deg)`,
+                    zIndex: item.z_index,
+                    color: item.color,
+                    fontSize: item.font_size,
+                    fontWeight: 700,
+                    border: selected?.kind === 'text' && selected.id === item.id ? `1px dashed ${C.brownDk}` : '1px dashed transparent',
+                  }}
+                >
+                  {item.text}
+                  <span
+                    onPointerDown={(e) => startDrag('text', item, 'resize', e)}
+                    className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize"
+                    style={{ background: C.brown, borderRadius: '4px 0 4px 0' }}
+                  />
+                  <span
+                    onPointerDown={(e) => startDrag('text', item, 'rotate', e)}
                     title={t('studio.rotate')}
                     className="absolute -top-2 -right-2 w-3 h-3 rounded-full cursor-grab"
                     style={{ background: C.brownDk, border: `2px solid ${C.white}` }}

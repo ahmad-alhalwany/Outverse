@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from users.models import User
 
-from .models import CanvasMedia, CanvasShape, CanvasStroke, DrawSession, SessionParticipant
+from .models import CanvasMedia, CanvasShape, CanvasStroke, CanvasText, DrawSession, SessionParticipant
 
 
 class StudioUserSerializer(serializers.ModelSerializer):
@@ -38,6 +38,15 @@ class CanvasShapeSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'created_at']
 
 
+class CanvasTextSerializer(serializers.ModelSerializer):
+    user = StudioUserSerializer(read_only=True)
+
+    class Meta:
+        model = CanvasText
+        fields = ['id', 'user', 'text', 'x', 'y', 'width', 'height', 'rotation', 'z_index', 'color', 'font_size', 'created_at']
+        read_only_fields = ['id', 'user', 'created_at']
+
+
 class SessionParticipantSerializer(serializers.ModelSerializer):
     user = StudioUserSerializer(read_only=True)
 
@@ -59,7 +68,8 @@ class DrawSessionDetailSerializer(DrawSessionListSerializer):
     strokes = CanvasStrokeSerializer(many=True, read_only=True)
     media = CanvasMediaSerializer(many=True, read_only=True)
     shapes = CanvasShapeSerializer(many=True, read_only=True)
+    texts = CanvasTextSerializer(many=True, read_only=True)
     participants = SessionParticipantSerializer(many=True, read_only=True)
 
     class Meta(DrawSessionListSerializer.Meta):
-        fields = DrawSessionListSerializer.Meta.fields + ['strokes', 'media', 'shapes', 'participants']
+        fields = DrawSessionListSerializer.Meta.fields + ['strokes', 'media', 'shapes', 'texts', 'participants']

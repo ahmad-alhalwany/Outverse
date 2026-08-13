@@ -1176,6 +1176,10 @@ export const ar = {
     shapeRectangle: 'مستطيل',
     shapeCircle: 'دائرة',
     shapeLine: 'خط',
+    textTool: 'إضافة نص',
+    sendToBack: 'إرسال للخلف',
+    bringToFront: 'إحضار للأمام',
+    deleteItem: 'حذف',
   },
   memories: {
     title: 'بنك الذكريات المستقبلية',

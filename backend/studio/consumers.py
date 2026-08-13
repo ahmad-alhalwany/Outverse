@@ -6,15 +6,20 @@ from chat.ws_auth import resolve_ws_user_id
 from .ws_utils import (
     add_shape,
     add_stroke,
+    add_text,
     clear_session,
+    delete_shape,
+    delete_text,
     is_host,
     join_session,
     leave_session,
     media_payload,
+    reorder_layer,
     session_exists,
     undo_last_stroke,
     update_media_transform,
     update_shape_transform,
+    update_text_transform,
     user_payload_by_id,
 )
 
@@ -137,6 +142,78 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.group_send(
                     self.group_name,
                     {'type': 'relay.studio.event', 'payload': {'type': 'shape.transformed', **payload}},
+                )
+
+        elif msg_type == 'media.deleted':
+            media_id = content.get('id')
+            if not media_id:
+                return
+            await self.channel_layer.group_send(
+                self.group_name,
+                {'type': 'relay.studio.event', 'payload': {'type': 'media.deleted', 'id': media_id}},
+            )
+
+        elif msg_type == 'shape.delete':
+            shape_id = content.get('id')
+            if not shape_id:
+                return
+            ok = await database_sync_to_async(delete_shape)(self.session_id, shape_id, self.user_id)
+            if ok:
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {'type': 'relay.studio.event', 'payload': {'type': 'shape.deleted', 'id': shape_id}},
+                )
+
+        elif msg_type == 'text.add':
+            payload = await database_sync_to_async(add_text)(
+                self.session_id, self.user_id,
+                float(content.get('x', 0)), float(content.get('y', 0)),
+                content.get('color'), content.get('font_size'),
+            )
+            await self.channel_layer.group_send(
+                self.group_name,
+                {'type': 'relay.studio.event', 'payload': {'type': 'text.added', **payload}},
+            )
+
+        elif msg_type == 'text.transform':
+            text_id = content.get('id')
+            if not text_id:
+                return
+            payload = await database_sync_to_async(update_text_transform)(
+                self.session_id, text_id,
+                float(content.get('x', 0)), float(content.get('y', 0)),
+                float(content.get('width', 200)), float(content.get('height', 60)),
+                float(content.get('rotation', 0)),
+                content.get('text'), content.get('color'), content.get('font_size'),
+            )
+            if payload:
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {'type': 'relay.studio.event', 'payload': {'type': 'text.transformed', **payload}},
+                )
+
+        elif msg_type == 'text.delete':
+            text_id = content.get('id')
+            if not text_id:
+                return
+            ok = await database_sync_to_async(delete_text)(self.session_id, text_id, self.user_id)
+            if ok:
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {'type': 'relay.studio.event', 'payload': {'type': 'text.deleted', 'id': text_id}},
+                )
+
+        elif msg_type == 'layer.reorder':
+            kind = content.get('kind')
+            item_id = content.get('id')
+            direction = content.get('direction')
+            if kind not in ('media', 'shape', 'text') or not item_id or direction not in ('front', 'back'):
+                return
+            new_z = await database_sync_to_async(reorder_layer)(self.session_id, kind, item_id, direction)
+            if new_z is not None:
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {'type': 'relay.studio.event', 'payload': {'type': 'layer.reordered', 'kind': kind, 'id': item_id, 'z_index': new_z}},
                 )
 
         elif msg_type == 'chat.send':

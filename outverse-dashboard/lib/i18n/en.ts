@@ -1174,6 +1174,10 @@ export const en = {
     shapeRectangle: 'Rectangle',
     shapeCircle: 'Circle',
     shapeLine: 'Line',
+    textTool: 'Add text',
+    sendToBack: 'Send to back',
+    bringToFront: 'Bring to front',
+    deleteItem: 'Delete',
   },
   memories: {
     title: 'Future Memories Bank',

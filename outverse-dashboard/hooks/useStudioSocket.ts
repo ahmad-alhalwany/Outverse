@@ -17,6 +17,12 @@ export type StudioEvent =
   | { type: 'media.transformed'; id: number; x: number; y: number; width: number; height: number; rotation: number; filter: string }
   | { type: 'shape.added'; id: number; user: StudioUser; kind: StudioShapeKind; x: number; y: number; width: number; height: number; rotation: number; z_index: number; color: string; stroke_width: number }
   | { type: 'shape.transformed'; id: number; x: number; y: number; width: number; height: number; rotation: number; color: string; stroke_width: number }
+  | { type: 'shape.deleted'; id: number }
+  | { type: 'text.added'; id: number; user: StudioUser; text: string; x: number; y: number; width: number; height: number; rotation: number; z_index: number; color: string; font_size: number }
+  | { type: 'text.transformed'; id: number; text: string; x: number; y: number; width: number; height: number; rotation: number; color: string; font_size: number }
+  | { type: 'text.deleted'; id: number }
+  | { type: 'media.deleted'; id: number }
+  | { type: 'layer.reordered'; kind: 'media' | 'shape' | 'text'; id: number; z_index: number }
   | { type: 'chat.message'; user: StudioUser; text: string }
   | { type: 'cursor.moved'; user_id: number; x: number; y: number }
   | { type: 'session.cleared' };

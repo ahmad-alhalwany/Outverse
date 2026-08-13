@@ -117,3 +117,26 @@ class CanvasShape(models.Model):
 
     def __str__(self):
         return f'{self.kind} {self.id} in session {self.session_id}'
+
+
+class CanvasText(models.Model):
+    """A text box placed on the canvas — live sessions only, same treatment as shapes."""
+
+    session = models.ForeignKey(DrawSession, on_delete=models.CASCADE, related_name='texts')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='canvas_texts')
+    text = models.CharField(max_length=300, default='Text')
+    x = models.FloatField(default=0)
+    y = models.FloatField(default=0)
+    width = models.FloatField(default=200)
+    height = models.FloatField(default=60)
+    rotation = models.FloatField(default=0)
+    z_index = models.IntegerField(default=0)
+    color = models.CharField(max_length=20, default='#5B21B6')
+    font_size = models.PositiveSmallIntegerField(default=24)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['z_index', 'created_at']
+
+    def __str__(self):
+        return f'text {self.id} in session {self.session_id}'
