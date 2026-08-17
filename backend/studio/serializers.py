@@ -25,7 +25,7 @@ class CanvasMediaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CanvasMedia
-        fields = ['id', 'user', 'image', 'x', 'y', 'width', 'height', 'rotation', 'z_index', 'filter', 'created_at']
+        fields = ['id', 'user', 'image', 'x', 'y', 'width', 'height', 'rotation', 'z_index', 'filter', 'opacity', 'visible', 'created_at']
         read_only_fields = ['id', 'user', 'created_at']
 
 
@@ -34,7 +34,7 @@ class CanvasShapeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CanvasShape
-        fields = ['id', 'user', 'kind', 'x', 'y', 'width', 'height', 'rotation', 'z_index', 'color', 'stroke_width', 'created_at']
+        fields = ['id', 'user', 'kind', 'x', 'y', 'width', 'height', 'rotation', 'z_index', 'color', 'stroke_width', 'opacity', 'visible', 'created_at']
         read_only_fields = ['id', 'user', 'created_at']
 
 
@@ -43,7 +43,7 @@ class CanvasTextSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CanvasText
-        fields = ['id', 'user', 'text', 'x', 'y', 'width', 'height', 'rotation', 'z_index', 'color', 'font_size', 'created_at']
+        fields = ['id', 'user', 'text', 'x', 'y', 'width', 'height', 'rotation', 'z_index', 'color', 'font_size', 'opacity', 'visible', 'created_at']
         read_only_fields = ['id', 'user', 'created_at']
 
 

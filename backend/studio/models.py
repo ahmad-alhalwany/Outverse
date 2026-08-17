@@ -85,6 +85,8 @@ class CanvasMedia(models.Model):
     rotation = models.FloatField(default=0)
     z_index = models.IntegerField(default=0)
     filter = models.CharField(max_length=200, blank=True, default='', help_text='CSS filter() string, e.g. "brightness(1.1) contrast(1.05)"')
+    opacity = models.FloatField(default=1)
+    visible = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -110,6 +112,8 @@ class CanvasShape(models.Model):
     z_index = models.IntegerField(default=0)
     color = models.CharField(max_length=20, default='#5B21B6')
     stroke_width = models.PositiveSmallIntegerField(default=3)
+    opacity = models.FloatField(default=1)
+    visible = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -133,6 +137,8 @@ class CanvasText(models.Model):
     z_index = models.IntegerField(default=0)
     color = models.CharField(max_length=20, default='#5B21B6')
     font_size = models.PositiveSmallIntegerField(default=24)
+    opacity = models.FloatField(default=1)
+    visible = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

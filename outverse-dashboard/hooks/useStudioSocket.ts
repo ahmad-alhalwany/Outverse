@@ -7,22 +7,26 @@ export type StudioUser = { id: number; username: string; avatar: string | null }
 
 export type StudioShapeKind = 'rectangle' | 'circle' | 'line';
 
+export type StudioLayerKind = 'media' | 'shape' | 'text';
+
 export type StudioEvent =
   | { type: 'studio.connected'; session_id: number }
   | { type: 'participant.joined'; user: StudioUser }
   | { type: 'participant.left'; user_id: number }
   | { type: 'stroke.added'; id: number; user: StudioUser; points: { x: number; y: number }[]; color: string; width: number }
   | { type: 'stroke.removed'; id: number }
-  | { type: 'media.added'; id: number; user: StudioUser; image: string | null; x: number; y: number; width: number; height: number; rotation: number; z_index: number; filter: string }
-  | { type: 'media.transformed'; id: number; x: number; y: number; width: number; height: number; rotation: number; filter: string }
-  | { type: 'shape.added'; id: number; user: StudioUser; kind: StudioShapeKind; x: number; y: number; width: number; height: number; rotation: number; z_index: number; color: string; stroke_width: number }
-  | { type: 'shape.transformed'; id: number; x: number; y: number; width: number; height: number; rotation: number; color: string; stroke_width: number }
+  | { type: 'media.added'; id: number; user: StudioUser; image: string | null; x: number; y: number; width: number; height: number; rotation: number; z_index: number; filter: string; opacity: number; visible: boolean }
+  | { type: 'media.transformed'; id: number; x: number; y: number; width: number; height: number; rotation: number; filter: string; opacity: number; visible: boolean }
+  | { type: 'shape.added'; id: number; user: StudioUser; kind: StudioShapeKind; x: number; y: number; width: number; height: number; rotation: number; z_index: number; color: string; stroke_width: number; opacity: number; visible: boolean }
+  | { type: 'shape.transformed'; id: number; x: number; y: number; width: number; height: number; rotation: number; color: string; stroke_width: number; opacity: number; visible: boolean }
   | { type: 'shape.deleted'; id: number }
-  | { type: 'text.added'; id: number; user: StudioUser; text: string; x: number; y: number; width: number; height: number; rotation: number; z_index: number; color: string; font_size: number }
-  | { type: 'text.transformed'; id: number; text: string; x: number; y: number; width: number; height: number; rotation: number; color: string; font_size: number }
+  | { type: 'text.added'; id: number; user: StudioUser; text: string; x: number; y: number; width: number; height: number; rotation: number; z_index: number; color: string; font_size: number; opacity: number; visible: boolean }
+  | { type: 'text.transformed'; id: number; text: string; x: number; y: number; width: number; height: number; rotation: number; color: string; font_size: number; opacity: number; visible: boolean }
   | { type: 'text.deleted'; id: number }
   | { type: 'media.deleted'; id: number }
-  | { type: 'layer.reordered'; kind: 'media' | 'shape' | 'text'; id: number; z_index: number }
+  | { type: 'layer.reordered'; kind: StudioLayerKind; id: number; z_index: number }
+  | { type: 'layer.visibility'; kind: StudioLayerKind; id: number; visible: boolean }
+  | { type: 'history.undone'; kind: 'stroke' | 'shape' | 'text'; id: number; payload: Record<string, unknown> }
   | { type: 'chat.message'; user: StudioUser; text: string }
   | { type: 'cursor.moved'; user_id: number; x: number; y: number }
   | { type: 'session.cleared' };

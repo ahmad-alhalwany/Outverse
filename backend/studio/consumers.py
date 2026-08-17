@@ -16,7 +16,8 @@ from .ws_utils import (
     media_payload,
     reorder_layer,
     session_exists,
-    undo_last_stroke,
+    set_visibility,
+    undo_last_action,
     update_media_transform,
     update_shape_transform,
     update_text_transform,
@@ -72,14 +73,6 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
                 {'type': 'relay.studio.event', 'payload': {'type': 'stroke.added', **payload}},
             )
 
-        elif msg_type == 'stroke.undo':
-            stroke_id = await database_sync_to_async(undo_last_stroke)(self.session_id, self.user_id)
-            if stroke_id is not None:
-                await self.channel_layer.group_send(
-                    self.group_name,
-                    {'type': 'relay.studio.event', 'payload': {'type': 'stroke.removed', 'id': stroke_id}},
-                )
-
         elif msg_type == 'media.added':
             media_id = content.get('id')
             if not media_id:
@@ -100,12 +93,14 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
             media_id = content.get('id')
             if not media_id:
                 return
+            opacity = content.get('opacity')
             payload = await database_sync_to_async(update_media_transform)(
                 self.session_id, media_id,
                 float(content.get('x', 0)), float(content.get('y', 0)),
                 float(content.get('width', 200)), float(content.get('height', 200)),
                 float(content.get('rotation', 0)),
                 content.get('filter'),
+                float(opacity) if opacity is not None else None,
             )
             if payload:
                 await self.channel_layer.group_send(
@@ -117,11 +112,15 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
             kind = content.get('kind')
             if kind not in ('rectangle', 'circle', 'line'):
                 return
+            opacity = content.get('opacity')
             payload = await database_sync_to_async(add_shape)(
                 self.session_id, self.user_id, kind,
                 float(content.get('x', 0)), float(content.get('y', 0)),
                 float(content.get('width', 120)), float(content.get('height', 120)),
                 content.get('color'), content.get('stroke_width'),
+                float(content.get('rotation', 0)),
+                float(opacity) if opacity is not None else 1,
+                content.get('z_index'),
             )
             await self.channel_layer.group_send(
                 self.group_name,
@@ -132,11 +131,13 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
             shape_id = content.get('id')
             if not shape_id:
                 return
+            opacity = content.get('opacity')
             payload = await database_sync_to_async(update_shape_transform)(
                 self.session_id, shape_id,
                 float(content.get('x', 0)), float(content.get('y', 0)),
                 float(content.get('width', 120)), float(content.get('height', 120)),
                 float(content.get('rotation', 0)),
+                float(opacity) if opacity is not None else None,
             )
             if payload:
                 await self.channel_layer.group_send(
@@ -165,10 +166,18 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
                 )
 
         elif msg_type == 'text.add':
+            opacity = content.get('opacity')
+            width, height, rotation = content.get('width'), content.get('height'), content.get('rotation')
             payload = await database_sync_to_async(add_text)(
                 self.session_id, self.user_id,
                 float(content.get('x', 0)), float(content.get('y', 0)),
                 content.get('color'), content.get('font_size'),
+                float(width) if width is not None else None,
+                float(height) if height is not None else None,
+                float(rotation) if rotation is not None else 0,
+                float(opacity) if opacity is not None else 1,
+                content.get('text'),
+                content.get('z_index'),
             )
             await self.channel_layer.group_send(
                 self.group_name,
@@ -179,12 +188,14 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
             text_id = content.get('id')
             if not text_id:
                 return
+            opacity = content.get('opacity')
             payload = await database_sync_to_async(update_text_transform)(
                 self.session_id, text_id,
                 float(content.get('x', 0)), float(content.get('y', 0)),
                 float(content.get('width', 200)), float(content.get('height', 60)),
                 float(content.get('rotation', 0)),
                 content.get('text'), content.get('color'), content.get('font_size'),
+                float(opacity) if opacity is not None else None,
             )
             if payload:
                 await self.channel_layer.group_send(
@@ -214,6 +225,71 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
                 await self.channel_layer.group_send(
                     self.group_name,
                     {'type': 'relay.studio.event', 'payload': {'type': 'layer.reordered', 'kind': kind, 'id': item_id, 'z_index': new_z}},
+                )
+
+        elif msg_type == 'layer.visibility':
+            kind = content.get('kind')
+            item_id = content.get('id')
+            visible = content.get('visible')
+            if kind not in ('media', 'shape', 'text') or not item_id or visible is None:
+                return
+            ok = await database_sync_to_async(set_visibility)(self.session_id, kind, item_id, bool(visible))
+            if ok:
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {'type': 'relay.studio.event', 'payload': {'type': 'layer.visibility', 'kind': kind, 'id': item_id, 'visible': bool(visible)}},
+                )
+
+        elif msg_type == 'history.undo':
+            result = await database_sync_to_async(undo_last_action)(self.session_id, self.user_id)
+            if not result:
+                return
+            kind = result['kind']
+            removed_type = {'stroke': 'stroke.removed', 'shape': 'shape.deleted', 'text': 'text.deleted'}[kind]
+            await self.channel_layer.group_send(
+                self.group_name,
+                {'type': 'relay.studio.event', 'payload': {'type': removed_type, 'id': result['id']}},
+            )
+            await self.send_json({'type': 'history.undone', 'kind': kind, 'id': result['id'], 'payload': result['payload']})
+
+        elif msg_type == 'history.redo':
+            kind = content.get('kind')
+            data = content.get('payload') or {}
+            if kind == 'stroke':
+                points = data.get('points')
+                if not isinstance(points, list) or len(points) < 2:
+                    return
+                payload = await database_sync_to_async(add_stroke)(
+                    self.session_id, self.user_id, points, data.get('color'), data.get('width'),
+                )
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {'type': 'relay.studio.event', 'payload': {'type': 'stroke.added', **payload}},
+                )
+            elif kind == 'shape':
+                payload = await database_sync_to_async(add_shape)(
+                    self.session_id, self.user_id, data.get('kind'),
+                    float(data.get('x', 0)), float(data.get('y', 0)),
+                    float(data.get('width', 120)), float(data.get('height', 120)),
+                    data.get('color'), data.get('stroke_width'),
+                    float(data.get('rotation', 0)), float(data.get('opacity', 1)), data.get('z_index'),
+                )
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {'type': 'relay.studio.event', 'payload': {'type': 'shape.added', **payload}},
+                )
+            elif kind == 'text':
+                payload = await database_sync_to_async(add_text)(
+                    self.session_id, self.user_id,
+                    float(data.get('x', 0)), float(data.get('y', 0)),
+                    data.get('color'), data.get('font_size'),
+                    float(data.get('width', 200)), float(data.get('height', 60)),
+                    float(data.get('rotation', 0)), float(data.get('opacity', 1)),
+                    data.get('text'), data.get('z_index'),
+                )
+                await self.channel_layer.group_send(
+                    self.group_name,
+                    {'type': 'relay.studio.event', 'payload': {'type': 'text.added', **payload}},
                 )
 
         elif msg_type == 'chat.send':

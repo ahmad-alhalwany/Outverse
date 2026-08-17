@@ -77,12 +77,16 @@ class DrawSessionViewSet(viewsets.ModelViewSet):
         media = CanvasMedia.objects.filter(pk=media_id, session_id=session.id).first()
         if not media:
             return Response({'error': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+        opacity = request.data.get('opacity')
+        visible = request.data.get('visible')
         payload = update_media_transform(
             session.id, media_id,
             float(request.data.get('x', media.x)), float(request.data.get('y', media.y)),
             float(request.data.get('width', media.width)), float(request.data.get('height', media.height)),
             float(request.data.get('rotation', media.rotation)),
             request.data.get('filter'),
+            float(opacity) if opacity is not None else None,
+            bool(visible) if visible is not None else None,
         )
         return Response(payload)
 

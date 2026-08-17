@@ -7,8 +7,11 @@ import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 import { apiFetch, apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
-import { useStudioSocket, type StudioEvent, type StudioShapeKind, type StudioUser } from '@/hooks/useStudioSocket';
-import { PlusIcon, TrashIcon, ArrowUturnLeftIcon, PhotoIcon, UserPlusIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
+import { useStudioSocket, type StudioEvent, type StudioLayerKind, type StudioShapeKind, type StudioUser } from '@/hooks/useStudioSocket';
+import {
+  PlusIcon, TrashIcon, ArrowUturnLeftIcon, ArrowUturnRightIcon, PhotoIcon, UserPlusIcon,
+  ChatBubbleLeftIcon, Square3Stack3DIcon, ArrowDownTrayIcon, EyeIcon, EyeSlashIcon,
+} from '@heroicons/react/24/outline';
 
 const BASE = apiUrl('studio/sessions');
 const CANVAS_W = 800;
@@ -32,17 +35,19 @@ type Stroke = { id: number; user: StudioUser; points: { x: number; y: number }[]
 type MediaItem = {
   id: number; user: StudioUser; image: string | null;
   x: number; y: number; width: number; height: number; rotation: number; z_index: number; filter: string;
+  opacity: number; visible: boolean;
 };
 type ShapeItem = {
   id: number; user: StudioUser; kind: StudioShapeKind;
   x: number; y: number; width: number; height: number; rotation: number; z_index: number;
-  color: string; stroke_width: number;
+  color: string; stroke_width: number; opacity: number; visible: boolean;
 };
 type TextItem = {
   id: number; user: StudioUser; text: string;
   x: number; y: number; width: number; height: number; rotation: number; z_index: number;
-  color: string; font_size: number;
+  color: string; font_size: number; opacity: number; visible: boolean;
 };
+type HistoryEntry = { kind: 'stroke' | 'shape' | 'text'; payload: Record<string, unknown> };
 type ChatMsg = { user: StudioUser; text: string };
 type FollowingUser = { id: number; username: string; avatar: string | null };
 type Session = { id: number; title: string; host: { id?: number; username: string }; mode: 'solo' | 'live'; is_live: boolean };
@@ -84,7 +89,26 @@ function parseFilter(filter: string) {
   const b = /brightness\(([\d.]+)\)/.exec(filter)?.[1];
   const c = /contrast\(([\d.]+)\)/.exec(filter)?.[1];
   const s = /saturate\(([\d.]+)\)/.exec(filter)?.[1];
-  return { brightness: b ? Number(b) : 1, contrast: c ? Number(c) : 1, saturate: s ? Number(s) : 1 };
+  const g = /grayscale\(([\d.]+)\)/.exec(filter)?.[1];
+  const bl = /blur\(([\d.]+)px\)/.exec(filter)?.[1];
+  return {
+    brightness: b ? Number(b) : 1, contrast: c ? Number(c) : 1, saturate: s ? Number(s) : 1,
+    grayscale: g ? Number(g) : 0, blur: bl ? Number(bl) : 0,
+  };
+}
+
+function buildFilter(v: { brightness: number; contrast: number; saturate: number; grayscale: number; blur: number }) {
+  return `brightness(${v.brightness}) contrast(${v.contrast}) saturate(${v.saturate}) grayscale(${v.grayscale}) blur(${v.blur}px)`;
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`failed to load ${src}`));
+    img.src = src;
+  });
 }
 
 function StudioPageInner() {
@@ -122,6 +146,9 @@ function StudioPageInner() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [following, setFollowing] = useState<FollowingUser[] | null>(null);
   const [inviting, setInviting] = useState<number | null>(null);
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
+  const [exporting, setExporting] = useState(false);
 
   const dragRef = useRef<DragState | null>(null);
 
@@ -182,13 +209,13 @@ function StudioPageInner() {
         setMediaItems((prev) => (prev.some((m) => m.id === event.id) ? prev : [...prev, { ...event }]));
         break;
       case 'media.transformed':
-        setMediaItems((prev) => prev.map((m) => (m.id === event.id ? { ...m, x: event.x, y: event.y, width: event.width, height: event.height, rotation: event.rotation, filter: event.filter } : m)));
+        setMediaItems((prev) => prev.map((m) => (m.id === event.id ? { ...m, x: event.x, y: event.y, width: event.width, height: event.height, rotation: event.rotation, filter: event.filter, opacity: event.opacity, visible: event.visible } : m)));
         break;
       case 'shape.added':
         setShapes((prev) => (prev.some((s) => s.id === event.id) ? prev : [...prev, { ...event }]));
         break;
       case 'shape.transformed':
-        setShapes((prev) => prev.map((s) => (s.id === event.id ? { ...s, x: event.x, y: event.y, width: event.width, height: event.height, rotation: event.rotation } : s)));
+        setShapes((prev) => prev.map((s) => (s.id === event.id ? { ...s, x: event.x, y: event.y, width: event.width, height: event.height, rotation: event.rotation, opacity: event.opacity, visible: event.visible } : s)));
         break;
       case 'shape.deleted':
         setShapes((prev) => prev.filter((s) => s.id !== event.id));
@@ -198,7 +225,7 @@ function StudioPageInner() {
         setTexts((prev) => (prev.some((tx) => tx.id === event.id) ? prev : [...prev, { ...event }]));
         break;
       case 'text.transformed':
-        setTexts((prev) => prev.map((tx) => (tx.id === event.id ? { ...tx, x: event.x, y: event.y, width: event.width, height: event.height, rotation: event.rotation, text: event.text, color: event.color, font_size: event.font_size } : tx)));
+        setTexts((prev) => prev.map((tx) => (tx.id === event.id ? { ...tx, x: event.x, y: event.y, width: event.width, height: event.height, rotation: event.rotation, text: event.text, color: event.color, font_size: event.font_size, opacity: event.opacity, visible: event.visible } : tx)));
         break;
       case 'text.deleted':
         setTexts((prev) => prev.filter((tx) => tx.id !== event.id));
@@ -213,6 +240,14 @@ function StudioPageInner() {
         else if (event.kind === 'shape') setShapes((prev) => prev.map((s) => (s.id === event.id ? { ...s, z_index: event.z_index } : s)));
         else setTexts((prev) => prev.map((tx) => (tx.id === event.id ? { ...tx, z_index: event.z_index } : tx)));
         break;
+      case 'layer.visibility':
+        if (event.kind === 'media') setMediaItems((prev) => prev.map((m) => (m.id === event.id ? { ...m, visible: event.visible } : m)));
+        else if (event.kind === 'shape') setShapes((prev) => prev.map((s) => (s.id === event.id ? { ...s, visible: event.visible } : s)));
+        else setTexts((prev) => prev.map((tx) => (tx.id === event.id ? { ...tx, visible: event.visible } : tx)));
+        break;
+      case 'history.undone':
+        setRedoStack((prev) => [...prev, { kind: event.kind, payload: event.payload }]);
+        break;
       case 'chat.message':
         setChatMessages((prev) => [...prev.slice(-49), { user: event.user, text: event.text }]);
         break;
@@ -222,6 +257,7 @@ function StudioPageInner() {
         setShapes([]);
         setTexts([]);
         setSelected(null);
+        setRedoStack([]);
         break;
       default:
         break;
@@ -256,6 +292,8 @@ function StudioPageInner() {
     setPlacingShape(null);
     setPlacingText(false);
     setInviteOpen(false);
+    setRedoStack([]);
+    setLayersOpen(false);
   }
 
   useEffect(() => {
@@ -276,6 +314,8 @@ function StudioPageInner() {
     setPlacingShape(null);
     setPlacingText(false);
     setInviteOpen(false);
+    setRedoStack([]);
+    setLayersOpen(false);
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
@@ -287,12 +327,14 @@ function StudioPageInner() {
       const h = placingShape === 'line' ? 4 : 120;
       send('shape.add', { kind: placingShape, x: point.x - w / 2, y: point.y - h / 2, width: w, height: h, color, stroke_width: brushWidth });
       setPlacingShape(null);
+      setRedoStack([]);
       return;
     }
     if (placingText) {
       const point = getCanvasPoint(canvasRef.current!, event.clientX, event.clientY);
       send('text.add', { x: point.x - 100, y: point.y - 30, color, font_size: 24 });
       setPlacingText(false);
+      setRedoStack([]);
       return;
     }
     setDrawing(true);
@@ -315,6 +357,7 @@ function StudioPageInner() {
     const strokeColor = eraser ? C.white : color;
     if (isLive) {
       send('stroke.add', { points, color: strokeColor, width: brushWidth });
+      setRedoStack([]);
     } else {
       const res = await apiFetchJson(`studio/sessions/${active.id}/strokes/`, {
         method: 'POST',
@@ -327,8 +370,15 @@ function StudioPageInner() {
     }
   }
 
-  function undoLastStroke() {
-    send('stroke.undo');
+  function undoLast() {
+    send('history.undo');
+  }
+
+  function redoLast() {
+    if (redoStack.length === 0) return;
+    const entry = redoStack[redoStack.length - 1];
+    setRedoStack((prev) => prev.slice(0, -1));
+    send('history.redo', { kind: entry.kind, payload: entry.payload });
   }
 
   function clearSession() {
@@ -431,26 +481,50 @@ function StudioPageInner() {
       const item = mediaItems.find((m) => m.id === drag.id);
       if (!item) return;
       if (isLive) {
-        send('media.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, filter: item.filter });
+        send('media.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, filter: item.filter, opacity: item.opacity });
       } else {
         await apiFetchJson(`studio/sessions/${active.id}/media/${drag.id}/`, {
           method: 'PATCH',
-          json: { x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, filter: item.filter },
+          json: { x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, filter: item.filter, opacity: item.opacity },
         });
       }
     } else if (drag.target === 'shape') {
-      send('shape.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation });
+      const item = shapes.find((s) => s.id === drag.id);
+      send('shape.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, opacity: item?.opacity });
     } else {
       const item = texts.find((tx) => tx.id === drag.id);
-      if (item) send('text.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, text: item.text, color: item.color, font_size: item.font_size });
+      if (item) send('text.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, text: item.text, color: item.color, font_size: item.font_size, opacity: item.opacity });
     }
   }
 
-  function updateFilter(id: number, brightness: number, contrast: number, saturate: number) {
-    const filter = `brightness(${brightness}) contrast(${contrast}) saturate(${saturate})`;
-    setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, filter } : m)));
+  function updateFilter(id: number, patch: Partial<{ brightness: number; contrast: number; saturate: number; grayscale: number; blur: number }>) {
     const item = mediaItems.find((m) => m.id === id);
-    if (item) send('media.transform', { id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter });
+    if (!item) return;
+    const filter = buildFilter({ ...parseFilter(item.filter || ''), ...patch });
+    setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, filter } : m)));
+    send('media.transform', { id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter, opacity: item.opacity });
+  }
+
+  function updateOpacity(kind: SelectionKind, id: number, opacity: number) {
+    if (!active) return;
+    if (kind === 'media') {
+      setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, opacity } : m)));
+      const item = mediaItems.find((m) => m.id === id);
+      if (!item) return;
+      if (isLive) {
+        send('media.transform', { id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter: item.filter, opacity });
+      } else {
+        void apiFetchJson(`studio/sessions/${active.id}/media/${id}/`, { method: 'PATCH', json: { opacity } });
+      }
+    } else if (kind === 'shape') {
+      setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, opacity } : s)));
+      const item = shapes.find((s) => s.id === id);
+      if (item) send('shape.transform', { id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, opacity });
+    } else {
+      setTexts((prev) => prev.map((tx) => (tx.id === id ? { ...tx, opacity } : tx)));
+      const item = texts.find((tx) => tx.id === id);
+      if (item) send('text.transform', { id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, text: item.text, color: item.color, font_size: item.font_size, opacity });
+    }
   }
 
   function updateText(id: number, patch: Partial<Pick<TextItem, 'text' | 'font_size'>>) {
@@ -458,13 +532,12 @@ function StudioPageInner() {
     const item = texts.find((tx) => tx.id === id);
     if (!item) return;
     const next = { ...item, ...patch };
-    send('text.transform', { id, x: next.x, y: next.y, width: next.width, height: next.height, rotation: next.rotation, text: next.text, color: next.color, font_size: next.font_size });
+    send('text.transform', { id, x: next.x, y: next.y, width: next.width, height: next.height, rotation: next.rotation, text: next.text, color: next.color, font_size: next.font_size, opacity: next.opacity });
   }
 
-  function deleteSelected() {
-    if (!selected || !active) return;
-    const { kind, id } = selected;
-    setSelected(null);
+  function deleteItem(kind: SelectionKind, id: number) {
+    if (!active) return;
+    setSelected((prev) => (prev?.kind === kind && prev.id === id ? null : prev));
     if (kind === 'media') {
       setMediaItems((prev) => prev.filter((m) => m.id !== id));
       void apiFetch(`studio/sessions/${active.id}/media/${id}/`, { method: 'DELETE' }).then(() => {
@@ -477,9 +550,12 @@ function StudioPageInner() {
     }
   }
 
-  function reorderSelected(direction: 'front' | 'back') {
-    if (!selected || !active) return;
-    const { kind, id } = selected;
+  function deleteSelected() {
+    if (selected) deleteItem(selected.kind, selected.id);
+  }
+
+  function reorderItem(kind: SelectionKind, id: number, direction: 'front' | 'back') {
+    if (!active) return;
     if (isLive) {
       send('layer.reorder', { kind, id, direction });
       return;
@@ -490,6 +566,127 @@ function StudioPageInner() {
       const data = await res.json();
       setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, z_index: data.z_index } : m)));
     });
+  }
+
+  function reorderSelected(direction: 'front' | 'back') {
+    if (selected) reorderItem(selected.kind, selected.id, direction);
+  }
+
+  function toggleVisibility(kind: SelectionKind, id: number, nextVisible: boolean) {
+    if (!active) return;
+    if (kind === 'media') {
+      setMediaItems((prev) => prev.map((m) => (m.id === id ? { ...m, visible: nextVisible } : m)));
+      if (isLive) {
+        send('layer.visibility', { kind, id, visible: nextVisible });
+      } else {
+        void apiFetchJson(`studio/sessions/${active.id}/media/${id}/`, { method: 'PATCH', json: { visible: nextVisible } });
+      }
+    } else if (kind === 'shape') {
+      setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, visible: nextVisible } : s)));
+      send('layer.visibility', { kind, id, visible: nextVisible });
+    } else {
+      setTexts((prev) => prev.map((tx) => (tx.id === id ? { ...tx, visible: nextVisible } : tx)));
+      send('layer.visibility', { kind, id, visible: nextVisible });
+    }
+  }
+
+  function shapeLabel(kind: StudioShapeKind) {
+    if (kind === 'rectangle') return t('studio.shapeRectangle');
+    if (kind === 'circle') return t('studio.shapeCircle');
+    return t('studio.shapeLine');
+  }
+
+  async function exportPng() {
+    if (!active) return;
+    setExporting(true);
+    setError('');
+    try {
+      const off = document.createElement('canvas');
+      off.width = CANVAS_W;
+      off.height = CANVAS_H;
+      const ctx = off.getContext('2d');
+      if (!ctx) throw new Error('no context');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+      for (const stroke of strokes) {
+        if (stroke.points.length < 2) continue;
+        ctx.beginPath();
+        ctx.strokeStyle = stroke.color;
+        ctx.lineWidth = stroke.width;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+        for (const p of stroke.points.slice(1)) ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      }
+
+      const layers = [
+        ...mediaItems.filter((m) => m.visible !== false).map((m) => ({ z: m.z_index, kind: 'media' as const, item: m })),
+        ...shapes.filter((s) => s.visible !== false).map((s) => ({ z: s.z_index, kind: 'shape' as const, item: s })),
+        ...texts.filter((tx) => tx.visible !== false).map((tx) => ({ z: tx.z_index, kind: 'text' as const, item: tx })),
+      ].sort((a, b) => a.z - b.z);
+
+      let imageFailed = false;
+      for (const layer of layers) {
+        ctx.save();
+        const cx = layer.item.x + layer.item.width / 2;
+        const cy = layer.item.y + layer.item.height / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate((layer.item.rotation * Math.PI) / 180);
+        ctx.globalAlpha = layer.item.opacity ?? 1;
+        if (layer.kind === 'media') {
+          const m = layer.item;
+          if (m.image) {
+            try {
+              const img = await loadImage(m.image);
+              ctx.filter = m.filter || 'none';
+              ctx.drawImage(img, -m.width / 2, -m.height / 2, m.width, m.height);
+            } catch {
+              imageFailed = true;
+            }
+          }
+        } else if (layer.kind === 'shape') {
+          const s = layer.item;
+          ctx.strokeStyle = s.color;
+          ctx.lineWidth = s.stroke_width;
+          if (s.kind === 'rectangle') {
+            ctx.strokeRect(-s.width / 2, -s.height / 2, s.width, s.height);
+          } else if (s.kind === 'circle') {
+            ctx.beginPath();
+            ctx.ellipse(0, 0, s.width / 2, s.height / 2, 0, 0, Math.PI * 2);
+            ctx.stroke();
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(-s.width / 2, 0);
+            ctx.lineTo(s.width / 2, 0);
+            ctx.stroke();
+          }
+        } else {
+          const tx = layer.item;
+          ctx.fillStyle = tx.color;
+          ctx.font = `bold ${tx.font_size}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(tx.text, 0, 0);
+        }
+        ctx.restore();
+      }
+
+      const blob: Blob | null = await new Promise((resolve) => off.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('export failed');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(active.title || 'studio').replace(/[^\w -]/g, '')}.png`;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (imageFailed) setError(t('studio.exportImageFailed'));
+    } catch {
+      setError(t('studio.exportFailed'));
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function openInvite() {
@@ -659,6 +856,25 @@ function StudioPageInner() {
                 )}
                 <button
                   type="button"
+                  onClick={() => setLayersOpen((v) => !v)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+                  style={{ background: layersOpen ? C.brownDk : C.card2, color: layersOpen ? '#fff' : C.brownDk }}
+                >
+                  <Square3Stack3DIcon className="h-3.5 w-3.5" />
+                  {t('studio.layers')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void exportPng()}
+                  disabled={exporting}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold disabled:opacity-50"
+                  style={{ background: C.card2, color: C.brownDk }}
+                >
+                  <ArrowDownTrayIcon className="h-3.5 w-3.5" />
+                  {t('studio.export')}
+                </button>
+                <button
+                  type="button"
                   onClick={clearSession}
                   disabled={!isHost}
                   title={isHost ? undefined : t('studio.hostOnly')}
@@ -673,6 +889,40 @@ function StudioPageInner() {
                 </button>
               </div>
             </div>
+
+            {layersOpen && (() => {
+              const rows = [
+                ...mediaItems.map((m) => ({ kind: 'media' as const, id: m.id, z: m.z_index, visible: m.visible !== false, label: t('studio.layerPhoto') })),
+                ...shapes.map((s) => ({ kind: 'shape' as const, id: s.id, z: s.z_index, visible: s.visible !== false, label: shapeLabel(s.kind) })),
+                ...texts.map((tx) => ({ kind: 'text' as const, id: tx.id, z: tx.z_index, visible: tx.visible !== false, label: tx.text || t('studio.layerText') })),
+              ].sort((a, b) => b.z - a.z);
+              return (
+                <div className="mb-3 rounded-2xl p-2 max-h-56 overflow-y-auto" style={{ background: C.card2 }}>
+                  {rows.length === 0 ? (
+                    <p className="text-xs px-2 py-2" style={{ color: C.text2 }}>{t('studio.layersEmpty')}</p>
+                  ) : (
+                    rows.map((row) => (
+                      <div
+                        key={`${row.kind}-${row.id}`}
+                        onClick={() => setSelected({ kind: row.kind, id: row.id })}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs cursor-pointer"
+                        style={{ background: selected?.kind === row.kind && selected.id === row.id ? C.white : 'transparent', color: C.text }}
+                      >
+                        <button type="button" onClick={(e) => { e.stopPropagation(); toggleVisibility(row.kind, row.id, !row.visible); }} className="shrink-0">
+                          {row.visible ? <EyeIcon className="h-3.5 w-3.5" /> : <EyeSlashIcon className="h-3.5 w-3.5" style={{ opacity: 0.5 }} />}
+                        </button>
+                        <span className="flex-1 truncate" style={{ opacity: row.visible ? 1 : 0.5 }}>{row.label}</span>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); reorderItem(row.kind, row.id, 'front'); }} className="shrink-0">⬆</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); reorderItem(row.kind, row.id, 'back'); }} className="shrink-0">⬇</button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); deleteItem(row.kind, row.id); }} className="shrink-0" style={{ color: '#c0392b' }}>
+                          <TrashIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              );
+            })()}
 
             {user && (
               <div className="flex flex-wrap items-center gap-3 mb-3 p-2.5 rounded-2xl" style={{ background: C.card2 }}>
@@ -708,12 +958,22 @@ function StudioPageInner() {
                   <>
                     <button
                       type="button"
-                      onClick={undoLastStroke}
+                      onClick={undoLast}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold"
                       style={{ background: C.white, color: C.text }}
                     >
                       <ArrowUturnLeftIcon className="h-3.5 w-3.5" />
                       {t('studio.undo')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={redoLast}
+                      disabled={redoStack.length === 0}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold disabled:opacity-40"
+                      style={{ background: C.white, color: C.text }}
+                    >
+                      <ArrowUturnRightIcon className="h-3.5 w-3.5" />
+                      {t('studio.redo')}
                     </button>
                     <div className="flex items-center gap-1">
                       <button
@@ -771,9 +1031,10 @@ function StudioPageInner() {
 
             {selected && (() => {
               const mediaSel = selected.kind === 'media' ? mediaItems.find((m) => m.id === selected.id) : null;
+              const shapeSel = selected.kind === 'shape' ? shapes.find((s) => s.id === selected.id) : null;
               const textSel = selected.kind === 'text' ? texts.find((tx) => tx.id === selected.id) : null;
-              if (selected.kind === 'media' && !mediaSel) return null;
-              if (selected.kind === 'text' && !textSel) return null;
+              const opacityItem = mediaSel || shapeSel || textSel;
+              if (!opacityItem) return null;
               const filterVals = mediaSel ? parseFilter(mediaSel.filter || '') : null;
               return (
                 <div className="flex flex-wrap items-center gap-3 mb-3 p-2.5 rounded-2xl text-xs" style={{ background: C.card2, color: C.text }}>
@@ -782,15 +1043,23 @@ function StudioPageInner() {
                       <span className="font-semibold">{t('studio.filters')}</span>
                       <label className="flex items-center gap-1.5">
                         {t('studio.brightness')}
-                        <input type="range" min={0.5} max={1.5} step={0.05} value={filterVals.brightness} onChange={(e) => updateFilter(mediaSel.id, Number(e.target.value), filterVals.contrast, filterVals.saturate)} className="w-16" />
+                        <input type="range" min={0.5} max={1.5} step={0.05} value={filterVals.brightness} onChange={(e) => updateFilter(mediaSel.id, { brightness: Number(e.target.value) })} className="w-16" />
                       </label>
                       <label className="flex items-center gap-1.5">
                         {t('studio.contrast')}
-                        <input type="range" min={0.5} max={1.5} step={0.05} value={filterVals.contrast} onChange={(e) => updateFilter(mediaSel.id, filterVals.brightness, Number(e.target.value), filterVals.saturate)} className="w-16" />
+                        <input type="range" min={0.5} max={1.5} step={0.05} value={filterVals.contrast} onChange={(e) => updateFilter(mediaSel.id, { contrast: Number(e.target.value) })} className="w-16" />
                       </label>
                       <label className="flex items-center gap-1.5">
                         {t('studio.saturate')}
-                        <input type="range" min={0} max={2} step={0.1} value={filterVals.saturate} onChange={(e) => updateFilter(mediaSel.id, filterVals.brightness, filterVals.contrast, Number(e.target.value))} className="w-16" />
+                        <input type="range" min={0} max={2} step={0.1} value={filterVals.saturate} onChange={(e) => updateFilter(mediaSel.id, { saturate: Number(e.target.value) })} className="w-16" />
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        {t('studio.grayscale')}
+                        <input type="range" min={0} max={1} step={0.1} value={filterVals.grayscale} onChange={(e) => updateFilter(mediaSel.id, { grayscale: Number(e.target.value) })} className="w-16" />
+                      </label>
+                      <label className="flex items-center gap-1.5">
+                        {t('studio.blur')}
+                        <input type="range" min={0} max={10} step={0.5} value={filterVals.blur} onChange={(e) => updateFilter(mediaSel.id, { blur: Number(e.target.value) })} className="w-16" />
                       </label>
                     </>
                   )}
@@ -808,6 +1077,15 @@ function StudioPageInner() {
                       </label>
                     </>
                   )}
+                  <label className="flex items-center gap-1.5 shrink-0">
+                    {t('studio.opacity')}
+                    <input
+                      type="range" min={0.1} max={1} step={0.05}
+                      value={opacityItem.opacity ?? 1}
+                      onChange={(e) => updateOpacity(selected.kind, selected.id, Number(e.target.value))}
+                      className="w-16"
+                    />
+                  </label>
                   <div className="flex items-center gap-1 ms-auto shrink-0">
                     <button type="button" onClick={() => reorderSelected('back')} title={t('studio.sendToBack')} className="px-2 py-1 rounded-lg" style={{ background: C.white, color: C.text }}>⬇</button>
                     <button type="button" onClick={() => reorderSelected('front')} title={t('studio.bringToFront')} className="px-2 py-1 rounded-lg" style={{ background: C.white, color: C.text }}>⬆</button>
@@ -852,6 +1130,8 @@ function StudioPageInner() {
                     border: `2px solid ${selected?.kind === 'media' && selected.id === item.id ? C.brownDk : C.brown}`,
                     transform: `rotate(${item.rotation}deg)`,
                     zIndex: item.z_index,
+                    opacity: item.opacity ?? 1,
+                    display: item.visible === false ? 'none' : undefined,
                   }}
                 >
                   {item.image && (
@@ -888,6 +1168,8 @@ function StudioPageInner() {
                     border: shape.kind === 'line' ? undefined : `${shape.stroke_width}px solid ${shape.color}`,
                     borderRadius: shape.kind === 'circle' ? '50%' : shape.kind === 'rectangle' ? 6 : 0,
                     zIndex: shape.z_index,
+                    opacity: shape.opacity ?? 1,
+                    display: shape.visible === false ? 'none' : undefined,
                     outline: selected?.kind === 'shape' && selected.id === shape.id ? `2px dashed ${C.brownDk}` : undefined,
                   }}
                 >
@@ -919,6 +1201,8 @@ function StudioPageInner() {
                     color: item.color,
                     fontSize: item.font_size,
                     fontWeight: 700,
+                    opacity: item.opacity ?? 1,
+                    display: item.visible === false ? 'none' : undefined,
                     border: selected?.kind === 'text' && selected.id === item.id ? `1px dashed ${C.brownDk}` : '1px dashed transparent',
                   }}
                 >

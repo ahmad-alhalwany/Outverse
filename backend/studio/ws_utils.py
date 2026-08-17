@@ -34,6 +34,8 @@ def media_payload(media):
         'rotation': media.rotation,
         'z_index': media.z_index,
         'filter': media.filter,
+        'opacity': media.opacity,
+        'visible': media.visible,
     }
 
 
@@ -50,6 +52,8 @@ def shape_payload(shape):
         'z_index': shape.z_index,
         'color': shape.color,
         'stroke_width': shape.stroke_width,
+        'opacity': shape.opacity,
+        'visible': shape.visible,
     }
 
 
@@ -66,6 +70,8 @@ def text_payload(text):
         'z_index': text.z_index,
         'color': text.color,
         'font_size': text.font_size,
+        'opacity': text.opacity,
+        'visible': text.visible,
     }
 
 
@@ -112,42 +118,35 @@ def add_stroke(session_id, user_id, points, color, width):
     return stroke_payload(stroke)
 
 
-def undo_last_stroke(session_id, user_id):
-    stroke = (
-        CanvasStroke.objects.filter(session_id=session_id, user_id=user_id)
-        .order_by('-created_at')
-        .first()
-    )
-    if not stroke:
-        return None
-    stroke_id = stroke.id
-    stroke.delete()
-    return stroke_id
-
-
-def update_media_transform(session_id, media_id, x, y, width, height, rotation, filter_str=None):
+def update_media_transform(session_id, media_id, x, y, width, height, rotation, filter_str=None, opacity=None, visible=None):
     fields = {'x': x, 'y': y, 'width': width, 'height': height, 'rotation': rotation}
     if filter_str is not None:
         fields['filter'] = filter_str
+    if opacity is not None:
+        fields['opacity'] = opacity
+    if visible is not None:
+        fields['visible'] = visible
     updated = CanvasMedia.objects.filter(pk=media_id, session_id=session_id).update(**fields)
     if not updated:
         return None
     return media_payload(CanvasMedia.objects.select_related('user').get(pk=media_id))
 
 
-def add_shape(session_id, user_id, kind, x, y, width, height, color, stroke_width):
+def add_shape(session_id, user_id, kind, x, y, width, height, color, stroke_width, rotation=0, opacity=1, z_index=None):
     shape = CanvasShape.objects.create(
         session_id=session_id, user_id=user_id, kind=kind,
-        x=x, y=y, width=width, height=height, z_index=next_z_index(session_id),
-        color=color or '#5B21B6', stroke_width=stroke_width or 3,
+        x=x, y=y, width=width, height=height, rotation=rotation or 0,
+        z_index=z_index if z_index is not None else next_z_index(session_id),
+        color=color or '#5B21B6', stroke_width=stroke_width or 3, opacity=opacity if opacity is not None else 1,
     )
     return shape_payload(CanvasShape.objects.select_related('user').get(pk=shape.pk))
 
 
-def update_shape_transform(session_id, shape_id, x, y, width, height, rotation):
-    updated = CanvasShape.objects.filter(pk=shape_id, session_id=session_id).update(
-        x=x, y=y, width=width, height=height, rotation=rotation,
-    )
+def update_shape_transform(session_id, shape_id, x, y, width, height, rotation, opacity=None):
+    fields = {'x': x, 'y': y, 'width': width, 'height': height, 'rotation': rotation}
+    if opacity is not None:
+        fields['opacity'] = opacity
+    updated = CanvasShape.objects.filter(pk=shape_id, session_id=session_id).update(**fields)
     if not updated:
         return None
     return shape_payload(CanvasShape.objects.select_related('user').get(pk=shape_id))
@@ -163,15 +162,19 @@ def delete_shape(session_id, shape_id, user_id):
     return True
 
 
-def add_text(session_id, user_id, x, y, color, font_size):
+def add_text(session_id, user_id, x, y, color, font_size, width=None, height=None, rotation=0, opacity=1, text_value=None, z_index=None):
     text = CanvasText.objects.create(
-        session_id=session_id, user_id=user_id, x=x, y=y, z_index=next_z_index(session_id),
+        session_id=session_id, user_id=user_id, x=x, y=y,
+        width=width if width is not None else 200, height=height if height is not None else 60,
+        rotation=rotation or 0, z_index=z_index if z_index is not None else next_z_index(session_id),
         color=color or '#5B21B6', font_size=font_size or 24,
+        opacity=opacity if opacity is not None else 1,
+        text=(text_value[:300] if text_value else 'Text'),
     )
     return text_payload(CanvasText.objects.select_related('user').get(pk=text.pk))
 
 
-def update_text_transform(session_id, text_id, x, y, width, height, rotation, text_value=None, color=None, font_size=None):
+def update_text_transform(session_id, text_id, x, y, width, height, rotation, text_value=None, color=None, font_size=None, opacity=None):
     fields = {'x': x, 'y': y, 'width': width, 'height': height, 'rotation': rotation}
     if text_value is not None:
         fields['text'] = text_value[:300]
@@ -179,6 +182,8 @@ def update_text_transform(session_id, text_id, x, y, width, height, rotation, te
         fields['color'] = color
     if font_size is not None:
         fields['font_size'] = font_size
+    if opacity is not None:
+        fields['opacity'] = opacity
     updated = CanvasText.objects.filter(pk=text_id, session_id=session_id).update(**fields)
     if not updated:
         return None
@@ -227,6 +232,36 @@ def reorder_layer(session_id, kind, item_id, direction):
     if not updated:
         return None
     return new_z
+
+
+def set_visibility(session_id, kind, item_id, visible):
+    Model = LAYER_MODELS.get(kind)
+    if not Model:
+        return False
+    return Model.objects.filter(pk=item_id, session_id=session_id).update(visible=visible) > 0
+
+
+def undo_last_action(session_id, user_id):
+    """Undo this user's most recent stroke/shape/text in this session (media excluded — see notes)."""
+    candidates = []
+    stroke = CanvasStroke.objects.filter(session_id=session_id, user_id=user_id).order_by('-created_at').first()
+    if stroke:
+        candidates.append(('stroke', stroke))
+    shape = CanvasShape.objects.filter(session_id=session_id, user_id=user_id).order_by('-created_at').first()
+    if shape:
+        candidates.append(('shape', shape))
+    text = CanvasText.objects.filter(session_id=session_id, user_id=user_id).order_by('-created_at').first()
+    if text:
+        candidates.append(('text', text))
+    if not candidates:
+        return None
+
+    kind, obj = max(candidates, key=lambda c: c[1].created_at)
+    payload_fn = {'stroke': stroke_payload, 'shape': shape_payload, 'text': text_payload}[kind]
+    payload = payload_fn(obj)
+    obj_id = obj.id
+    obj.delete()
+    return {'kind': kind, 'id': obj_id, 'payload': payload}
 
 
 def clear_session(session_id):
