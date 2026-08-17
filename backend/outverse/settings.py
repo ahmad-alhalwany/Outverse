@@ -341,9 +341,12 @@ if USE_S3_MEDIA_STORAGE:
     AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
     AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
     AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', '').strip() or None
-    AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN', '').strip() or (
-        f'{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com'
-    )
+    # Leave unset unless a real custom domain (e.g. CloudFront) is configured.
+    # django-storages skips presigned-URL signing entirely whenever a custom
+    # domain is set (it assumes the domain handles its own auth) — defaulting
+    # this to the bucket's own S3 hostname silently broke AWS_QUERYSTRING_AUTH
+    # below and made every media URL an unsigned, 403-ing request.
+    AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN', '').strip() or None
     AWS_DEFAULT_ACL = None
     # Bucket keeps Block Public Access on (deliberate) — every media URL must be
     # a signed, time-limited GET rather than assuming public-read.
