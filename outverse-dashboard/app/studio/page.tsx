@@ -57,13 +57,17 @@ type SessionDetail = Session & {
 type SelectionKind = 'media' | 'shape' | 'text';
 type Selection = { kind: SelectionKind; id: number };
 
+type Geometry = { x: number; y: number; width: number; height: number; rotation: number };
+
 type DragState = {
   target: SelectionKind;
   id: number;
   mode: 'move' | 'resize' | 'rotate';
   startX: number;
   startY: number;
-  item: { x: number; y: number; width: number; height: number; rotation: number };
+  item: Geometry;
+  /** Live-updated on every pointermove so pointerup never has to re-derive from (possibly stale) React state. */
+  current: Geometry;
   centerX: number;
   centerY: number;
   startAngle: number;
@@ -375,7 +379,8 @@ function StudioPageInner() {
       centerY = rect.top + ((item.y + item.height / 2) / CANVAS_H) * rect.height;
       startAngle = Math.atan2(event.clientY - centerY, event.clientX - centerX) * (180 / Math.PI);
     }
-    dragRef.current = { target, id: item.id, mode, startX: event.clientX, startY: event.clientY, item, centerX, centerY, startAngle };
+    const geometry = { x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation };
+    dragRef.current = { target, id: item.id, mode, startX: event.clientX, startY: event.clientY, item: geometry, current: geometry, centerX, centerY, startAngle };
     try {
       (event.target as Element).setPointerCapture(event.pointerId);
     } catch {
@@ -406,6 +411,8 @@ function StudioPageInner() {
       return { ...it, rotation: drag!.item.rotation + (angle - drag!.startAngle) };
     }
 
+    drag.current = nextGeometry(drag.current);
+
     if (drag.target === 'media') {
       setMediaItems((prev) => prev.map((m) => (m.id === drag.id ? nextGeometry(m) : m)));
     } else if (drag.target === 'shape') {
@@ -419,23 +426,23 @@ function StudioPageInner() {
     const drag = dragRef.current;
     if (!drag || !active) return;
     dragRef.current = null;
+    const g = drag.current;
     if (drag.target === 'media') {
       const item = mediaItems.find((m) => m.id === drag.id);
       if (!item) return;
       if (isLive) {
-        send('media.transform', { id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter: item.filter });
+        send('media.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, filter: item.filter });
       } else {
-        await apiFetchJson(`studio/sessions/${active.id}/media/${item.id}/`, {
+        await apiFetchJson(`studio/sessions/${active.id}/media/${drag.id}/`, {
           method: 'PATCH',
-          json: { x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, filter: item.filter },
+          json: { x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, filter: item.filter },
         });
       }
     } else if (drag.target === 'shape') {
-      const item = shapes.find((s) => s.id === drag.id);
-      if (item) send('shape.transform', { id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation });
+      send('shape.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation });
     } else {
       const item = texts.find((tx) => tx.id === drag.id);
-      if (item) send('text.transform', { id: item.id, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation, text: item.text, color: item.color, font_size: item.font_size });
+      if (item) send('text.transform', { id: drag.id, x: g.x, y: g.y, width: g.width, height: g.height, rotation: g.rotation, text: item.text, color: item.color, font_size: item.font_size });
     }
   }
 
