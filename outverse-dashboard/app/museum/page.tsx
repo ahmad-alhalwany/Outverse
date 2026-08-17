@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import WorldShell from '@/components/world/WorldShell';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
-import { apiFetchJson, apiUrl } from '@/lib/api';
+import { apiFetch, apiFetchJson, apiUrl } from '@/lib/api';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { PlusIcon, BuildingLibraryIcon } from '@heroicons/react/24/outline';
 
@@ -59,7 +59,7 @@ export default function MuseumPage() {
     setLoading(true);
     try {
       const params = exhibition !== 'all' ? `?exhibition=${exhibition}` : '';
-      const res = await fetch(`${BASE}/${params}`);
+      const res = await apiFetch(`${BASE}/${params}`);
       if (res.ok) {
         const data = await res.json();
         setItems(Array.isArray(data) ? data : data.results || []);

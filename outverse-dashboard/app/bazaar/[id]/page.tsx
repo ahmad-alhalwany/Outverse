@@ -7,7 +7,7 @@ import IdeaDetailView from '@/components/bazaar/IdeaDetailView';
 import PledgeModal from '@/components/bazaar/PledgeModal';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
-import { apiFetchJson, apiUrl } from '@/lib/api';
+import { apiFetch, apiFetchJson, apiUrl } from '@/lib/api';
 import { toggleIdeaSave } from '@/lib/bazaarApi';
 import { fetchIdeaConstellation, fetchIdeaCrew } from '@/lib/differentiatorApi';
 import type { IdeaConstellation, IdeaCrew } from '@/lib/differentiatorApi';
@@ -73,7 +73,7 @@ export default function BazaarIdeaPage() {
 
   const loadIdea = useCallback(async () => {
     if (!id) return null;
-    const res = await fetch(`${BASE}/${id}/`);
+    const res = await apiFetch(`${BASE}/${id}/`);
     if (res.status === 404) {
       setNotFound(true);
       setIdea(null);
@@ -101,7 +101,7 @@ export default function BazaarIdeaPage() {
     if (!id) return;
     setCommentsLoading(true);
     try {
-      const res = await fetch(`${BASE}/${id}/comments/`);
+      const res = await apiFetch(`${BASE}/${id}/comments/`);
       if (!res.ok) throw new Error('failed');
       setComments((await res.json()) as BazaarIdeaComment[]);
     } catch {

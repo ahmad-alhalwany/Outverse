@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import WorldShell from '@/components/world/WorldShell';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
-import { apiFetchJson, apiUrl } from '@/lib/api';
+import { apiFetch, apiFetchJson, apiUrl } from '@/lib/api';
 import {
   MagnifyingGlassIcon,
   ArrowDownTrayIcon,
@@ -81,7 +81,7 @@ export default function ResourceLibraryPage() {
       const params = new URLSearchParams();
       if (tab !== 'all') params.set('type', tab);
       if (search) params.set('search', search);
-      const res = await fetch(`${BASE}/?${params.toString()}`);
+      const res = await apiFetch(`${BASE}/?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setResources(Array.isArray(data) ? data : data.results || []);
