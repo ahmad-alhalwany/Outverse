@@ -156,7 +156,7 @@ function StudioPageInner() {
   const isLive = active?.mode === 'live';
 
   const loadSessions = useCallback(async () => {
-    const res = await fetch(`${BASE}/`);
+    const res = await apiFetch(`${BASE}/`);
     if (res.ok) {
       const data = await res.json();
       setSessions(Array.isArray(data) ? data : data.results || []);
