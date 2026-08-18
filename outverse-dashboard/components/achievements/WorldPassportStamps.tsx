@@ -40,13 +40,13 @@ export default function WorldPassportStamps({ passport }: { passport: WorldPassp
           >
             <div className="text-2xl mb-2">{STAMP_EMOJI[w.key] || '✨'}</div>
             <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: C.text2 }}>
-              {w.world}
+              {t(`achievements.world.${w.key}` as never)}
             </p>
             <p className="text-xl font-bold mt-1" style={{ color: C.accent }}>
               {w.count}
             </p>
             <p className="text-xs" style={{ color: C.text2 }}>
-              {w.label}
+              {t(`achievements.worldLabel.${w.key}` as never)}
             </p>
           </div>
         ))}

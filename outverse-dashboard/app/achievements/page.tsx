@@ -6,7 +6,15 @@ import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 import { apiFetch } from '@/lib/api';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
-import { TrophyIcon, ShareIcon, FlagIcon, LightBulbIcon, BookOpenIcon } from '@heroicons/react/24/outline';
+import {
+  TrophyIcon,
+  ShareIcon,
+  LightBulbIcon,
+  BookOpenIcon,
+  UserGroupIcon,
+  LockClosedIcon,
+  VideoCameraIcon,
+} from '@heroicons/react/24/outline';
 import { TrophyIcon as TrophySolid } from '@heroicons/react/24/solid';
 import WorldPassportStamps from '@/components/achievements/WorldPassportStamps';
 import { fetchWorldPassports } from '@/lib/differentiatorApi';
@@ -49,12 +57,16 @@ type Achievement = {
   goal?: number;
 };
 
-const CATEGORY_ORDER = ['Challenges', 'Ideas', 'Stories'] as const;
+// Matches the categories backend achievement definitions actually use
+// (backend/users/achievements.py:ACHIEVEMENT_DEFINITIONS) — not display text.
+const CATEGORY_ORDER = ['content', 'community', 'bazaar', 'vault', 'live'] as const;
 
-const CATEGORY_ICON: Record<string, typeof FlagIcon> = {
-  Challenges: FlagIcon,
-  Ideas: LightBulbIcon,
-  Stories: BookOpenIcon,
+const CATEGORY_ICON: Record<string, typeof TrophyIcon> = {
+  content: BookOpenIcon,
+  community: UserGroupIcon,
+  bazaar: LightBulbIcon,
+  vault: LockClosedIcon,
+  live: VideoCameraIcon,
 };
 
 function isUnlocked(a: Achievement) {
@@ -178,7 +190,9 @@ export default function AchievementsPage() {
                 <section key={category} className="mb-8">
                   <div className="flex items-center gap-2 mb-3">
                     <CategoryIcon className="h-5 w-5" style={{ color: C.brown }} />
-                    <h2 className="text-lg font-semibold" style={{ color: C.text }}>{category}</h2>
+                    <h2 className="text-lg font-semibold" style={{ color: C.text }}>
+                      {t(`achievements.category.${category}` as never)}
+                    </h2>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                     {byCategory[category].map((achievement, index) => {

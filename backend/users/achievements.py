@@ -119,6 +119,34 @@ for _defn in ACHIEVEMENT_DEFINITIONS:
     _BY_EVENT.setdefault(_defn['event_type'], []).append(_defn)
 
 
+def full_achievements_for_profile(stored: list[dict] | None) -> list[dict]:
+    """Merge a profile's earned/in-progress achievements with the full
+    roster of definitions, so locked-but-not-yet-started ones still show
+    up (progress 0/goal) instead of being invisible until first touched.
+    """
+    by_key = {a.get('key'): a for a in (stored or []) if a.get('key')}
+    merged: list[dict] = []
+    for defn in ACHIEVEMENT_DEFINITIONS:
+        key = defn['key']
+        entry = by_key.get(key)
+        if entry:
+            entry = dict(entry)
+            entry.setdefault('category', defn['category'])
+            entry.setdefault('description', defn['description'])
+        else:
+            entry = {
+                'title': defn['title'],
+                'key': key,
+                'goal': defn['goal'],
+                'progress': 0,
+                'completed': False,
+                'category': defn['category'],
+                'description': defn['description'],
+            }
+        merged.append(entry)
+    return merged
+
+
 def check_and_grant_achievement(user, event_type: str) -> list[str]:
     """
     Increment progress for all achievements tied to *event_type* and unlock

@@ -20,7 +20,7 @@ export function createT(locale: AppLocale) {
     let text = getByPath(messages as unknown as Record<string, unknown>, key) ?? key;
     if (vars) {
       Object.entries(vars).forEach(([k, v]) => {
-        text = text.replace(`{${k}}`, String(v));
+        text = text.replaceAll(`{${k}}`, String(v));
       });
     }
     return text;

@@ -23,6 +23,7 @@ from rest_framework.views import APIView
 from notifications.utils import create_notification
 from reels.models import Reel
 
+from .achievements import full_achievements_for_profile
 from .models import Experience, Follow, Profile, UserBlock, UserMute, UserRestrict, UserToken
 from .social import (
     apply_block_side_effects,
@@ -503,7 +504,8 @@ class YearInView(APIView):
         cat_counts: dict[str, int] = {}
         if RitualParticipation is not None:
             for rp in RitualParticipation.objects.filter(
-                user=user, date__gte=year_start.date(), date__lt=year_end.date()
+                user=user, date__gte=year_start.date(), date__lt=year_end.date(),
+                completed_at__isnull=False,
             ).select_related('question'):
                 if rp.question and rp.question.category:
                     cat_counts[rp.question.category] = cat_counts.get(rp.question.category, 0) + 1
@@ -529,17 +531,19 @@ class YearInView(APIView):
         ritual_days = 0
         ritual_max_streak = 0
         if RitualParticipation is not None:
-            ritual_rows = list(
+            # distinct(): a day can have both a morning and evening row —
+            # count calendar days, not participation rows.
+            ritual_dates = sorted(set(
                 RitualParticipation.objects.filter(
-                    user=user, date__gte=year_start.date(), date__lt=year_end.date()
-                ).order_by('date')
-            )
-            ritual_days = len(ritual_rows)
-            # Compute max consecutive-day streak by date.
+                    user=user, date__gte=year_start.date(), date__lt=year_end.date(),
+                    completed_at__isnull=False,
+                ).values_list('date', flat=True)
+            ))
+            ritual_days = len(ritual_dates)
+            # Compute max consecutive-day streak.
             prev = None
             run = 0
-            for rp in ritual_rows:
-                d = rp.date
+            for d in ritual_dates:
                 if prev is not None and (d - prev).days == 1:
                     run += 1
                 else:
@@ -678,7 +682,9 @@ class UserProfileView(APIView):
                 follower_id=viewer.id, following_id=user_id
             ).exists()
             social = social_status_for(viewer.id, user_id)
-        return Response(_public_user_dict(user, request, is_following=is_following, social=social))
+        payload = _public_user_dict(user, request, is_following=is_following, social=social)
+        payload['achievements'] = full_achievements_for_profile(payload['achievements'])
+        return Response(payload)
 
 
 class UserProfileUpdateView(APIView):

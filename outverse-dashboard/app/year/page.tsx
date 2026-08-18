@@ -80,7 +80,7 @@ export default function YearPage() {
           className="text-3xl md:text-5xl font-bold leading-tight"
           style={{ color: C.text }}
         >
-          {data ? `${data.display_name}'s` : 'Your'} {data?.year ?? new Date().getFullYear()}
+          {data ? `${data.display_name}'s` : t('year.yourYear')} {data?.year ?? new Date().getFullYear()}
         </h1>
         <p className="mt-2 text-sm md:text-base" style={{ color: C.muted }}>
           {t('year.subtitle')}
@@ -112,13 +112,15 @@ export default function YearPage() {
           {error}
         </div>
       ) : data ? (
-        <YearRecapView data={data} C={C} />
+        <YearRecapView data={data} C={C} t={t} />
       ) : null}
     </div>
   );
 }
 
-function YearRecapView({ data, C }: { data: YearInReview; C: typeof LIGHT }) {
+type TFunc = (key: string, vars?: Record<string, string | number>) => string;
+
+function YearRecapView({ data, C, t }: { data: YearInReview; C: typeof LIGHT; t: TFunc }) {
   const hasContent =
     data.posts_count > 0 ||
     data.capsules_created > 0 ||
@@ -132,10 +134,10 @@ function YearRecapView({ data, C }: { data: YearInReview; C: typeof LIGHT }) {
         style={{ borderColor: C.border, background: C.card }}
       >
         <p className="text-base font-semibold" style={{ color: C.text }}>
-          {data.year} hasn&apos;t been written yet.
+          {t('year.emptyTitle', { year: data.year })}
         </p>
         <p className="mt-2 text-sm" style={{ color: C.muted }}>
-          Post a thought, open a capsule, or join a room — and your year will start to take shape.
+          {t('year.emptyBody')}
         </p>
       </div>
     );
@@ -146,20 +148,20 @@ function YearRecapView({ data, C }: { data: YearInReview; C: typeof LIGHT }) {
       {/* Hero stat — words written */}
       <HeroCard
         value={data.words_written.toLocaleString()}
-        label={'words written'}
+        label={t('year.wordsWritten')}
         accent={C.gold}
         C={C}
       />
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard value={data.posts_count} label={'posts'} C={C} />
-        <StatCard value={data.ritual_days} label={'ritual days'} C={C} />
-        <StatCard value={data.ritual_max_streak} label={'longest streak'} C={C} />
-        <StatCard value={data.voice_notes} label={'voice notes'} C={C} />
-        <StatCard value={data.capsules_created} label={'capsules sealed'} C={C} />
-        <StatCard value={data.capsules_opened} label={'capsules opened'} C={C} />
-        <StatCard value={data.rooms_joined} label={'rooms joined'} C={C} />
-        <StatCard value={data.longest_post_chars} label={'longest post (chars)'} C={C} />
+        <StatCard value={data.posts_count} label={t('year.posts')} C={C} />
+        <StatCard value={data.ritual_days} label={t('year.ritualDays')} C={C} />
+        <StatCard value={data.ritual_max_streak} label={t('year.longestStreak')} C={C} />
+        <StatCard value={data.voice_notes} label={t('year.voiceNotes')} C={C} />
+        <StatCard value={data.capsules_created} label={t('year.capsulesSealed')} C={C} />
+        <StatCard value={data.capsules_opened} label={t('year.capsulesOpened')} C={C} />
+        <StatCard value={data.rooms_joined} label={t('year.roomsJoined')} C={C} />
+        <StatCard value={data.longest_post_chars} label={t('year.longestPost')} C={C} />
       </div>
 
       {/* First post of the year */}
@@ -172,7 +174,7 @@ function YearRecapView({ data, C }: { data: YearInReview; C: typeof LIGHT }) {
             className="text-[10px] font-bold uppercase tracking-widest mb-2"
             style={{ color: C.muted }}
           >
-            How your year began
+            {t('year.yearBeganTitle')}
           </p>
           <p
             className="text-sm md:text-base leading-relaxed italic"
@@ -188,7 +190,7 @@ function YearRecapView({ data, C }: { data: YearInReview; C: typeof LIGHT }) {
 
       {/* Top tags */}
       {data.top_tags.length > 0 && (
-        <Panel title={'Words you kept returning to'} C={C}>
+        <Panel title={t('year.tagsTitle')} C={C}>
           <div className="flex flex-wrap gap-2">
             {data.top_tags.map((tg) => (
               <span
@@ -205,7 +207,7 @@ function YearRecapView({ data, C }: { data: YearInReview; C: typeof LIGHT }) {
 
       {/* Top categories */}
       {data.top_categories.length > 0 && (
-        <Panel title={'The shapes your questions took'} C={C}>
+        <Panel title={t('year.categoriesTitle')} C={C}>
           <div className="space-y-2">
             {data.top_categories.map((c) => (
               <div key={c.category} className="flex items-center justify-between text-sm">
@@ -227,8 +229,8 @@ function YearRecapView({ data, C }: { data: YearInReview; C: typeof LIGHT }) {
       >
         <p className="text-sm md:text-base leading-relaxed" style={{ color: C.text }}>
           {data.posts_count > 0
-            ? `You showed up ${data.posts_count} time${data.posts_count === 1 ? '' : 's'} this year. That's ${data.posts_count} small acts of courage.`
-            : `You opened ${data.capsules_created} capsule${data.capsules_created === 1 ? '' : 's'} to your future self this year.`}
+            ? t('year.closingPosts', { count: data.posts_count, plural: data.posts_count === 1 ? '' : 's' })
+            : t('year.closingCapsules', { count: data.capsules_created, plural: data.capsules_created === 1 ? '' : 's' })}
         </p>
       </div>
     </div>
