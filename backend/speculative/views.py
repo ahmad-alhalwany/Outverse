@@ -114,6 +114,12 @@ class FutureMemoryViewSet(ThrottleMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = getattr(self.request, 'user', None)
+        target_user_id = self.request.query_params.get('user')
+        if target_user_id:
+            qs = FutureMemory.objects.filter(user_id=target_user_id)
+            if not (user and user.is_authenticated and str(user.id) == str(target_user_id)):
+                qs = qs.filter(is_public=True)
+            return qs.select_related('user')
         if user and user.is_authenticated:
             return FutureMemory.objects.filter(Q(is_public=True) | Q(user_id=user.id)).select_related('user')
         return FutureMemory.objects.filter(is_public=True).select_related('user')

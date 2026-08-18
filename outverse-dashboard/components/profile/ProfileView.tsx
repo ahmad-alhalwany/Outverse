@@ -94,7 +94,7 @@ interface Profile {
   social?: SocialStatus;
   points?: number;
   karma?: number;
-  achievements?: (string | { id?: number | string; icon?: string; title?: string })[];
+  achievements?: (string | { id?: number | string; icon?: string; title?: string; completed?: boolean })[];
   status?: string;
   badge_verified?: boolean;
   spender_tier?: 'none' | 'bronze' | 'silver' | 'gold';
@@ -200,6 +200,9 @@ export default function ProfileView({ userId }: ProfileViewProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<ReturnType<typeof mapPost>[]>([]);
   const [timeline, setTimeline] = useState<TimelineDay[]>([]);
+  const [currentMood, setCurrentMood] = useState<string | null>(null);
+  const [moodInsights, setMoodInsights] = useState<{ emotion: string; pct: number }[]>([]);
+  const [futureMemory, setFutureMemory] = useState<{ id: number; text: string; tag: string; created_at: string } | null>(null);
   const [stories, setStories] = useState<ForgeStory[]>([]);
   const [challenges, setChallenges] = useState<ChallengeEntry[]>([]);
   const [bottles, setBottles] = useState<BottleEntry[]>([]);
@@ -223,7 +226,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
     if (!userId) return;
     setLoading(true);
     try {
-      const [profileRes, postsRes, moodRes, storiesRes, challRes, bottlesRes, suggestionsRes, experienceRes] =
+      const [profileRes, postsRes, moodRes, storiesRes, challRes, bottlesRes, suggestionsRes, experienceRes, memoryRes] =
         await Promise.all([
           apiFetch(`users/${userId}/`),
           apiFetch(`posts/?author=${userId}`),
@@ -235,6 +238,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             : Promise.resolve(new Response(JSON.stringify([]), { status: 200 })),
           apiFetch(`users/suggestions/?exclude=${userId}`),
           apiFetch(`users/${userId}/experience/`),
+          apiFetch(`speculative/future-memories/?user=${userId}`),
         ]);
       if (profileRes.ok) setProfile(await profileRes.json());
       if (postsRes.ok) {
@@ -244,6 +248,8 @@ export default function ProfileView({ userId }: ProfileViewProps) {
       if (moodRes.ok) {
         const mood = await moodRes.json();
         setTimeline(Array.isArray(mood.timeline) ? mood.timeline : []);
+        setCurrentMood(mood.current_mood ?? null);
+        setMoodInsights(Array.isArray(mood.insights) ? mood.insights : []);
       }
       if (storiesRes.ok) setStories(await storiesRes.json());
       if (challRes.ok) setChallenges(await challRes.json());
@@ -252,6 +258,11 @@ export default function ProfileView({ userId }: ProfileViewProps) {
       if (experienceRes.ok) {
         const experienceData = await experienceRes.json();
         setExperiences(Array.isArray(experienceData) ? experienceData : experienceData?.results || []);
+      }
+      if (memoryRes.ok) {
+        const memoryData = await memoryRes.json();
+        const list = Array.isArray(memoryData) ? memoryData : memoryData?.results || [];
+        setFutureMemory(list[0] || null);
       }
     } catch {
       /* offline */
@@ -412,6 +423,18 @@ export default function ProfileView({ userId }: ProfileViewProps) {
   const name = displayName(profile);
   const avatarSrc = profile.avatar ? mediaUrl(profile.avatar) : '';
   const coverSrc = profile.cover_photo ? mediaUrl(profile.cover_photo) : '';
+  const moodMeta = currentMood ? emotionMeta(currentMood) : null;
+  const coverBg = coverSrc
+    ? `url(${coverSrc}) center/cover`
+    : moodMeta
+      ? `linear-gradient(135deg, ${moodMeta.color}CC 0%, ${moodMeta.color}66 55%, ${C.cream} 100%)`
+      : C.cover;
+  // The API now returns every achievement definition (locked ones included)
+  // so the progress view on /achievements can show what's left to unlock —
+  // this profile summary should only show ones actually earned.
+  const earnedAchievements = (profile.achievements ?? []).filter((achievement) =>
+    typeof achievement === 'string' ? true : achievement.completed === true,
+  );
 
   return (
     <div
@@ -426,7 +449,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
       {/* Cover + edit */}
       <div
         className="relative h-40 sm:h-52 bg-cover bg-center"
-        style={{ background: coverSrc ? `url(${coverSrc}) center/cover` : C.cover }}
+        style={{ background: coverBg }}
       >
         <div
           className="absolute inset-0"
@@ -514,18 +537,29 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                 <p className="text-sm" style={{ color: C.text2 }}>
                   @{profile.username}
                 </p>
-                {profile.spender_tier && profile.spender_tier !== 'none' && (
-                  <span
-                    className="mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
-                    style={{
-                      background: `${SPENDER_TIER_META[profile.spender_tier].color}22`,
-                      color: SPENDER_TIER_META[profile.spender_tier].color,
-                    }}
-                  >
-                    {SPENDER_TIER_META[profile.spender_tier].emoji}
-                    {SPENDER_TIER_META[profile.spender_tier].label}
-                  </span>
-                )}
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {moodMeta && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+                      style={{ background: `${moodMeta.color}22`, color: moodMeta.color }}
+                      title={moodMeta.label}
+                    >
+                      {moodMeta.emoji} {t('profile.feeling')} {moodMeta.label}
+                    </span>
+                  )}
+                  {profile.spender_tier && profile.spender_tier !== 'none' && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
+                      style={{
+                        background: `${SPENDER_TIER_META[profile.spender_tier].color}22`,
+                        color: SPENDER_TIER_META[profile.spender_tier].color,
+                      }}
+                    >
+                      {SPENDER_TIER_META[profile.spender_tier].emoji}
+                      {SPENDER_TIER_META[profile.spender_tier].label}
+                    </span>
+                  )}
+                </div>
               </div>
               {!isOwnProfile && !profile.social?.is_blocked && (
                 <div className="flex items-center gap-2 shrink-0">
@@ -589,6 +623,28 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           </p>
         ) : null}
 
+        {moodInsights.length > 0 && (
+          <div className="mt-3">
+            <p className="text-[10px] font-bold uppercase tracking-wide mb-1.5" style={{ color: C.text2 }}>
+              {t('profile.emotionalFingerprint')}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {moodInsights.map((insight) => {
+                const m = emotionMeta(insight.emotion);
+                return (
+                  <span
+                    key={insight.emotion}
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium"
+                    style={{ background: `${m.color}18`, color: m.color, border: `1px solid ${m.color}33` }}
+                  >
+                    {m.emoji} {m.label} · {insight.pct}%
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 flex flex-wrap gap-2.5 text-sm">
           <span className="rounded-full px-3 py-2" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
             <span className="font-bold" style={{ color: C.text }}>
@@ -638,7 +694,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         className="mx-4 sm:mx-6 mt-6 rounded-2xl p-4"
         style={{ background: C.card2, border: `1px solid ${C.line}` }}
       >
-        <h2 className="text-sm font-bold mb-3">Weekly mood</h2>
+        <h2 className="text-sm font-bold mb-3">{t('profile.weeklyMoodTitle')}</h2>
         <div className="grid grid-cols-7 gap-1.5 mb-4">
           {weeklyMood.map((day, i) => {
             const m = day.emotion ? emotionMeta(day.emotion) : null;
@@ -667,7 +723,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         >
           <div className="flex items-center justify-between text-sm mb-2">
             <span style={{ color: C.text }}>
-              <span className="font-bold">{happyPct}%</span> Happy Days This Month
+              <span className="font-bold">{happyPct}%</span> {t('profile.happyDaysThisMonth')}
             </span>
             <span className="text-lg">✨</span>
           </div>
@@ -685,6 +741,28 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           </div>
         </div>
       </div>
+
+      {futureMemory && (
+        <div
+          className="mx-4 sm:mx-6 mt-6 rounded-2xl p-4"
+          style={{ background: `linear-gradient(135deg, ${C.card}, ${C.card2})`, border: `1px solid ${C.line}` }}
+        >
+          <p className="flex items-center gap-1.5 text-sm font-bold mb-2">
+            🔮 {t('profile.futureMemoryTitle')}
+          </p>
+          <p className="text-sm italic leading-relaxed" style={{ color: C.text }}>
+            &ldquo;{futureMemory.text}&rdquo;
+          </p>
+          {futureMemory.tag && (
+            <span
+              className="mt-2 inline-block text-xs px-2 py-0.5 rounded-full"
+              style={{ background: C.white, color: C.text2 }}
+            >
+              #{futureMemory.tag}
+            </span>
+          )}
+        </div>
+      )}
 
       {(isOwnProfile || experiences.length > 0) && (
         <section
@@ -846,10 +924,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             <span className="text-lg font-bold" style={{ color: C.brown }}>{formatCount(profile.karma ?? 0)}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {(profile.achievements ?? []).length === 0 ? (
+            {earnedAchievements.length === 0 ? (
               <p className="text-sm" style={{ color: C.text2 }}>No achievements unlocked yet.</p>
             ) : (
-              (profile.achievements ?? []).map((achievement) => {
+              earnedAchievements.map((achievement) => {
                 const label = typeof achievement === 'string' ? achievement : achievement.title || '';
                 const icon = typeof achievement === 'string' ? null : achievement.icon;
                 const key = typeof achievement === 'string' ? achievement : achievement.id ?? label;
