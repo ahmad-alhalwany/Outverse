@@ -135,7 +135,7 @@ export default function ShopProductPage() {
           canAfford={balance == null || balance >= item.price}
           balance={balance}
           onBuy={(shippingAddress) => void buy(shippingAddress)}
-          accessUrl={owned && item.type !== 'physical' ? item.cover_url || item.cover : null}
+          accessUrl={owned && item.type !== 'physical' ? item.download_url || item.cover_url || item.cover : null}
         />
       )}
       {toast && (
