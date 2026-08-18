@@ -116,6 +116,13 @@ class TipSerializer(serializers.ModelSerializer):
 
 
 class CoinPackSerializer(serializers.ModelSerializer):
+    available = serializers.SerializerMethodField()
+
     class Meta:
         model = CoinPack
-        fields = ['id', 'name', 'coins', 'price_usd_cents']
+        fields = ['id', 'name', 'coins', 'price_usd_cents', 'available']
+
+    def get_available(self, obj):
+        # Checkout is disabled server-side until a real Stripe price is
+        # attached — expose that as a plain flag instead of the raw id.
+        return bool(obj.stripe_price_id)

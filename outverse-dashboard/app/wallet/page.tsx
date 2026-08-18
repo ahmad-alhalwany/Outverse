@@ -13,6 +13,7 @@ type CoinPack = {
   name: string;
   coins: number;
   price_usd_cents: number;
+  available: boolean;
 };
 
 function formatPrice(cents: number) {
@@ -117,11 +118,15 @@ function WalletContent() {
                   </p>
                   <button
                     type="button"
-                    disabled={busyPack === pack.id}
+                    disabled={busyPack === pack.id || !pack.available}
                     onClick={() => void handleBuy(pack.id)}
-                    className="mt-2 w-full rounded-full bg-vault px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    className="mt-2 w-full rounded-full bg-vault px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {busyPack === pack.id ? t('common.loading') : formatPrice(pack.price_usd_cents)}
+                    {busyPack === pack.id
+                      ? t('common.loading')
+                      : pack.available
+                        ? formatPrice(pack.price_usd_cents)
+                        : t('wallet.comingSoon')}
                   </button>
                 </div>
               ))}

@@ -477,6 +477,7 @@ export const en = {
     checkoutError: 'Could not start checkout. Please try again.',
     checkoutSuccess: 'Nova added to your balance!',
     checkoutCancelled: 'Checkout cancelled.',
+    comingSoon: 'Coming soon',
   },
   communities: {
     title: 'Communities',
@@ -1086,6 +1087,7 @@ export const en = {
     empty: 'No resources match your filters yet.',
     downloads: 'downloads',
     download: 'Download',
+    comingSoon: 'Coming soon',
     tabAll: 'All',
     tabTemplate: 'Templates',
     tabToolkit: 'Toolkits',

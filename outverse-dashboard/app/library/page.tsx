@@ -96,14 +96,11 @@ export default function ResourceLibraryPage() {
   }, [load]);
 
   async function download(resource: Resource) {
-    try {
-      const res = await apiFetchJson(`resources/${resource.id}/download/`, { method: 'POST' });
-      if (res.ok) {
-        const updated = await res.json();
-        setResources((prev) => prev.map((r) => (r.id === resource.id ? updated : r)));
-      }
-    } finally {
-      if (resource.file_url) window.open(resource.file_url, '_blank');
+    const res = await apiFetchJson(`resources/${resource.id}/download/`, { method: 'POST' });
+    if (res.ok) {
+      const updated = await res.json();
+      setResources((prev) => prev.map((r) => (r.id === resource.id ? updated : r)));
+      if (updated.file_url) window.open(updated.file_url, '_blank');
     }
   }
 
@@ -175,11 +172,12 @@ export default function ResourceLibraryPage() {
                     <button
                       type="button"
                       onClick={() => void download(resource)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white"
-                      style={{ background: C.brownDk }}
+                      disabled={!resource.file_url}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: resource.file_url ? C.brownDk : C.text2 }}
                     >
                       <ArrowDownTrayIcon className="h-3.5 w-3.5" />
-                      {t('library.download')}
+                      {resource.file_url ? t('library.download') : t('library.comingSoon')}
                     </button>
                   </div>
                 </div>

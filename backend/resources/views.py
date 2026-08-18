@@ -48,8 +48,11 @@ class ResourceViewSet(ThrottleMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def download(self, request, pk=None):
-        Resource.objects.filter(pk=pk).update(download_count=F('download_count') + 1)
         resource = Resource.objects.get(pk=pk)
+        if not resource.file_url:
+            return Response({'error': 'This resource has no file available yet.'}, status=400)
+        Resource.objects.filter(pk=pk).update(download_count=F('download_count') + 1)
+        resource.refresh_from_db(fields=['download_count'])
         serializer = self.get_serializer(resource)
         return Response(serializer.data)
 

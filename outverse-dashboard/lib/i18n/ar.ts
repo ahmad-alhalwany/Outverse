@@ -479,6 +479,7 @@ export const ar = {
     checkoutError: 'تعذر بدء عملية الدفع. حاول مرة أخرى.',
     checkoutSuccess: 'تمت إضافة نوفا إلى رصيدك!',
     checkoutCancelled: 'تم إلغاء عملية الدفع.',
+    comingSoon: 'قريبًا',
   },
   communities: {
     title: 'المجتمعات',
@@ -1088,6 +1089,7 @@ export const ar = {
     empty: 'لا توجد موارد تطابق الفلاتر بعد.',
     downloads: 'تنزيلات',
     download: 'تنزيل',
+    comingSoon: 'قريبًا',
     tabAll: 'الكل',
     tabTemplate: 'قوالب',
     tabToolkit: 'أدوات',
