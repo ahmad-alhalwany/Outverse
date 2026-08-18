@@ -56,6 +56,12 @@ export type CommunityPendingMember = {
   requested_at: string;
 };
 
+export type CommunityBannedMember = {
+  id: number;
+  username: string;
+  banned_at: string;
+};
+
 export async function fetchCommunities(q?: string, ordering?: 'trending'): Promise<Community[]> {
   const params = new URLSearchParams();
   if (q) params.set('q', q);
@@ -142,6 +148,12 @@ export async function unbanMember(slug: string, userId: number): Promise<boolean
   return res.ok;
 }
 
+export async function fetchBannedMembers(slug: string): Promise<CommunityBannedMember[]> {
+  const res = await apiFetch(`communities/${slug}/banned-members/`);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function fetchModQueue(slug: string): Promise<CommunityModQueueItem[]> {
   const res = await apiFetch(`communities/${slug}/mod-queue/`);
   if (!res.ok) return [];
@@ -167,6 +179,7 @@ export async function updateCommunityGates(
     spoilers_enabled?: boolean;
     posting_permission?: 'members' | 'mods';
     flair_options?: string[];
+    cover_url?: string;
   },
 ): Promise<Community | null> {
   const res = await apiFetchJson(`communities/${slug}/`, {
@@ -240,6 +253,7 @@ export async function createCommunityPost(
   communityId: number,
   text: string,
   flair?: string,
+  isSpoiler?: boolean,
 ): Promise<boolean> {
   const res = await apiFetchJson('posts/', {
     method: 'POST',
@@ -248,6 +262,7 @@ export async function createCommunityPost(
       post_type: 'normal',
       community_id: communityId,
       ...(flair ? { flair } : {}),
+      ...(isSpoiler ? { is_spoiler: true } : {}),
     },
   });
   return res.ok;
@@ -340,6 +355,18 @@ export async function fetchCommunityWikiPage(
   const res = await apiFetch(
     `communities/${encodeURIComponent(slug)}/wiki/${encodeURIComponent(pageSlug)}/`,
   );
+  if (!res.ok) return null;
+  return (await res.json()) as CommunityWikiPage;
+}
+
+export async function createOrUpdateWikiPage(
+  slug: string,
+  payload: { title: string; body: string; slug?: string },
+): Promise<CommunityWikiPage | null> {
+  const res = await apiFetchJson(`communities/${encodeURIComponent(slug)}/wiki/`, {
+    method: 'POST',
+    json: payload,
+  });
   if (!res.ok) return null;
   return (await res.json()) as CommunityWikiPage;
 }

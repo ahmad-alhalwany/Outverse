@@ -354,6 +354,24 @@ class CommunityViewSet(ThrottleMixin, viewsets.ModelViewSet):
         community.refresh_from_db(fields=['members_count'])
         return Response(CommunitySerializer(community, context={'request': request}).data)
 
+    @action(detail=True, methods=['get'], url_path='banned-members')
+    def banned_members(self, request, slug=None):
+        user, err = require_user(request)
+        if err:
+            return err
+        community = self.get_object()
+        if not _is_moderator(user, community):
+            return Response({'error': 'Forbidden.'}, status=403)
+        rows = community.memberships.filter(status='banned').select_related('user').order_by('-joined_at')[:100]
+        return Response([
+            {
+                'id': m.user.id,
+                'username': m.user.username,
+                'banned_at': m.joined_at.isoformat(),
+            }
+            for m in rows
+        ])
+
     @action(detail=True, methods=['post'])
     def unban(self, request, slug=None):
         user, err = require_user(request)

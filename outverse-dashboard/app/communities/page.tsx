@@ -17,6 +17,7 @@ export default function CommunitiesPage() {
   const [newDescription, setNewDescription] = useState('');
   const [newPrivacy, setNewPrivacy] = useState<'public' | 'private'>('public');
   const [createBusy, setCreateBusy] = useState(false);
+  const [createError, setCreateError] = useState('');
   const [sort, setSort] = useState<'popular' | 'trending'>('popular');
 
   const load = useCallback(async (q?: string, sortMode?: 'popular' | 'trending') => {
@@ -35,6 +36,7 @@ export default function CommunitiesPage() {
     const name = newName.trim();
     if (!name || createBusy) return;
     setCreateBusy(true);
+    setCreateError('');
     try {
       const community = await createCommunity(name, newDescription.trim(), newPrivacy);
       if (community) {
@@ -43,6 +45,8 @@ export default function CommunitiesPage() {
         setNewPrivacy('public');
         setCreating(false);
         void load(query || undefined);
+      } else {
+        setCreateError(t('communities.createFailed'));
       }
     } finally {
       setCreateBusy(false);
@@ -98,6 +102,7 @@ export default function CommunitiesPage() {
                 {t('communities.private')}
               </button>
             </div>
+            {createError && <p className="text-xs text-red-500">{createError}</p>}
             <div className="flex justify-end gap-2">
               <button
                 type="button"

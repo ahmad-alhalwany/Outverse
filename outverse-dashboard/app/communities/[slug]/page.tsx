@@ -21,6 +21,8 @@ import {
   rejectMember,
   kickMember,
   banMember,
+  unbanMember,
+  fetchBannedMembers,
   setModerator,
   updateCommunityRules,
   createCommunityPost,
@@ -34,9 +36,11 @@ import {
   deleteCommunityChannel,
   joinCommunityChannel,
   fetchCommunityWiki,
+  createOrUpdateWikiPage,
   type Community,
   type CommunityMember,
   type CommunityPendingMember,
+  type CommunityBannedMember,
   type CommunityFeedSort,
   type CommunityModQueueItem,
   type CommunityChannel,
@@ -59,12 +63,23 @@ export default function CommunityDetailPage() {
   const [manageOpen, setManageOpen] = useState(false);
   const [members, setMembers] = useState<CommunityMember[]>([]);
   const [pending, setPending] = useState<CommunityPendingMember[]>([]);
+  const [banned, setBanned] = useState<CommunityBannedMember[]>([]);
   const [rulesEditing, setRulesEditing] = useState(false);
   const [rulesDraft, setRulesDraft] = useState('');
   const [rulesBusy, setRulesBusy] = useState(false);
   const [postText, setPostText] = useState('');
   const [postFlair, setPostFlair] = useState('');
+  const [postSpoiler, setPostSpoiler] = useState(false);
   const [postBusy, setPostBusy] = useState(false);
+  const [postError, setPostError] = useState('');
+  const [flairDraft, setFlairDraft] = useState('');
+  const [coverUrlDraft, setCoverUrlDraft] = useState('');
+  const [wikiFormOpen, setWikiFormOpen] = useState(false);
+  const [wikiEditSlug, setWikiEditSlug] = useState<string | null>(null);
+  const [wikiTitle, setWikiTitle] = useState('');
+  const [wikiBody, setWikiBody] = useState('');
+  const [wikiBusy, setWikiBusy] = useState(false);
+  const [wikiError, setWikiError] = useState('');
   const [sort, setSort] = useState<CommunityFeedSort>('new');
   const [modQueue, setModQueue] = useState<CommunityModQueueItem[]>([]);
   const [modQueueOpen, setModQueueOpen] = useState(false);
@@ -120,6 +135,8 @@ export default function CommunityDetailPage() {
         }, {}),
       );
       setWiki(wikiPages);
+      setFlairDraft((c.flair_options || []).join(', '));
+      setCoverUrlDraft(c.cover_url || '');
     } finally {
       setLoading(false);
     }
@@ -136,9 +153,14 @@ export default function CommunityDetailPage() {
 
   const loadManagement = useCallback(async () => {
     if (!slug) return;
-    const [m, p] = await Promise.all([fetchCommunityMembers(slug), fetchPendingMembers(slug)]);
+    const [m, p, b] = await Promise.all([
+      fetchCommunityMembers(slug),
+      fetchPendingMembers(slug),
+      fetchBannedMembers(slug),
+    ]);
     setMembers(m);
     setPending(p);
+    setBanned(b);
   }, [slug]);
 
   useEffect(() => {
@@ -159,7 +181,10 @@ export default function CommunityDetailPage() {
     if (!community || joinBusy) return;
     setJoinBusy(true);
     try {
-      const updated = community.is_member ? await leaveCommunity(slug) : await joinCommunity(slug);
+      const updated =
+        community.is_member || community.is_pending
+          ? await leaveCommunity(slug)
+          : await joinCommunity(slug);
       if (updated) setCommunity(updated);
     } finally {
       setJoinBusy(false);
@@ -201,6 +226,52 @@ export default function CommunityDetailPage() {
     }
   };
 
+  const handleUnban = async (userId: number) => {
+    if (await unbanMember(slug, userId)) {
+      await loadManagement();
+    }
+  };
+
+  const handleStartWikiEdit = (page?: CommunityWikiPage) => {
+    setWikiEditSlug(page ? page.slug : null);
+    setWikiTitle(page ? page.title : '');
+    setWikiBody(page ? page.body : '');
+    setWikiError('');
+    setWikiFormOpen(true);
+  };
+
+  const handleSaveWikiPage = async () => {
+    if (!wikiTitle.trim() || wikiBusy) return;
+    setWikiBusy(true);
+    setWikiError('');
+    try {
+      const saved = await createOrUpdateWikiPage(slug, {
+        title: wikiTitle.trim(),
+        body: wikiBody,
+        ...(wikiEditSlug ? { slug: wikiEditSlug } : {}),
+      });
+      if (saved) {
+        setWiki((prev) => {
+          const idx = prev.findIndex((p) => p.slug === saved.slug);
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = saved;
+            return next;
+          }
+          return [...prev, saved];
+        });
+        setWikiFormOpen(false);
+        setWikiEditSlug(null);
+        setWikiTitle('');
+        setWikiBody('');
+      } else {
+        setWikiError(t('communities.wikiSaveFailed'));
+      }
+    } finally {
+      setWikiBusy(false);
+    }
+  };
+
   const handleStartRulesEdit = () => {
     setRulesDraft((community?.rules || []).join('\n'));
     setRulesEditing(true);
@@ -227,12 +298,16 @@ export default function CommunityDetailPage() {
   const handleCreatePost = async () => {
     if (!community || !postText.trim() || postBusy || community.is_banned) return;
     setPostBusy(true);
+    setPostError('');
     try {
-      const ok = await createCommunityPost(community.id, postText, postFlair || undefined);
+      const ok = await createCommunityPost(community.id, postText, postFlair || undefined, postSpoiler);
       if (ok) {
         setPostText('');
         setPostFlair('');
+        setPostSpoiler(false);
         await load();
+      } else {
+        setPostError(t('communities.postFailed'));
       }
     } finally {
       setPostBusy(false);
@@ -294,7 +369,7 @@ export default function CommunityDetailPage() {
 
   const handleDeleteChannel = async (channelId: number) => {
     if (channelBusy) return;
-    if (!(await confirm('Delete this channel?', { danger: true, confirmLabel: 'Delete' }))) return;
+    if (!(await confirm(t('communities.deleteChannelConfirm'), { danger: true, confirmLabel: t('common.delete') }))) return;
     setChannelBusy(true);
     try {
       if (await deleteCommunityChannel(slug, channelId)) {
@@ -316,7 +391,7 @@ export default function CommunityDetailPage() {
   const joinLabel = community?.is_banned
     ? t('communities.banned')
     : community?.is_pending
-    ? t('communities.pendingApproval')
+    ? t('communities.cancelRequest')
     : community?.is_member
       ? t('communities.leave')
       : community?.privacy === 'private'
@@ -340,9 +415,18 @@ export default function CommunityDetailPage() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-lab to-bazaar text-white">
-                  <UserGroupIcon className="h-6 w-6" />
-                </span>
+                {community.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={community.cover_url}
+                    alt=""
+                    className="h-12 w-12 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-lab to-bazaar text-white">
+                    <UserGroupIcon className="h-6 w-6" />
+                  </span>
+                )}
                 <div className="min-w-0">
                   <h1 className="text-xl font-bold truncate">{community.name}</h1>
                   <p className="text-text-secondary text-sm">
@@ -358,10 +442,10 @@ export default function CommunityDetailPage() {
               <div className="flex shrink-0 flex-col items-end gap-2">
                 <button
                   type="button"
-                  disabled={joinBusy || community.is_pending || community.is_banned}
+                  disabled={joinBusy || community.is_banned}
                   onClick={() => void handleToggleMembership()}
                   className={`rounded-full px-5 py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
-                    community.is_member ? 'bg-surface text-text-secondary' : community.is_banned ? 'bg-red-600/10 text-red-600' : 'bg-vault text-white'
+                    community.is_member || community.is_pending ? 'bg-surface text-text-secondary' : community.is_banned ? 'bg-red-600/10 text-red-600' : 'bg-vault text-white'
                   }`}
                 >
                   {joinLabel}
@@ -425,6 +509,32 @@ export default function CommunityDetailPage() {
                         <option value="members">{t('communities.gatePostingMembers')}</option>
                         <option value="mods">{t('communities.gatePostingMods')}</option>
                       </select>
+                      <input
+                        value={flairDraft}
+                        onChange={(e) => setFlairDraft(e.target.value)}
+                        onBlur={() => {
+                          const options = flairDraft
+                            .split(',')
+                            .map((f) => f.trim())
+                            .filter(Boolean);
+                          void updateCommunityGates(slug, { flair_options: options }).then((c) => {
+                            if (c) setCommunity(c);
+                          });
+                        }}
+                        placeholder={t('communities.flairOptionsLabel')}
+                        className="w-full rounded-lg border border-surface bg-background px-2 py-1 text-xs"
+                      />
+                      <input
+                        value={coverUrlDraft}
+                        onChange={(e) => setCoverUrlDraft(e.target.value)}
+                        onBlur={() => {
+                          void updateCommunityGates(slug, { cover_url: coverUrlDraft.trim() }).then((c) => {
+                            if (c) setCommunity(c);
+                          });
+                        }}
+                        placeholder={t('communities.coverUrlLabel')}
+                        className="w-full rounded-lg border border-surface bg-background px-2 py-1 text-xs"
+                      />
                     </div>
                   </div>
                 )}
@@ -493,13 +603,13 @@ export default function CommunityDetailPage() {
                 className="flex items-center gap-1 text-xs font-semibold text-text-secondary mb-2"
               >
                 <span>#</span>
-                <span>Channels ({channels.length})</span>
+                <span>{t('communities.channelsTitle', { count: String(channels.length) })}</span>
                 <span>{channelsOpen ? '▲' : '▼'}</span>
               </button>
               {channelsOpen && (
                 <div className="space-y-2 rounded-xl border border-surface bg-surface/30 p-3">
                   {channels.length === 0 ? (
-                    <p className="text-sm text-text-secondary">No channels yet.</p>
+                    <p className="text-sm text-text-secondary">{t('communities.noChannels')}</p>
                   ) : (
                     <ul className="space-y-1">
                       {Object.entries(
@@ -555,13 +665,13 @@ export default function CommunityDetailPage() {
                                       <input
                                         value={draft.name}
                                         onChange={(e) => updateChannelDraft(ch.id, { name: e.target.value })}
-                                        placeholder="Name"
+                                        placeholder={t('communities.channelNamePlaceholder')}
                                         className="rounded-lg border border-surface bg-background px-2 py-1 text-xs"
                                       />
                                       <input
                                         value={draft.category}
                                         onChange={(e) => updateChannelDraft(ch.id, { category: e.target.value })}
-                                        placeholder="Category"
+                                        placeholder={t('communities.channelCategoryPlaceholder')}
                                         className="rounded-lg border border-surface bg-background px-2 py-1 text-xs"
                                       />
                                       <input
@@ -569,7 +679,7 @@ export default function CommunityDetailPage() {
                                         onChange={(e) => updateChannelDraft(ch.id, { slowmode_seconds: e.target.value })}
                                         type="number"
                                         min={0}
-                                        placeholder="Slow"
+                                        placeholder={t('communities.channelSlowPlaceholder')}
                                         className="rounded-lg border border-surface bg-background px-2 py-1 text-xs"
                                       />
                                       <select
@@ -577,9 +687,9 @@ export default function CommunityDetailPage() {
                                         onChange={(e) => updateChannelDraft(ch.id, { channel_type: e.target.value as 'text' | 'voice' | 'stage' })}
                                         className="rounded-lg border border-surface bg-background px-2 py-1 text-xs"
                                       >
-                                        <option value="text">Text</option>
-                                        <option value="voice">Voice</option>
-                                        <option value="stage">Stage</option>
+                                        <option value="text">{t('communities.channelTypeText')}</option>
+                                        <option value="voice">{t('communities.channelTypeVoice')}</option>
+                                        <option value="stage">{t('communities.channelTypeStage')}</option>
                                       </select>
                                       <button
                                         type="button"
@@ -587,7 +697,7 @@ export default function CommunityDetailPage() {
                                         onClick={() => void handleSaveChannel(ch.id)}
                                         className="rounded-lg bg-vault px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
                                       >
-                                        Save
+                                        {t('common.save')}
                                       </button>
                                       <button
                                         type="button"
@@ -595,7 +705,7 @@ export default function CommunityDetailPage() {
                                         onClick={() => void handleDeleteChannel(ch.id)}
                                         className="rounded-lg bg-red-600/10 px-2 py-1 text-xs font-semibold text-red-600 disabled:opacity-50"
                                       >
-                                        Delete
+                                        {t('common.delete')}
                                       </button>
                                     </div>
                                   )}
@@ -612,13 +722,13 @@ export default function CommunityDetailPage() {
                       <input
                         value={newChannelName}
                         onChange={(e) => setNewChannelName(e.target.value)}
-                        placeholder="Channel name"
+                        placeholder={t('communities.newChannelNamePlaceholder')}
                         className="min-w-[140px] flex-1 rounded-lg border border-surface bg-background px-3 py-2 text-sm"
                       />
                       <input
                         value={newChannelCategory}
                         onChange={(e) => setNewChannelCategory(e.target.value)}
-                        placeholder="Category"
+                        placeholder={t('communities.channelCategoryPlaceholder')}
                         className="w-28 rounded-lg border border-surface bg-background px-3 py-2 text-sm"
                       />
                       <input
@@ -626,7 +736,7 @@ export default function CommunityDetailPage() {
                         onChange={(e) => setNewChannelSlowmode(e.target.value)}
                         type="number"
                         min={0}
-                        placeholder="Slowmode"
+                        placeholder={t('communities.newChannelSlowmodePlaceholder')}
                         className="w-24 rounded-lg border border-surface bg-background px-3 py-2 text-sm"
                       />
                       <select
@@ -634,9 +744,9 @@ export default function CommunityDetailPage() {
                         onChange={(e) => setNewChannelType(e.target.value as 'text' | 'voice' | 'stage')}
                         className="w-28 rounded-lg border border-surface bg-background px-3 py-2 text-sm"
                       >
-                        <option value="text">Text</option>
-                        <option value="voice">Voice</option>
-                        <option value="stage">Stage</option>
+                        <option value="text">{t('communities.channelTypeText')}</option>
+                        <option value="voice">{t('communities.channelTypeVoice')}</option>
+                        <option value="stage">{t('communities.channelTypeStage')}</option>
                       </select>
                       <button
                         type="button"
@@ -661,7 +771,7 @@ export default function CommunityDetailPage() {
                           })();
                         }}
                       >
-                        {channelBusy ? '…' : 'Create'}
+                        {channelBusy ? '…' : t('communities.create')}
                       </button>
                     </div>
                   )}
@@ -670,21 +780,78 @@ export default function CommunityDetailPage() {
             </div>
 
             {/* Wiki */}
-            {wiki.length > 0 && (
+            {(wiki.length > 0 || community.is_moderator) && (
               <div className="mt-4">
-                <p className="text-xs font-semibold text-text-secondary mb-1">Wiki</p>
-                <ul className="flex flex-wrap gap-2">
-                  {wiki.map((page) => (
-                    <li key={page.id}>
-                      <Link
-                        href={`/communities/${slug}/wiki/${page.slug}`}
-                        className="rounded-full bg-surface px-3 py-1 text-xs font-semibold text-text-primary hover:bg-vault/10 transition-colors"
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-text-secondary">{t('communities.wikiSectionTitle')}</p>
+                  {community.is_moderator && (
+                    <button
+                      type="button"
+                      onClick={() => (wikiFormOpen ? setWikiFormOpen(false) : handleStartWikiEdit())}
+                      className="text-xs font-semibold text-vault"
+                    >
+                      {t('communities.newWikiPage')}
+                    </button>
+                  )}
+                </div>
+                {wiki.length > 0 && (
+                  <ul className="flex flex-wrap gap-2">
+                    {wiki.map((page) => (
+                      <li key={page.id} className="flex items-center gap-1">
+                        <Link
+                          href={`/communities/${slug}/wiki/${page.slug}`}
+                          className="rounded-full bg-surface px-3 py-1 text-xs font-semibold text-text-primary hover:bg-vault/10 transition-colors"
+                        >
+                          {page.title}
+                        </Link>
+                        {community.is_moderator && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartWikiEdit(page)}
+                            className="text-[10px] font-semibold text-text-secondary hover:text-vault"
+                          >
+                            {t('communities.editWikiPage')}
+                          </button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {wikiFormOpen && community.is_moderator && (
+                  <div className="mt-2 space-y-2 rounded-xl border border-surface bg-surface/30 p-3">
+                    <input
+                      value={wikiTitle}
+                      onChange={(e) => setWikiTitle(e.target.value)}
+                      placeholder={t('communities.wikiTitleLabel')}
+                      className="w-full rounded-lg border border-surface bg-background px-3 py-2 text-sm"
+                    />
+                    <textarea
+                      value={wikiBody}
+                      onChange={(e) => setWikiBody(e.target.value)}
+                      placeholder={t('communities.wikiBodyLabel')}
+                      rows={4}
+                      className="w-full rounded-lg border border-surface bg-background px-3 py-2 text-sm"
+                    />
+                    {wikiError && <p className="text-xs text-red-500">{wikiError}</p>}
+                    <div className="flex justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setWikiFormOpen(false)}
+                        className="rounded-lg bg-surface px-3 py-1.5 text-xs font-semibold text-text-secondary"
                       >
-                        {page.title}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                        {t('common.cancel')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={wikiBusy || !wikiTitle.trim()}
+                        onClick={() => void handleSaveWikiPage()}
+                        className="rounded-lg bg-vault px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+                      >
+                        {wikiBusy ? t('communities.wikiSaving') : t('communities.wikiSave')}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -775,6 +942,25 @@ export default function CommunityDetailPage() {
                     ))}
                   </ul>
                 </div>
+                {banned.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-xs font-semibold text-text-secondary">{t('communities.bannedMembers')}</p>
+                    <ul className="space-y-2">
+                      {banned.map((b) => (
+                        <li key={b.id} className="flex items-center justify-between text-sm">
+                          <span>{b.username}</span>
+                          <button
+                            type="button"
+                            onClick={() => void handleUnban(b.id)}
+                            className="rounded-lg bg-surface px-3 py-1 text-xs font-semibold text-text-secondary"
+                          >
+                            {t('communities.unban')}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
@@ -788,7 +974,7 @@ export default function CommunityDetailPage() {
                     {modQueue.map((item) => (
                       <li key={item.id} className="rounded-lg border border-surface bg-background p-3 text-sm">
                         <p className="font-semibold text-text-primary">
-                          @{item.post?.username || 'unknown'}
+                          @{item.post?.username || t('communities.unknownUser')}
                           {item.post?.flair && (
                             <span className="ml-2 rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-text-secondary">
                               {item.post.flair}
@@ -799,7 +985,7 @@ export default function CommunityDetailPage() {
                           <p className="mt-1 text-text-secondary line-clamp-2">{item.post.text}</p>
                         )}
                         <p className="mt-2 text-xs text-text-secondary">
-                          {item.reporter} · {item.status}
+                          {item.reporter} · {item.status === 'pending' ? t('communities.modStatusPending') : item.status === 'auto_flagged' ? t('communities.modStatusAutoFlagged') : item.status}
                           {item.ai_flagged ? ' · AI' : ''}
                         </p>
                         {item.content && (
@@ -852,6 +1038,11 @@ export default function CommunityDetailPage() {
           </div>
 
           {community.is_member && !community.is_banned && (
+            community.posting_permission === 'mods' && !community.is_moderator ? (
+              <div className="card mb-6 p-4 text-sm text-text-secondary">
+                {t('communities.postingLocked')}
+              </div>
+            ) : (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -878,7 +1069,18 @@ export default function CommunityDetailPage() {
                 placeholder={t('communities.postPlaceholder')}
                 className="w-full resize-none rounded-xl border border-surface bg-background px-4 py-3 text-sm text-text-primary placeholder:text-text-secondary focus:outline-none focus:ring-2 focus:ring-vault/40"
               />
-              <div className="mt-3 flex justify-end">
+              {postError && <p className="mt-2 text-xs text-red-500">{postError}</p>}
+              <div className="mt-3 flex items-center justify-between gap-2">
+                {community.spoilers_enabled !== false ? (
+                  <label className="flex items-center gap-1.5 text-xs text-text-secondary">
+                    <input
+                      type="checkbox"
+                      checked={postSpoiler}
+                      onChange={(e) => setPostSpoiler(e.target.checked)}
+                    />
+                    {t('communities.spoilerToggle')}
+                  </label>
+                ) : <span />}
                 <button
                   type="button"
                   disabled={postBusy || !postText.trim()}
@@ -889,6 +1091,7 @@ export default function CommunityDetailPage() {
                 </button>
               </div>
             </motion.div>
+            )
           )}
 
           {mappedPosts.length === 0 ? (
