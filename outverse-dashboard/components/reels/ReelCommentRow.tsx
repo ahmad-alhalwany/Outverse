@@ -138,7 +138,7 @@ export default function ReelCommentRow({
   };
 
   const remove = async () => {
-    if (!(await confirm(t('reels.confirmDelete'), { danger: true, confirmLabel: 'Delete' }))) return;
+    if (!(await confirm(t('reels.confirmDelete'), { danger: true, confirmLabel: t('common.delete') }))) return;
     setBusy(true);
     try {
       const res = await apiFetch(`reel-comments/${comment.id}/`, { method: 'DELETE' });

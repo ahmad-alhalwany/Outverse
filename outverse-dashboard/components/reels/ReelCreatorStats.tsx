@@ -78,7 +78,7 @@ export default function ReelCreatorStats() {
                 href={reelPagePath(reel.id)}
                 className="text-xs rounded-full px-3 py-1 bg-surface hover:bg-vault/10 transition"
               >
-                ▶ {formatCount(reel.views)} · {(reel.caption || 'Signal').slice(0, 32)}
+                ▶ {formatCount(reel.views)} · {(reel.caption || t('reels.signalFallback')).slice(0, 32)}
               </Link>
             ))}
           </div>

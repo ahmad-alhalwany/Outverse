@@ -540,7 +540,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
 
   const deleteReel = async () => {
     if (!me || !isOwner) return;
-    if (!(await confirm(t('reels.confirmDeleteReel'), { danger: true, confirmLabel: 'Delete' }))) return;
+    if (!(await confirm(t('reels.confirmDeleteReel'), { danger: true, confirmLabel: t('common.delete') }))) return;
     try {
       const res = await apiFetch(`reels/${reel.id}/`, { method: 'DELETE' });
       if (res.ok) onDeleted?.();
@@ -670,7 +670,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
                 color: '#fff',
               }}
             >
-              This signal is hidden from public feeds due to moderation state.
+              {t('reels.hiddenModeration')}
             </div>
           )}
 
@@ -750,11 +750,11 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
           type="button"
           className={`reel-slide__action${saved ? ' reel-slide__action--liked' : ''}`}
           onClick={toggleSave}
-          aria-label="Save reel"
-          title="Save"
+          aria-label={t('reels.save')}
+          title={t('reels.save')}
         >
           <BookmarkIcon />
-          <span>{saved ? 'Saved' : 'Save'}</span>
+          <span>{saved ? t('reels.saved') : t('reels.save')}</span>
         </button>
 
         <div className="reel-slide__action reel-slide__action--react">
@@ -861,12 +861,12 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
                     method: 'POST',
                     json: { force: true, language: reel.captions_language || 'en' },
                   });
-                  if (res.ok) window.alert('Captions refreshed — reload the feed to see them.');
+                  if (res.ok) window.alert(t('reels.captionsRefreshed'));
                   else flashActionError(t('reels.actionFailed'));
                 })();
               }}
-              aria-label="Generate captions"
-              title="Captions"
+              aria-label={t('reels.generateCaptions')}
+              title={t('reels.captions')}
             >
               <span style={{ fontSize: 11, fontWeight: 800 }}>CC</span>
               <span>CC</span>

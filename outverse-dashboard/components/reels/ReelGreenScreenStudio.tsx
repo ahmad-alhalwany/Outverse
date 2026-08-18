@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { REEL_BACKDROPS } from '@/lib/reelTypes';
+import { useLocale } from '../LocaleProvider';
 
 /** Client-side green-screen / backdrop picker for create (chroma key live preview). */
 export default function ReelGreenScreenStudio({
@@ -17,6 +18,7 @@ export default function ReelGreenScreenStudio({
   chromaEnabled: boolean;
   onChromaChange: (on: boolean) => void;
 }) {
+  const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [running, setRunning] = useState(false);
@@ -85,7 +87,7 @@ export default function ReelGreenScreenStudio({
             checked={chromaEnabled}
             onChange={(e) => onChromaChange(e.target.checked)}
           />
-          Green screen / backdrop
+          {t('reels.greenScreenToggle')}
         </label>
       </div>
       {chromaEnabled ? (
@@ -126,11 +128,11 @@ export default function ReelGreenScreenStudio({
                 style={{ mixBlendMode: running ? 'normal' : undefined }}
               />
               <p className="absolute bottom-2 left-2 z-[2] rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white/80">
-                Live chroma preview
+                {t('reels.liveChromaPreview')}
               </p>
             </div>
           ) : (
-            <p className="text-sm text-white/60">Add a video filmed on green to preview the key.</p>
+            <p className="text-sm text-white/60">{t('reels.greenScreenHint')}</p>
           )}
         </>
       ) : null}

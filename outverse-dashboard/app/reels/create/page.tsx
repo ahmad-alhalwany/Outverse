@@ -276,7 +276,7 @@ export default function CreateReelPage() {
       const label =
         soundLabel.trim() ||
         tracks.find((tr) => tr.id === musicTrack)?.title ||
-        'Original signal';
+        t('reels.originalSound');
       fd.append('sound_label', label);
       const tags = tagsInput
         .split(',')
@@ -357,7 +357,7 @@ export default function CreateReelPage() {
 
         {templates.length > 0 && (
           <div className="space-y-2">
-            <p className="text-sm font-bold text-white/90">Pulse packs</p>
+            <p className="text-sm font-bold text-white/90">{t('reels.pulsePacks')}</p>
             <div className="flex flex-wrap gap-2">
               {templates.map((tpl) => (
                 <button
@@ -428,7 +428,7 @@ export default function CreateReelPage() {
             className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
             style={{ background: 'var(--c-focus)' }}
           >
-            {remixBusy ? '✨ Remixing…' : '✨ Remix with meaning'}
+            {remixBusy ? t('reels.remixingMeaning') : t('reels.remixWithMeaning')}
           </button>
         </div>
 
@@ -453,7 +453,7 @@ export default function CreateReelPage() {
           <p className="text-xs text-text-secondary">{t('reels.draftSaved')}</p>
         )}
         {draftError && (
-          <p className="text-xs text-red-400">Could not save your draft. Your latest changes may not be saved.</p>
+          <p className="text-xs text-red-400">{t('reels.draftSaveFailed')}</p>
         )}
 
         <label className="reels-create__label">{t('reels.mood')}</label>

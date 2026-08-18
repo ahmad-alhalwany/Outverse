@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { VideoCameraIcon, StopIcon } from '@heroicons/react/24/solid';
+import { useLocale } from '../LocaleProvider';
 
 type Props = {
   onRecorded: (file: File) => void;
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export default function ReelCameraRecorder({ onRecorded, maxSeconds = 60 }: Props) {
+  const { t } = useLocale();
   const videoRef = useRef<HTMLVideoElement>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -37,7 +39,7 @@ export default function ReelCameraRecorder({ onRecorded, maxSeconds = 60 }: Prop
         await videoRef.current.play();
       }
     } catch {
-      setError('Camera access denied or unavailable.');
+      setError(t('reels.cameraAccessDenied'));
     }
   };
 
@@ -85,7 +87,7 @@ export default function ReelCameraRecorder({ onRecorded, maxSeconds = 60 }: Prop
   return (
     <div className="reels-create__camera rounded-xl border border-surface p-3 mb-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-semibold text-text-secondary">Record with camera</span>
+        <span className="text-xs font-semibold text-text-secondary">{t('reels.cameraRecordTitle')}</span>
         {recording && <span className="text-xs text-red-400">{seconds}s</span>}
       </div>
       <video
@@ -99,7 +101,7 @@ export default function ReelCameraRecorder({ onRecorded, maxSeconds = 60 }: Prop
         {!recording ? (
           <>
             <button type="button" className="reels-create__mood flex-1" onClick={() => void startCamera()}>
-              Preview
+              {t('reels.cameraPreview')}
             </button>
             <button
               type="button"
@@ -107,7 +109,7 @@ export default function ReelCameraRecorder({ onRecorded, maxSeconds = 60 }: Prop
               onClick={() => void startRecording()}
             >
               <VideoCameraIcon className="h-4 w-4" />
-              Record
+              {t('reels.cameraRecord')}
             </button>
           </>
         ) : (
@@ -117,7 +119,7 @@ export default function ReelCameraRecorder({ onRecorded, maxSeconds = 60 }: Prop
             onClick={stopRecording}
           >
             <StopIcon className="h-4 w-4" />
-            Stop
+            {t('reels.cameraStop')}
           </button>
         )}
       </div>
