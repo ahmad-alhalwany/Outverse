@@ -8,6 +8,7 @@ import AppShell from '@/components/AppShell';
 import CosmicVideoPlayer, { type CosmicVideoPlayerHandle } from '@/components/CosmicVideoPlayer';
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
+import { useLocale } from '@/components/LocaleProvider';
 
 type Chapter = {
   id: number;
@@ -46,8 +47,8 @@ function formatSeconds(seconds: number) {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function formatPremiereCountdown(ms: number) {
-  if (ms <= 0) return 'soon';
+function formatPremiereCountdown(ms: number, soonLabel: string) {
+  if (ms <= 0) return soonLabel;
   const totalSeconds = Math.ceil(ms / 1000);
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
@@ -70,6 +71,7 @@ function listFromResponse(data: unknown): Playlist[] {
 export default function VideoDetailPage() {
   const params = useParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const { t } = useLocale();
   const authUser = useAuthUser();
   const playerRef = useRef<CosmicVideoPlayerHandle>(null);
   const [video, setVideo] = useState<LongFormVideo | null>(null);
@@ -95,7 +97,7 @@ export default function VideoDetailPage() {
       setVideo((await res.json()) as LongFormVideo);
     } catch {
       setVideo(null);
-      setError('Could not load this video.');
+      setError(t('videos.couldNotLoad'));
     } finally {
       setLoading(false);
     }
@@ -150,7 +152,7 @@ export default function VideoDetailPage() {
     if (!id || !chapterTitle.trim() || chapterBusy) return;
     const start = Number(chapterStart);
     if (!Number.isFinite(start) || start < 0) {
-      setChapterMessage('Start time must be a positive number of seconds.');
+      setChapterMessage(t('videos.chapterStartError'));
       return;
     }
     setChapterBusy(true);
@@ -165,9 +167,9 @@ export default function VideoDetailPage() {
       setVideo((current) => current ? { ...current, chapters: [...(current.chapters || []), created] } : current);
       setChapterTitle('');
       setChapterStart('');
-      setChapterMessage('Chapter added.');
+      setChapterMessage(t('videos.chapterAdded'));
     } catch {
-      setChapterMessage('Could not add chapter.');
+      setChapterMessage(t('videos.couldNotAddChapter'));
     } finally {
       setChapterBusy(false);
     }
@@ -183,9 +185,9 @@ export default function VideoDetailPage() {
         json: { video_id: Number(id) },
       });
       if (!res.ok) throw new Error('failed');
-      setPlaylistMessage('Added to playlist.');
+      setPlaylistMessage(t('videos.addedToPlaylist'));
     } catch {
-      setPlaylistMessage('Could not add to that playlist.');
+      setPlaylistMessage(t('videos.couldNotAddToPlaylist'));
     } finally {
       setPlaylistBusy(false);
     }
@@ -195,23 +197,23 @@ export default function VideoDetailPage() {
     <AppShell contentClassName="flex-1 min-w-0 w-full max-w-4xl mx-auto px-4 pb-16">
       <div className="pt-4">
         <Link href="/videos" className="text-sm font-semibold text-vault hover:underline">
-          Back to videos
+          {t('videos.backToVideos')}
         </Link>
 
         {loading ? (
-          <p className="py-16 text-center text-sm text-text-secondary">Loading video...</p>
+          <p className="py-16 text-center text-sm text-text-secondary">{t('videos.loadingVideo')}</p>
         ) : error || !video ? (
-          <p className="py-16 text-center text-sm text-text-secondary">{error || 'Video not found.'}</p>
+          <p className="py-16 text-center text-sm text-text-secondary">{error || t('videos.notFound')}</p>
         ) : (
           <article className="mt-4 space-y-5">
             {isPremierePending ? (
               <div className="flex aspect-video flex-col items-center justify-center rounded-2xl border border-vault/30 bg-gradient-to-br from-vault/20 via-surface/50 to-bazaar/20 px-6 text-center">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-vault">Premiere</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-vault">{t('videos.premiereLabel')}</p>
                 <p className="mt-2 text-2xl font-bold">
-                  {premiereAtMs ? `Premiere in ${formatPremiereCountdown(premiereInMs)}` : 'Premiere scheduled'}
+                  {premiereAtMs ? t('videos.premiereIn', { countdown: formatPremiereCountdown(premiereInMs, t('videos.premiereSoon')) }) : t('videos.premiereScheduled')}
                 </p>
                 <p className="mt-2 max-w-md text-sm text-text-secondary">
-                  Playback unlocks when this video is published.
+                  {t('videos.premiereUnlockHint')}
                 </p>
               </div>
             ) : video.video ? (
@@ -224,7 +226,7 @@ export default function VideoDetailPage() {
               />
             ) : (
               <div className="flex aspect-video items-center justify-center rounded-2xl border border-surface bg-surface/40 text-sm text-text-secondary">
-                Video file unavailable.
+                {t('videos.fileUnavailable')}
               </div>
             )}
 
@@ -233,10 +235,10 @@ export default function VideoDetailPage() {
               <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-text-secondary">
                 <span className="inline-flex items-center gap-1">
                   <EyeIcon className="h-4 w-4" />
-                  {video.views ?? 0} views
+                  {video.views ?? 0} {t('videos.views')}
                 </span>
-                {video.published_at ? <span>Published {new Date(video.published_at).toLocaleString()}</span> : null}
-                {video.premiere_at ? <span>Premiere {new Date(video.premiere_at).toLocaleString()}</span> : null}
+                {video.published_at ? <span>{t('videos.published', { date: new Date(video.published_at).toLocaleString() })}</span> : null}
+                {video.premiere_at ? <span>{t('videos.premiereAt', { date: new Date(video.premiere_at).toLocaleString() })}</span> : null}
                 {video.status ? <span className="capitalize">{video.status}</span> : null}
               </div>
               {video.description ? (
@@ -246,10 +248,10 @@ export default function VideoDetailPage() {
 
             {authUser ? (
               <section className="rounded-2xl border border-surface bg-surface/20 p-4">
-                <h2 className="text-sm font-semibold text-text-secondary">Add to playlist</h2>
+                <h2 className="text-sm font-semibold text-text-secondary">{t('videos.addToPlaylist')}</h2>
                 {playlists.length === 0 ? (
                   <p className="mt-2 text-sm text-text-secondary">
-                    No playlists yet. <Link href="/playlists" className="font-semibold text-vault hover:underline">Create one</Link>.
+                    {t('videos.noPlaylists')} <Link href="/playlists" className="font-semibold text-vault hover:underline">{t('videos.createOne')}</Link>.
                   </p>
                 ) : (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -270,7 +272,7 @@ export default function VideoDetailPage() {
                       disabled={playlistBusy || !selectedPlaylistId}
                       className="rounded-xl bg-vault px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     >
-                      {playlistBusy ? 'Adding...' : 'Add item'}
+                      {playlistBusy ? t('videos.adding') : t('videos.addItem')}
                     </button>
                   </div>
                 )}
@@ -282,20 +284,20 @@ export default function VideoDetailPage() {
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold text-text-secondary">
                   <ListBulletIcon className="h-5 w-5" />
-                  Chapters
+                  {t('videos.chapters')}
                 </h2>
                 {isOwner ? (
                   <form onSubmit={addChapter} className="flex flex-wrap gap-2">
                     <input
                       value={chapterTitle}
                       onChange={(event) => setChapterTitle(event.target.value)}
-                      placeholder="Chapter title"
+                      placeholder={t('videos.chapterTitlePlaceholder')}
                       className="w-40 rounded-xl border border-surface bg-background px-3 py-2 text-sm"
                     />
                     <input
                       value={chapterStart}
                       onChange={(event) => setChapterStart(event.target.value)}
-                      placeholder="Seconds"
+                      placeholder={t('videos.secondsPlaceholder')}
                       inputMode="numeric"
                       className="w-24 rounded-xl border border-surface bg-background px-3 py-2 text-sm"
                     />
@@ -304,14 +306,14 @@ export default function VideoDetailPage() {
                       disabled={chapterBusy || !chapterTitle.trim() || !chapterStart.trim()}
                       className="rounded-xl bg-vault px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     >
-                      {chapterBusy ? 'Adding...' : 'Add'}
+                      {chapterBusy ? t('videos.adding') : t('videos.add')}
                     </button>
                   </form>
                 ) : null}
               </div>
               {chapterMessage ? <p className="mb-3 text-xs text-text-secondary">{chapterMessage}</p> : null}
               {sortedChapters.length === 0 ? (
-                <p className="text-sm text-text-secondary">No chapters yet.</p>
+                <p className="text-sm text-text-secondary">{t('videos.noChapters')}</p>
               ) : (
                 <ol className="space-y-2">
                   {sortedChapters.map((chapter) => (

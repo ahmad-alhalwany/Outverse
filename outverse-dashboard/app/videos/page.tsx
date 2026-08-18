@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { CloudArrowUpIcon, PlayCircleIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
+import { useLocale } from '@/components/LocaleProvider';
 
 type VideoUser = {
   id?: number;
@@ -34,13 +35,14 @@ function listFromResponse(data: unknown): LongFormVideo[] {
   return [];
 }
 
-function creatorName(user?: VideoUser | null) {
-  if (!user) return 'Creator';
+function creatorName(user: VideoUser | null | undefined, fallback: string) {
+  if (!user) return fallback;
   const full = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-  return full || user.username || 'Creator';
+  return full || user.username || fallback;
 }
 
 export default function VideosPage() {
+  const { t } = useLocale();
   const [videos, setVideos] = useState<LongFormVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -96,10 +98,10 @@ export default function VideosPage() {
       setDescription('');
       setPremiereAt('');
       setFile(null);
-      setMessage('Video uploaded.');
+      setMessage(t('videos.uploaded'));
       await loadVideos();
     } catch {
-      setMessage('Could not upload video. Try again.');
+      setMessage(t('videos.uploadFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -112,38 +114,38 @@ export default function VideosPage() {
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold">
               <PlayCircleIcon className="h-7 w-7 text-vault" />
-              Creator Videos
+              {t('videos.title')}
             </h1>
             <p className="mt-1 text-sm text-text-secondary">
-              Upload long-form videos, schedule premieres, and browse published creator drops.
+              {t('videos.subtitle')}
             </p>
           </div>
           <Link href="/playlists" className="rounded-full border border-surface px-4 py-2 text-sm font-semibold text-text-secondary hover:text-vault">
-            Playlists
+            {t('videos.playlistsLink')}
           </Link>
         </header>
 
         <form onSubmit={handleSubmit} className="rounded-2xl border border-surface bg-surface/30 p-4 space-y-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-text-secondary">
             <CloudArrowUpIcon className="h-5 w-5" />
-            Upload video
+            {t('videos.uploadVideo')}
           </h2>
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Title"
+            placeholder={t('videos.titleLabel')}
             className="w-full rounded-xl border border-surface bg-background px-3 py-2 text-sm"
           />
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="Description"
+            placeholder={t('videos.descriptionLabel')}
             rows={3}
             className="w-full rounded-xl border border-surface bg-background px-3 py-2 text-sm"
           />
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-xs font-semibold text-text-secondary">
-              Video file
+              {t('videos.videoFile')}
               <input
                 type="file"
                 accept="video/*"
@@ -152,7 +154,7 @@ export default function VideosPage() {
               />
             </label>
             <label className="block text-xs font-semibold text-text-secondary">
-              Optional premiere
+              {t('videos.optionalPremiere')}
               <input
                 type="datetime-local"
                 value={premiereAt}
@@ -168,18 +170,18 @@ export default function VideosPage() {
               disabled={submitting || !title.trim() || !file}
               className="rounded-xl bg-vault px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {submitting ? 'Uploading...' : 'Upload'}
+              {submitting ? t('videos.uploading') : t('videos.upload')}
             </button>
           </div>
         </form>
 
         <section>
-          <h2 className="mb-3 text-sm font-semibold text-text-secondary">Published videos</h2>
+          <h2 className="mb-3 text-sm font-semibold text-text-secondary">{t('videos.publishedVideos')}</h2>
           {loading ? (
-            <p className="py-10 text-center text-sm text-text-secondary">Loading videos...</p>
+            <p className="py-10 text-center text-sm text-text-secondary">{t('videos.loadingVideos')}</p>
           ) : videos.length === 0 ? (
             <p className="rounded-2xl border border-surface bg-surface/20 p-6 text-center text-sm text-text-secondary">
-              No published videos yet.
+              {t('videos.empty')}
             </p>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
@@ -204,11 +206,11 @@ export default function VideosPage() {
                   <div className="p-4">
                     <p className="font-semibold text-text">{video.title}</p>
                     <p className="mt-1 text-xs text-text-secondary">
-                      {creatorName(video.user)} - {video.views ?? 0} views
+                      {creatorName(video.user, t('videos.creatorFallback'))} · {video.views ?? 0} {t('videos.views')}
                     </p>
                     {video.premiere_at ? (
                       <p className="mt-2 text-xs font-medium text-vault">
-                        Premieres {new Date(video.premiere_at).toLocaleString()}
+                        {t('videos.premieres', { date: new Date(video.premiere_at).toLocaleString() })}
                       </p>
                     ) : null}
                   </div>
