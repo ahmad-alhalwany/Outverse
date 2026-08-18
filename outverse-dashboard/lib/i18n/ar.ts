@@ -1120,6 +1120,7 @@ export const ar = {
     subtitle: 'أطلق العنان الكامل لرحلتك الكونية بمزايا حصرية في كل عالم.',
     choosePlan: 'اختر باقتك',
     choosePlanCta: 'اختر الباقة',
+    comingSoon: 'قريبًا',
     recommended: 'موصى بها',
     perMonth: 'شهريًا',
     redirecting: 'جارٍ التحويل…',

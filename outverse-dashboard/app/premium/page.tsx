@@ -41,6 +41,7 @@ type Plan = {
   price_usd: number;
   features: string[];
   is_recommended: boolean;
+  available: boolean;
 };
 
 const FEATURE_CARDS = [
@@ -209,14 +210,18 @@ function PremiumContent() {
                 <button
                   type="button"
                   onClick={() => void choosePlan(plan.tier)}
-                  disabled={busyTier === plan.tier}
-                  className="w-full py-3 rounded-xl font-semibold disabled:opacity-60"
+                  disabled={busyTier === plan.tier || !plan.available}
+                  className="w-full py-3 rounded-xl font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                   style={{
                     background: plan.is_recommended ? '#fff' : C.brownDk,
                     color: plan.is_recommended ? C.brownDk : '#fff',
                   }}
                 >
-                  {busyTier === plan.tier ? t('premium.redirecting') : t('premium.choosePlanCta')}
+                  {busyTier === plan.tier
+                    ? t('premium.redirecting')
+                    : plan.available
+                      ? t('premium.choosePlanCta')
+                      : t('premium.comingSoon')}
                 </button>
               </div>
             ))}

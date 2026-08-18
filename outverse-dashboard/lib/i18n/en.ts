@@ -1118,6 +1118,7 @@ export const en = {
     subtitle: 'Unlock the full potential of your cosmic journey with exclusive perks across every world.',
     choosePlan: 'Choose Your Plan',
     choosePlanCta: 'Choose Plan',
+    comingSoon: 'Coming soon',
     recommended: 'Recommended',
     perMonth: 'mo',
     redirecting: 'Redirecting…',

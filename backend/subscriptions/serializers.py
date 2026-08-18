@@ -5,13 +5,19 @@ from .models import CreatorSubscription, CreatorTier, Subscription, Subscription
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     price_usd = serializers.SerializerMethodField()
+    available = serializers.SerializerMethodField()
 
     class Meta:
         model = SubscriptionPlan
-        fields = ['id', 'tier', 'name', 'price_usd_cents', 'price_usd', 'features', 'is_recommended']
+        fields = ['id', 'tier', 'name', 'price_usd_cents', 'price_usd', 'features', 'is_recommended', 'available']
 
     def get_price_usd(self, obj):
         return round(obj.price_usd_cents / 100, 2)
+
+    def get_available(self, obj):
+        # Checkout is disabled server-side until a real Stripe price is
+        # attached — expose that as a plain flag instead of the raw id.
+        return bool(obj.stripe_price_id)
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):

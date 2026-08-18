@@ -60,13 +60,17 @@ class SavedItemViewSet(ThrottleMixin, viewsets.ViewSet):
         for key, (type_name, saved_model, content_model, serializer_class, id_field) in TYPE_MAP.items():
             if collection != 'all' and key != collection:
                 continue
-            saved_ids = list(
+            saved_rows = list(
                 saved_model.objects.filter(user=user)
                 .order_by('-created_at')
-                .values_list(id_field, flat=True)
+                .values_list(id_field, 'created_at')
             )
-            if not saved_ids:
+            if not saved_rows:
                 continue
+            saved_ids = [content_id for content_id, _ in saved_rows]
+            # When bookmarks were saved, not the content's own pk — used to sort
+            # the mixed "all" collection by recency instead of raw content id.
+            saved_at_by_id = dict(saved_rows)
             ordering = Case(
                 *[When(pk=pk, then=pos) for pos, pk in enumerate(saved_ids)],
                 output_field=IntegerField(),
@@ -74,10 +78,11 @@ class SavedItemViewSet(ThrottleMixin, viewsets.ViewSet):
             qs = content_model.objects.filter(pk__in=saved_ids).order_by(ordering)
             serializer = serializer_class(qs, many=True, context={'request': request})
             for idx, item in enumerate(serializer.data):
+                content_id = saved_ids[idx]
                 item_copy = dict(item)
-                item_copy['saved_id'] = f"{type_name}_{saved_ids[idx]}"
+                item_copy['saved_id'] = f"{type_name}_{content_id}"
                 item_copy['saved_type'] = type_name
-                results.append((saved_ids[idx], type_name, item_copy))
+                results.append((saved_at_by_id[content_id], type_name, item_copy))
 
         results.sort(key=lambda x: x[0], reverse=True)
         return Response([item for _, _, item in results])
