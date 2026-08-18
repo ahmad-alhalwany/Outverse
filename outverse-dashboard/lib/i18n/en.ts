@@ -24,6 +24,7 @@ export const en = {
     sold: 'sold',
     close: 'Close',
     skipToMain: 'Skip to main content',
+    comingSoon: 'Coming soon',
   },
   nav: {
     home: 'Home',

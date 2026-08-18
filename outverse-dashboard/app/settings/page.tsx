@@ -17,7 +17,6 @@ import {
   ShieldCheckIcon,
   SpeakerWaveIcon,
   UserCircleIcon,
-  UserIcon,
   ChatBubbleLeftRightIcon,
   UserGroupIcon,
   SignalIcon,
@@ -253,12 +252,12 @@ export default function SettingsPage() {
     router.push('/login');
   }
 
-  const themeOptions = useMemo<ThemeOption[]>(
+  const themeOptions = useMemo<(ThemeOption & { available: boolean })[]>(
     () => [
-      { id: 'cosmic', label: 'Cosmic Calm', active: prefs.theme === 'dark' },
-      { id: 'nebula', label: 'Nebula Glow', active: false },
-      { id: 'stardust', label: 'Stardust Mist', active: false },
-      { id: 'aurora', label: 'Aurora Drift', active: prefs.theme === 'light' },
+      { id: 'cosmic', label: 'Cosmic Calm', active: prefs.theme === 'dark', available: true },
+      { id: 'nebula', label: 'Nebula Glow', active: false, available: false },
+      { id: 'stardust', label: 'Stardust Mist', active: false, available: false },
+      { id: 'aurora', label: 'Aurora Drift', active: prefs.theme === 'light', available: true },
     ],
     [prefs.theme],
   );
@@ -293,7 +292,7 @@ export default function SettingsPage() {
       maxWidth="max-w-3xl"
       contentClassName="flex-1 min-w-0 w-full px-0 pb-16 md:px-4"
     >
-      <div className="mx-auto w-full max-w-[430px] overflow-hidden rounded-[2rem] md:border" style={{ borderColor: palette.border }}>
+      <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-[2rem] md:border" style={{ borderColor: palette.border }}>
         <div className="px-5 pb-6 pt-6">
           <div className="mb-8 flex items-center gap-4">
             <button
@@ -344,6 +343,7 @@ export default function SettingsPage() {
                     <button
                       key={option.id}
                       type="button"
+                      disabled={!option.available}
                       onClick={() => {
                         if (option.id === 'cosmic') {
                           updatePrefs({ theme: 'dark' });
@@ -352,13 +352,19 @@ export default function SettingsPage() {
                           updatePrefs({ theme: 'light' });
                         }
                       }}
-                      className="rounded-2xl px-4 py-5 text-left text-[1.05rem] font-semibold"
+                      className="rounded-2xl px-4 py-5 text-left text-[1.05rem] font-semibold disabled:cursor-not-allowed"
                       style={{
                         background: option.active ? palette.cardStrong : palette.card,
-                        color: option.active ? '#FFFFFF' : palette.icon,
+                        color: option.active ? '#FFFFFF' : option.available ? palette.icon : palette.textSoft,
+                        opacity: option.available ? 1 : 0.6,
                       }}
                     >
                       {option.label}
+                      {!option.available && (
+                        <span className="mt-1 block text-xs font-normal" style={{ color: palette.textSoft }}>
+                          {t('common.comingSoon')}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -369,7 +375,11 @@ export default function SettingsPage() {
                   <p className="text-[1.05rem] font-semibold">Weirdness Level</p>
                   <button
                     type="button"
-                    onClick={() => updatePrefs({ locale: locale === 'en' ? 'ar' : 'en' })}
+                    onClick={() => {
+                      const nextLocale = locale === 'en' ? 'ar' : 'en';
+                      setLocale(nextLocale);
+                      updatePrefs({ locale: nextLocale });
+                    }}
                     className="rounded-full px-3 py-1 text-xs font-semibold"
                     style={{ background: palette.card, color: palette.icon }}
                   >
@@ -591,21 +601,11 @@ export default function SettingsPage() {
           </section>
 
           <section className="mb-6">
-            <SectionTitle icon={ShieldCheckIcon} title="Privacy & Security" color={palette.icon} />
+            <SectionTitle icon={InformationCircleIcon} title="Legal" color={palette.icon} />
             <div className="space-y-3 px-5 pb-2">
-              <RowLink href="/profile/privacy" icon={UserIcon} label="Account Privacy" palette={palette} />
               <RowLink href="/privacy" icon={LockClosedIcon} label={t('legal.privacyTitle')} palette={palette} />
               <RowLink href="/terms" icon={InformationCircleIcon} label={t('legal.termsTitle')} palette={palette} />
-              <RowLink href="/settings/data-usage" icon={EnvelopeIcon} label="Data Usage" palette={palette} />
-              <RowLink href="/settings/security" icon={LockClosedIcon} label="Security Settings" palette={palette} />
               <RowLink href="/chat" icon={ChatBubbleLeftRightIcon} label="Message Settings" palette={palette} />
-            </div>
-          </section>
-
-          <section className="-mx-5 mb-8" style={{ background: palette.section }}>
-            <div className="space-y-3 px-5 py-5">
-              <RowLink href="/settings/help" icon={InformationCircleIcon} label="Help & Support" palette={palette} />
-              <RowLink href="/settings/about" icon={InformationCircleIcon} label="About" palette={palette} />
             </div>
           </section>
 
