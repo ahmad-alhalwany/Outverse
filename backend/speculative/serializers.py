@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from users.models import User
 
+from .character_ai import emoji_for
 from .models import Character, FailedIdea, FailedIdeaComment, FutureMemory
 
 
@@ -62,14 +63,19 @@ class CharacterSerializer(serializers.ModelSerializer):
     creator = SpecUserSerializer(read_only=True)
     rarity_display = serializers.CharField(source='get_rarity_display', read_only=True)
     owned = serializers.SerializerMethodField()
+    emoji = serializers.SerializerMethodField()
 
     class Meta:
         model = Character
         fields = [
             'id', 'name', 'description', 'rarity', 'rarity_display',
-            'image_url', 'price', 'creator', 'created_at', 'owned',
+            'image_url', 'emoji', 'price', 'creator', 'is_ai_generated',
+            'is_public', 'created_at', 'owned',
         ]
-        read_only_fields = ['creator', 'created_at']
+        read_only_fields = ['creator', 'is_ai_generated', 'created_at']
+
+    def get_emoji(self, obj):
+        return emoji_for(obj.id, obj.emoji)
 
     def get_owned(self, obj):
         request = self.context.get('request')

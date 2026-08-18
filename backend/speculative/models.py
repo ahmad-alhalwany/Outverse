@@ -69,10 +69,13 @@ class Character(models.Model):
     description = models.TextField(blank=True)
     rarity = models.CharField(max_length=20, choices=RARITY_CHOICES, default='rare', db_index=True)
     image_url = models.URLField(blank=True)
+    emoji = models.CharField(max_length=8, blank=True, default='')
     price = models.PositiveIntegerField(default=100, help_text='Price in Outverse coins')
     creator = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='characters'
     )
+    is_ai_generated = models.BooleanField(default=False)
+    is_public = models.BooleanField(default=True, help_text='Private characters only appear in their creator\'s collection.')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
