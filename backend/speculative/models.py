@@ -17,6 +17,7 @@ class FailedIdea(models.Model):
     exhibition = models.CharField(max_length=32, choices=EXHIBITION_CHOICES, default='burned_ideas', db_index=True)
     cover_url = models.URLField(blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='failed_ideas')
+    likes = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='liked_failed_ideas', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -24,6 +25,19 @@ class FailedIdea(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class FailedIdeaComment(models.Model):
+    failed_idea = models.ForeignKey(FailedIdea, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='failed_idea_comments')
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.user} on {self.failed_idea}'
 
 
 class FutureMemory(models.Model):

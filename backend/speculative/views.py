@@ -1,17 +1,18 @@
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import Count, F, Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from outverse.throttles import AnonReadThrottle, ContentPostCreateThrottle, ThrottleMixin
 
-from outverse.auth_utils import require_user
+from outverse.auth_utils import require_user, user_from_request
 from users.models import Profile
 
-from .models import Character, CharacterOwnership, FailedIdea, FutureMemory
+from .models import Character, CharacterOwnership, FailedIdea, FailedIdeaComment, FutureMemory
 from .serializers import (
     CharacterSerializer,
+    FailedIdeaCommentSerializer,
     FailedIdeaSerializer,
     FutureMemorySerializer,
 )
@@ -34,19 +35,65 @@ class FailedIdeaViewSet(ThrottleMixin, viewsets.ModelViewSet):
     queryset = FailedIdea.objects.select_related('user')
 
     def get_permissions(self):
-        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+        if self.action in ('create', 'update', 'partial_update', 'destroy', 'like'):
             return [IsAuthenticated()]
         return [AllowAny()]
+
+    def get_serializer_context(self):
+        ctx = super().get_serializer_context()
+        viewer = user_from_request(self.request)
+        if viewer:
+            ctx['liked_failed_idea_ids'] = set(
+                viewer.liked_failed_ideas.values_list('id', flat=True)
+            )
+        return ctx
 
     def get_queryset(self):
         qs = super().get_queryset()
         exhibition = self.request.query_params.get('exhibition')
         if exhibition and exhibition != 'all':
             qs = qs.filter(exhibition=exhibition)
+        if self.request.query_params.get('ordering') == 'top':
+            qs = qs.annotate(
+                engagement=Count('likes', distinct=True) + Count('comments', distinct=True)
+            ).order_by('-engagement', '-created_at')
         return qs
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    @action(detail=True, methods=['post'], url_path='like')
+    def like(self, request, pk=None):
+        idea = self.get_object()
+        user, err = require_user(request)
+        if err:
+            return err
+        if idea.likes.filter(id=user.id).exists():
+            idea.likes.remove(user)
+            liked = False
+        else:
+            idea.likes.add(user)
+            liked = True
+        return Response({'liked': liked, 'likes_count': idea.likes.count()})
+
+    @action(detail=True, methods=['get', 'post'], url_path='comments')
+    def comments(self, request, pk=None):
+        idea = self.get_object()
+        if request.method == 'GET':
+            rows = FailedIdeaComment.objects.filter(failed_idea=idea).select_related('user')
+            return Response(FailedIdeaCommentSerializer(rows, many=True).data)
+
+        user, err = require_user(request)
+        if err:
+            return err
+        serializer = FailedIdeaCommentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        comment = FailedIdeaComment.objects.create(
+            failed_idea=idea,
+            user=user,
+            content=serializer.validated_data['content'],
+        )
+        return Response(FailedIdeaCommentSerializer(comment).data, status=status.HTTP_201_CREATED)
 
 
 class FutureMemoryViewSet(ThrottleMixin, viewsets.ModelViewSet):
