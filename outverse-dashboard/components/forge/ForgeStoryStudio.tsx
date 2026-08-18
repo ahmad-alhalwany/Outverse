@@ -18,6 +18,7 @@ import {
 } from '@heroicons/react/24/outline';
 import WorldShell from '@/components/world/WorldShell';
 import { useTheme } from '@/components/ThemeProvider';
+import { useLocale } from '@/components/LocaleProvider';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { getToken } from '@/lib/auth';
 import {
@@ -86,6 +87,18 @@ const PALETTES = {
 };
 
 type Colors = (typeof PALETTES)['dark'];
+
+const BUDDY_LABEL_KEY: Record<string, string> = {
+  continue: 'forge.buddyContinue',
+  rewrite: 'forge.buddyRewrite',
+  outline: 'forge.buddyOutline',
+  character: 'forge.buddyCharacter',
+  critique: 'forge.buddyCritique',
+  spark: 'forge.buddySpark',
+  twist: 'forge.buddyTwist',
+  sensory: 'forge.buddySensory',
+  dialogue: 'forge.buddyDialogue',
+};
 
 function renderFormattedText(content: string): ReactNode[] {
   const blocks = content.split(/\n/);
@@ -180,6 +193,7 @@ function SegmentDialogues({
   colors: Colors;
   onChanged: () => void;
 }) {
+  const { t } = useLocale();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -204,7 +218,7 @@ function SegmentDialogues({
     <div className="mt-3">
       <button type="button" className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: colors.brownDk }} onClick={() => setOpen((v) => !v)}>
         <ChatBubbleLeftIcon className="h-4 w-4" />
-        Inner dialogue ({segment.dialogues_count ?? dialogues.length})
+        {t('forge.innerDialogue')} ({segment.dialogues_count ?? dialogues.length})
       </button>
       {open && (
         <div className="mt-2 space-y-2 rounded-xl border p-3" style={{ borderColor: colors.line, background: colors.card2 }}>
@@ -219,12 +233,12 @@ function SegmentDialogues({
               className="flex-1 rounded-full border px-3 py-1.5 text-xs outline-none"
               style={{ borderColor: colors.line, background: colors.white, color: colors.text }}
               maxLength={280}
-              placeholder="Add a short inner note…"
+              placeholder={t('forge.addInnerNote')}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
             />
             <button type="button" disabled={busy} onClick={() => void submit()} className="rounded-full px-3 py-1.5 text-xs font-semibold text-white" style={{ background: colors.brownDk }}>
-              Post
+              {t('forge.post')}
             </button>
           </div>
         </div>
@@ -235,6 +249,7 @@ function SegmentDialogues({
 
 export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
   const { theme } = useTheme();
+  const { t } = useLocale();
   const C = PALETTES[theme];
   const user = useAuthUser();
   const [story, setStory] = useState<ForgeStory | null>(null);
@@ -516,7 +531,7 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
       headers: token ? { Authorization: `Token ${token}` } : {},
     });
     if (!res.ok) {
-      alert('PDF export failed');
+      alert(t('forge.pdfExportFailed'));
       return;
     }
     const blob = await res.blob();
@@ -531,7 +546,7 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
   if (loading) {
     return (
       <WorldShell colors={C} maxWidth="max-w-6xl">
-        <p className="py-20 text-center text-sm" style={{ color: C.text2 }}>Opening World Studio…</p>
+        <p className="py-20 text-center text-sm" style={{ color: C.text2 }}>{t('forge.openingStudio')}</p>
       </WorldShell>
     );
   }
@@ -540,9 +555,9 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
     return (
       <WorldShell colors={C} maxWidth="max-w-6xl">
         <div className="py-16 text-center">
-          <p className="text-sm" style={{ color: C.text2 }}>{error || 'Story not found'}</p>
+          <p className="text-sm" style={{ color: C.text2 }}>{error || t('forge.storyNotFound')}</p>
           <Link href="/forge" className="mt-4 inline-block text-sm font-semibold underline" style={{ color: C.brownDk }}>
-            Back to Forge
+            {t('forge.backToForge')}
           </Link>
         </div>
       </WorldShell>
@@ -560,7 +575,7 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
     return (
       <WorldShell colors={C} maxWidth="max-w-3xl">
         <div className="mb-4">
-          <Link href="/forge" className="text-xs font-semibold" style={{ color: C.text2 }}>← Story Forge</Link>
+          <Link href="/forge" className="text-xs font-semibold" style={{ color: C.text2 }}>{t('forge.backToForge')}</Link>
         </div>
         <div className="overflow-hidden rounded-[28px] border" style={{ borderColor: C.line, boxShadow: C.shadowLg, background: C.hero }}>
           {cover ? (
@@ -573,22 +588,22 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
           )}
           <div className="space-y-3 p-6">
             <p className="text-xs uppercase tracking-wide" style={{ color: C.text2 }}>
-              {story.studio_mode === 'solo' ? 'Private solo studio' : 'Collaborative world'} · {story.genre_display}
+              {story.studio_mode === 'solo' ? t('forge.privateSoloStudio') : t('forge.collaborativeWorld')} · {story.genre_display}
             </p>
             <h1 className="font-serif text-3xl font-semibold" style={{ color: C.text }}>{story.title}</h1>
             <p className="leading-relaxed" style={{ color: C.text2 }}>{story.premise}</p>
             <p className="text-xs" style={{ color: C.text2 }}>
-              by {displayName(story.owner)} · {story.approved_segment_count ?? approved.length}/{story.max_segments} parts
+              {displayName(story.owner)} · {story.approved_segment_count ?? approved.length}/{story.max_segments} {t('forge.parts')}
             </p>
           </div>
         </div>
 
         {approved.length > 0 && (
           <div className="mt-6 space-y-3">
-            <h2 className="text-sm font-semibold" style={{ color: C.text }}>Published parts</h2>
+            <h2 className="text-sm font-semibold" style={{ color: C.text }}>{t('forge.publishedParts')}</h2>
             {approved.slice(0, 3).map((seg) => (
               <article key={seg.id} className="rounded-2xl border p-4 text-sm leading-relaxed" style={{ borderColor: C.line, background: C.panel, color: C.text }}>
-                <div className="mb-1 text-xs font-semibold" style={{ color: C.brownDk }}>Part {seg.order}</div>
+                <div className="mb-1 text-xs font-semibold" style={{ color: C.brownDk }}>{t('forge.part')} {seg.order}</div>
                 {renderFormattedText(seg.content.slice(0, 420))}{seg.content.length > 420 ? '…' : ''}
               </article>
             ))}
@@ -598,34 +613,34 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
         <div className="mt-6 rounded-2xl border p-5" style={{ borderColor: C.line, background: C.panel }}>
           {myInvite ? (
             <>
-              <h3 className="text-base font-semibold" style={{ color: C.text }}>You&apos;re invited</h3>
+              <h3 className="text-base font-semibold" style={{ color: C.text }}>{t('forge.youAreInvited')}</h3>
               <p className="mt-1 text-sm" style={{ color: C.text2 }}>
-                Join this studio as <strong>{myInvite.role}</strong> to write, use Writing Buddy, and collaborate.
+                {t('forge.joinAsRoleHint', { role: myInvite.role })}
               </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button type="button" className="rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ background: C.brownDk }} onClick={() => void respondInvite(story.id, true).then(load)}>
-                  Accept & open studio
+                  {t('forge.acceptOpenStudio')}
                 </button>
                 <button type="button" className="rounded-full border px-4 py-2 text-sm font-semibold" style={{ borderColor: C.line, color: C.text }} onClick={() => void respondInvite(story.id, false).then(load)}>
-                  Decline
+                  {t('forge.decline')}
                 </button>
               </div>
             </>
           ) : pendingRequest ? (
             <>
-              <h3 className="text-base font-semibold" style={{ color: C.text }}>Join request pending</h3>
+              <h3 className="text-base font-semibold" style={{ color: C.text }}>{t('forge.joinRequestPending')}</h3>
               <p className="mt-1 text-sm" style={{ color: C.text2 }}>
-                The owner has your request. You&apos;ll get studio access once they approve.
+                {t('forge.joinRequestPendingHint')}
               </p>
             </>
           ) : (
             <>
-              <h3 className="text-base font-semibold" style={{ color: C.text }}>Request to join this studio</h3>
+              <h3 className="text-base font-semibold" style={{ color: C.text }}>{t('forge.requestToJoinTitle')}</h3>
               <p className="mt-1 text-sm" style={{ color: C.text2 }}>
-                This World Studio is reserved for the owner and accepted collaborators. Send a join request to write here.
+                {t('forge.requestToJoinHint')}
               </p>
               {!user ? (
-                <p className="mt-4 text-sm font-semibold" style={{ color: C.brownDk }}>Sign in to request access.</p>
+                <p className="mt-4 text-sm font-semibold" style={{ color: C.brownDk }}>{t('forge.signInToRequest')}</p>
               ) : story.can_request_join ? (
                 <button
                   type="button"
@@ -640,10 +655,10 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
                       .finally(() => setBusy(''));
                   }}
                 >
-                  <UserPlusIcon className="h-4 w-4" /> {busy === 'join' ? 'Sending…' : 'Request to join'}
+                  <UserPlusIcon className="h-4 w-4" /> {busy === 'join' ? t('forge.sending') : t('forge.requestToJoin')}
                 </button>
               ) : (
-                <p className="mt-4 text-sm" style={{ color: C.text2 }}>Joining is not available for this story right now.</p>
+                <p className="mt-4 text-sm" style={{ color: C.text2 }}>{t('forge.joiningUnavailable')}</p>
               )}
             </>
           )}
@@ -656,30 +671,30 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
     <WorldShell colors={C} maxWidth="max-w-7xl">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Link href="/forge" className="text-xs font-semibold" style={{ color: C.text2 }}>← Story Forge</Link>
+          <Link href="/forge" className="text-xs font-semibold" style={{ color: C.text2 }}>{t('forge.backToForge')}</Link>
           <span className="rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide" style={{ background: C.card, color: C.text2 }}>
-            {story.studio_mode === 'solo' ? 'Solo studio' : 'Collab studio'}
+            {story.studio_mode === 'solo' ? t('forge.soloStudio') : t('forge.collabStudio')}
           </span>
           {presence.length > 0 && (
             <span className="inline-flex items-center gap-1 text-[10px]" style={{ color: C.text2 }}>
               <UsersIcon className="h-3.5 w-3.5" />
-              Live: {presence.map((p) => p.username).join(', ')}
+              {t('forge.live')} {presence.map((p) => p.username).join(', ')}
             </span>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: C.line, color: C.text }} onClick={() => void navigator.clipboard?.writeText(`${window.location.origin}/forge/${story.id}`)}>
-            <ShareIcon className="h-4 w-4" /> Share
+            <ShareIcon className="h-4 w-4" /> {t('forge.share')}
           </button>
           <button type="button" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: C.line, color: C.text }} onClick={() => void toggleSaveStory(story.id).then(load)}>
-            <BookmarkIcon className="h-4 w-4" /> {story.is_saved ? 'Saved' : 'Save'}
+            <BookmarkIcon className="h-4 w-4" /> {story.is_saved ? t('forge.saved') : t('common.save')}
           </button>
           <button type="button" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: C.line, color: C.text }} onClick={() => void handlePdf()}>
             <ArrowDownTrayIcon className="h-4 w-4" /> PDF
           </button>
           {story.is_owner && (
             <button type="button" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-white" style={{ background: C.brownDk }} onClick={() => setSettingsOpen(true)}>
-              <PencilSquareIcon className="h-4 w-4" /> Author settings
+              <PencilSquareIcon className="h-4 w-4" /> {t('forge.authorSettings')}
             </button>
           )}
         </div>
@@ -687,16 +702,16 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
 
       {pendingJoinRequests.length > 0 && (
         <div className="mb-4 space-y-2 rounded-2xl border px-4 py-3" style={{ borderColor: C.line, background: C.card }}>
-          <p className="text-sm font-semibold">Join requests</p>
+          <p className="text-sm font-semibold">{t('forge.joinRequests')}</p>
           {pendingJoinRequests.map((req) => (
             <div key={req.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span>{displayName(req.user)} · wants <strong>{req.role}</strong></span>
+              <span>{displayName(req.user)} · {t('forge.wants')} <strong>{req.role}</strong></span>
               <div className="flex gap-2">
                 <button type="button" className="rounded-full px-3 py-1 text-xs font-semibold text-white" style={{ background: '#16a34a' }} onClick={() => void reviewJoinRequest(story.id, req.user!.id!, true, req.role).then(load)}>
-                  Approve
+                  {t('forge.approve')}
                 </button>
                 <button type="button" className="rounded-full border px-3 py-1 text-xs font-semibold" style={{ borderColor: C.line }} onClick={() => void reviewJoinRequest(story.id, req.user!.id!, false).then(load)}>
-                  Decline
+                  {t('forge.decline')}
                 </button>
               </div>
             </div>
@@ -707,20 +722,24 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
       <div className="grid gap-6 xl:grid-cols-[minmax(220px,0.85fr)_minmax(0,1.5fr)_minmax(260px,0.95fr)]">
         {/* Bible */}
         <aside className="rounded-2xl border p-4 h-fit" style={{ borderColor: C.line, background: C.panel }}>
-          <h3 className="mb-3 text-sm font-semibold">Story Bible</h3>
+          <h3 className="mb-3 text-sm font-semibold">{t('forge.storyBible')}</h3>
           <div className="mb-3 flex gap-1">
-            {(['outline', 'cast', 'world'] as const).map((tab) => (
-              <button key={tab} type="button" onClick={() => setBibleTab(tab)} className="rounded-full px-2.5 py-1 text-[10px] font-semibold capitalize" style={{ background: bibleTab === tab ? C.brownDk : C.card, color: bibleTab === tab ? '#fff' : C.text2 }}>
-                {tab}
+            {([
+              ['outline', 'forge.bibleOutline'],
+              ['cast', 'forge.bibleCast'],
+              ['world', 'forge.bibleWorld'],
+            ] as const).map(([tab, labelKey]) => (
+              <button key={tab} type="button" onClick={() => setBibleTab(tab)} className="rounded-full px-2.5 py-1 text-[10px] font-semibold" style={{ background: bibleTab === tab ? C.brownDk : C.card, color: bibleTab === tab ? '#fff' : C.text2 }}>
+                {t(labelKey)}
               </button>
             ))}
           </div>
           {bibleTab === 'outline' && (
             <div className="space-y-2 text-xs">
-              {outline.length === 0 && <p style={{ color: C.text2 }}>No outline yet — ask Writing Buddy.</p>}
+              {outline.length === 0 && <p style={{ color: C.text2 }}>{t('forge.noOutlineYet')}</p>}
               {outline.map((act, i) => (
                 <div key={i} className="rounded-xl border p-2" style={{ borderColor: C.line }}>
-                  <div className="font-semibold" style={{ color: C.brownDk }}>Act {act.act ?? i + 1}: {act.title || 'Untitled'}</div>
+                  <div className="font-semibold" style={{ color: C.brownDk }}>{t('forge.act')} {act.act ?? i + 1}: {act.title || t('forge.untitled')}</div>
                   <ul className="mt-1 list-disc pl-4" style={{ color: C.text2 }}>
                     {(act.beats || []).map((b, j) => <li key={j}>{b}</li>)}
                   </ul>
@@ -730,10 +749,10 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
           )}
           {bibleTab === 'cast' && (
             <div className="space-y-2 text-xs">
-              {characters.length === 0 && <p style={{ color: C.text2 }}>Cast is empty — generate a character.</p>}
+              {characters.length === 0 && <p style={{ color: C.text2 }}>{t('forge.castEmpty')}</p>}
               {characters.map((ch, i) => (
                 <div key={i} className="rounded-xl border p-2" style={{ borderColor: C.line }}>
-                  <div className="font-semibold">{ch.name || 'Unnamed'}</div>
+                  <div className="font-semibold">{ch.name || t('forge.unnamed')}</div>
                   <div style={{ color: C.text2 }}>{ch.role} · {(ch.traits || []).join(', ')}</div>
                   {ch.voice && <div className="mt-1 italic" style={{ color: C.text2 }}>{ch.voice}</div>}
                 </div>
@@ -748,11 +767,11 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
                 value={worldNotes}
                 disabled={!story.can_edit_bible}
                 onChange={(e) => setWorldNotes(e.target.value)}
-                placeholder="Laws of this world, magic systems, history…"
+                placeholder={t('forge.worldNotesPlaceholder')}
               />
               {story.can_edit_bible && (
                 <button type="button" disabled={busy === 'bible'} onClick={() => void saveWorldNotes()} className="w-full rounded-full px-3 py-1.5 text-xs font-semibold text-white" style={{ background: C.brownDk }}>
-                  Save world notes
+                  {t('forge.saveWorldNotes')}
                 </button>
               )}
             </div>
@@ -773,8 +792,8 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
             <div className="space-y-3 px-5 py-5">
               <div className="flex flex-wrap gap-2 text-xs" style={{ color: C.text2 }}>
                 <span className="rounded-full px-2 py-0.5" style={{ background: C.card }}>{story.genre_display}</span>
-                <span>{story.approved_segment_count ?? story.segment_count}/{story.max_segments} parts</span>
-                <span>· {story.word_count || 0} words</span>
+                <span>{story.approved_segment_count ?? story.segment_count}/{story.max_segments} {t('forge.parts')}</span>
+                <span>· {story.word_count || 0} {t('forge.words')}</span>
                 {story.my_role && <span className="rounded-full px-2 py-0.5 capitalize" style={{ background: C.card2 }}>{story.my_role}</span>}
               </div>
               <h1 className="font-serif text-3xl font-semibold md:text-4xl" style={{ color: C.text }}>{story.title}</h1>
@@ -785,7 +804,7 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
               {wordProgress != null && (
                 <div>
                   <div className="mb-1 flex justify-between text-[10px]" style={{ color: C.text2 }}>
-                    <span>Writing goal</span>
+                    <span>{t('forge.writingGoal')}</span>
                     <span>{story.word_count}/{story.writing_goal} ({wordProgress}%)</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full" style={{ background: C.card }}>
@@ -800,12 +819,12 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
             {(story.segments || []).map((seg) => (
               <article key={seg.id} className="rounded-2xl border p-4 md:p-5" style={{ borderColor: C.line, background: C.panel }}>
                 <div className="mb-2 flex items-center justify-between gap-2 text-xs" style={{ color: C.text2 }}>
-                  <span className="font-semibold" style={{ color: C.brownDk }}>Part {seg.order}</span>
+                  <span className="font-semibold" style={{ color: C.brownDk }}>{t('forge.part')} {seg.order}</span>
                   <span className="flex items-center gap-2">
                     — {displayName(seg.author)}
                     {story.can_revise && (
                       <button type="button" className="underline" onClick={() => { setEditingSegmentId(seg.id); setEditDraft(seg.content); }}>
-                        Revise
+                        {t('forge.revise')}
                       </button>
                     )}
                   </span>
@@ -814,8 +833,8 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
                   <div className="space-y-2">
                     <textarea className="min-h-[120px] w-full rounded-xl border p-3 text-sm outline-none" style={{ borderColor: C.line, background: C.white, color: C.text }} value={editDraft} onChange={(e) => setEditDraft(e.target.value)} />
                     <div className="flex gap-2">
-                      <button type="button" className="rounded-full px-3 py-1.5 text-xs font-semibold text-white" style={{ background: C.brownDk }} onClick={() => void reviseSegment(story.id, seg.id, editDraft).then(() => { setEditingSegmentId(null); return load(); })}>Save revision</button>
-                      <button type="button" className="rounded-full border px-3 py-1.5 text-xs" style={{ borderColor: C.line }} onClick={() => setEditingSegmentId(null)}>Cancel</button>
+                      <button type="button" className="rounded-full px-3 py-1.5 text-xs font-semibold text-white" style={{ background: C.brownDk }} onClick={() => void reviseSegment(story.id, seg.id, editDraft).then(() => { setEditingSegmentId(null); return load(); })}>{t('forge.saveRevision')}</button>
+                      <button type="button" className="rounded-full border px-3 py-1.5 text-xs" style={{ borderColor: C.line }} onClick={() => setEditingSegmentId(null)}>{t('common.cancel')}</button>
                     </div>
                   </div>
                 ) : (
@@ -828,17 +847,17 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
 
           {story.can_approve && (story.pending_segments || []).length > 0 && (
             <div className="mt-8 space-y-3">
-              <h2 className="text-sm font-semibold" style={{ color: C.pending }}>Pending approval</h2>
+              <h2 className="text-sm font-semibold" style={{ color: C.pending }}>{t('forge.pendingApproval')}</h2>
               {(story.pending_segments || []).map((seg) => (
                 <div key={seg.id} className="rounded-2xl border p-4" style={{ borderColor: C.pending, background: C.card }}>
-                  <p className="mb-2 text-xs" style={{ color: C.text2 }}>From {displayName(seg.author)}</p>
+                  <p className="mb-2 text-xs" style={{ color: C.text2 }}>{t('forge.from')} {displayName(seg.author)}</p>
                   <p className="whitespace-pre-wrap text-sm">{seg.content}</p>
                   <div className="mt-3 flex gap-2">
                     <button type="button" className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-white" style={{ background: '#16a34a' }} onClick={() => void approveSegment(story.id, seg.id).then(load)}>
-                      <CheckIcon className="h-4 w-4" /> Approve
+                      <CheckIcon className="h-4 w-4" /> {t('forge.approve')}
                     </button>
                     <button type="button" className="inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: C.line }} onClick={() => void rejectSegment(story.id, seg.id).then(load)}>
-                      <XMarkIcon className="h-4 w-4" /> Reject
+                      <XMarkIcon className="h-4 w-4" /> {t('forge.reject')}
                     </button>
                   </div>
                 </div>
@@ -849,25 +868,25 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
           {story.can_contribute && story.status !== 'completed' && (
             <form onSubmit={handleContribute} className={`mt-8 rounded-2xl border p-4 ${focusMode ? 'fixed inset-4 z-50 overflow-y-auto' : ''}`} style={{ borderColor: C.line, background: focusMode ? C.cream : C.card }}>
               <div className="mb-2 flex items-center justify-between">
-                <label className="text-sm font-semibold">Studio editor</label>
+                <label className="text-sm font-semibold">{t('forge.studioEditor')}</label>
                 <button type="button" className="inline-flex items-center gap-1 text-xs" style={{ color: C.brownDk }} onClick={() => setFocusMode((v) => !v)}>
-                  <ArrowsPointingOutIcon className="h-4 w-4" /> {focusMode ? 'Exit focus' : 'Focus mode'}
+                  <ArrowsPointingOutIcon className="h-4 w-4" /> {focusMode ? t('forge.exitFocus') : t('forge.focusMode')}
                 </button>
               </div>
               {story.require_approval && !story.is_owner && story.my_role !== 'editor' && (
-                <p className="mb-2 text-xs" style={{ color: C.pending }}>Owner/editor approval required.</p>
+                <p className="mb-2 text-xs" style={{ color: C.pending }}>{t('forge.approvalRequired')}</p>
               )}
               <ForgeFocusEditor
                 value={draft}
                 onChange={setDraft}
                 colors={C}
                 disabled={busy === 'write'}
-                placeholder="Write the next part — format with the toolbar, drop an image, break a scene…"
+                placeholder={t('forge.editorPlaceholder')}
               />
               <div className="mt-2 flex items-center justify-between text-xs" style={{ color: C.text2 }}>
-                <span>{draftWords} words</span>
+                <span>{draftWords} {t('forge.words')}</span>
                 <button type="submit" disabled={busy === 'write' || !draft.trim()} className="rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" style={{ background: C.brownDk }}>
-                  {busy === 'write' ? 'Sending…' : 'Publish part'}
+                  {busy === 'write' ? t('forge.sending') : t('forge.publishPart')}
                 </button>
               </div>
             </form>
@@ -878,31 +897,20 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
         <aside className="space-y-4">
           <div className="rounded-2xl border p-4" style={{ borderColor: C.line, background: C.panel }}>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <SparklesIcon className="h-4 w-4" /> Writing Buddy
+              <SparklesIcon className="h-4 w-4" /> {t('forge.writingBuddy')}
             </h3>
-            <p className="mb-2 text-[10px]" style={{ color: C.text2 }}>Generate cards only — nothing reloads until you insert or apply.</p>
+            <p className="mb-2 text-[10px]" style={{ color: C.text2 }}>{t('forge.buddyHint')}</p>
             <div className="grid grid-cols-2 gap-2">
-              {([
-                ['continue', 'Continue'],
-                ['rewrite', 'Rewrite'],
-                ['outline', 'Outline'],
-                ['character', 'Character'],
-                ['critique', 'Critique'],
-              ] as const).map(([k, label]) => (
+              {(['continue', 'rewrite', 'outline', 'character', 'critique'] as const).map((k) => (
                 <button key={k} type="button" disabled={!!busy} onClick={() => void runBuddy(k)} className="rounded-full border px-2 py-1.5 text-[11px] font-semibold" style={{ borderColor: C.line, color: C.text }}>
-                  {busy === `buddy-${k}` ? '…' : label}
+                  {busy === `buddy-${k}` ? '…' : t(BUDDY_LABEL_KEY[k])}
                 </button>
               ))}
             </div>
             <div className="mt-2 grid grid-cols-2 gap-2">
-              {([
-                ['spark', '✦ Spark'],
-                ['twist', 'Twist'],
-                ['sensory', 'Sensory'],
-                ['dialogue', 'Dialogue'],
-              ] as const).map(([k, label]) => (
+              {(['spark', 'twist', 'sensory', 'dialogue'] as const).map((k) => (
                 <button key={k} type="button" disabled={!!busy} onClick={() => void runBuddy(k)} className="rounded-full px-2 py-1.5 text-[11px] font-semibold text-white" style={{ background: C.brownDk }}>
-                  {busy === `buddy-${k}` ? '…' : label}
+                  {busy === `buddy-${k}` ? '…' : t(BUDDY_LABEL_KEY[k])}
                 </button>
               ))}
             </div>
@@ -912,16 +920,16 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
                   <div className="max-h-64 overflow-y-auto rounded-xl border p-3" style={{ borderColor: C.line, background: C.card2 }}>
                     <div className="mb-2 flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.brown }}>Suggested cast</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.brown }}>{t('forge.suggestedCast')}</p>
                         <h4 className="text-sm font-semibold" style={{ color: C.text }}>
-                          {buddyResult.character.name || 'Unnamed character'}
+                          {buddyResult.character.name || t('forge.unnamedCharacter')}
                         </h4>
                         {buddyResult.character.role && (
                           <p className="mt-0.5 text-xs" style={{ color: C.text2 }}>{buddyResult.character.role}</p>
                         )}
                       </div>
                       <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: C.card, color: C.brownDk }}>
-                        Character
+                        {t('forge.characterBadge')}
                       </span>
                     </div>
                     {buddyResult.character.voice && (
@@ -950,7 +958,7 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
                     {buddyResult.outline.map((act, i) => (
                       <div key={i} className="rounded-lg border p-2" style={{ borderColor: C.line, background: C.panel }}>
                         <div className="text-xs font-semibold" style={{ color: C.brownDk }}>
-                          Act {act.act ?? i + 1}: {act.title || 'Untitled'}
+                          {t('forge.act')} {act.act ?? i + 1}: {act.title || t('forge.untitled')}
                         </div>
                         <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[11px]" style={{ color: C.text2 }}>
                           {(act.beats || []).map((b, j) => <li key={j}>{b}</li>)}
@@ -961,18 +969,18 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
                 ) : (
                   <div className="max-h-56 overflow-y-auto rounded-xl border p-3 text-xs leading-relaxed whitespace-pre-wrap" style={{ borderColor: C.line, background: C.card2, color: C.text }}>
                     <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide" style={{ color: C.brown }}>
-                      {buddyResult.kind}
+                      {t(BUDDY_LABEL_KEY[buddyResult.kind] || buddyResult.kind)}
                     </p>
                     {buddyResult.text}
                   </div>
                 )}
                 <div className="grid gap-2">
                   <button type="button" className="w-full rounded-full px-3 py-1.5 text-xs font-semibold text-white" style={{ background: C.brownDk }} onClick={insertBuddyIntoDraft}>
-                    Insert into draft
+                    {t('forge.insertIntoDraft')}
                   </button>
                   {story.can_edit_bible && (buddyResult.kind === 'outline' || buddyResult.kind === 'character') && (
                     <button type="button" disabled={busy === 'bible-apply'} className="w-full rounded-full border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: C.line, color: C.text }} onClick={() => void applyBuddyToBible()}>
-                      {busy === 'bible-apply' ? 'Saving…' : 'Add to Story Bible'}
+                      {busy === 'bible-apply' ? t('forge.saving') : t('forge.addToBible')}
                     </button>
                   )}
                 </div>
@@ -981,10 +989,10 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
           </div>
 
           <div className="rounded-2xl border p-4" style={{ borderColor: C.line, background: C.panel }}>
-            <h3 className="mb-3 text-sm font-semibold">Contributors</h3>
+            <h3 className="mb-3 text-sm font-semibold">{t('forge.contributorsTitle')}</h3>
             <div className="space-y-2 text-sm">
               {story.owner && (
-                <div className="flex justify-between"><span>{displayName(story.owner)}</span><span className="text-xs" style={{ color: C.text2 }}>Owner</span></div>
+                <div className="flex justify-between"><span>{displayName(story.owner)}</span><span className="text-xs" style={{ color: C.text2 }}>{t('forge.owner')}</span></div>
               )}
               {(story.collaborators || []).filter((c) => c.status === 'accepted').map((c) => (
                 <div key={c.id} className="flex justify-between"><span>{displayName(c.user)}</span><span className="text-xs capitalize" style={{ color: C.text2 }}>{c.role}</span></div>
@@ -993,15 +1001,15 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
             {story.is_owner && (
               <div className="mt-4 space-y-2 border-t pt-3" style={{ borderColor: C.line }}>
                 <div className="flex gap-2">
-                  <input className="min-w-0 flex-1 rounded-full border px-3 py-1.5 text-xs outline-none" style={{ borderColor: C.line, background: C.white, color: C.text }} placeholder="Username" value={inviteUser} onChange={(e) => setInviteUser(e.target.value)} />
+                  <input className="min-w-0 flex-1 rounded-full border px-3 py-1.5 text-xs outline-none" style={{ borderColor: C.line, background: C.white, color: C.text }} placeholder={t('forge.usernamePlaceholder')} value={inviteUser} onChange={(e) => setInviteUser(e.target.value)} />
                   <select className="rounded-full border px-2 text-xs" style={{ borderColor: C.line, background: C.white, color: C.text }} value={inviteRole} onChange={(e) => setInviteRole(e.target.value)}>
-                    <option value="writer">Writer</option>
-                    <option value="editor">Editor</option>
-                    <option value="narrator">Narrator</option>
+                    <option value="writer">{t('forge.roleWriter')}</option>
+                    <option value="editor">{t('forge.roleEditor')}</option>
+                    <option value="narrator">{t('forge.roleNarrator')}</option>
                   </select>
                 </div>
                 <button type="button" onClick={() => void inviteCollaborator(story.id, { username: inviteUser.trim(), role: inviteRole }).then(() => { setInviteUser(''); return load(); })} className="inline-flex w-full items-center justify-center gap-1 rounded-full px-3 py-2 text-xs font-semibold text-white" style={{ background: C.brownDk }}>
-                  <UserPlusIcon className="h-4 w-4" /> Invite (switches to collab)
+                  <UserPlusIcon className="h-4 w-4" /> {t('forge.inviteSwitchesToCollab')}
                 </button>
               </div>
             )}
@@ -1009,7 +1017,7 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
 
           {story.is_owner && (
             <button type="button" disabled={busy === 'cover'} onClick={() => void generateCover(story.id, settings.cover_prompt).then(load)} className="inline-flex w-full items-center justify-center gap-2 rounded-full border px-3 py-2 text-xs font-semibold" style={{ borderColor: C.line, color: C.text }}>
-              <SparklesIcon className="h-4 w-4" /> {busy === 'cover' ? 'Generating…' : 'AI cover'}
+              <SparklesIcon className="h-4 w-4" /> {busy === 'cover' ? t('forge.generating') : t('forge.aiCover')}
             </button>
           )}
         </aside>
@@ -1019,13 +1027,20 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border p-5" style={{ background: C.cream, borderColor: C.line }}>
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Author settings</h2>
+              <h2 className="text-lg font-semibold">{t('forge.authorSettingsTitle')}</h2>
               <button type="button" onClick={() => setSettingsOpen(false)}><XMarkIcon className="h-5 w-5" /></button>
             </div>
             <div className="space-y-3 text-sm">
-              {(['title', 'premise', 'tone', 'pov', 'content_rules', 'cover_prompt'] as const).map((key) => (
+              {([
+                ['title', 'forge.titleLabel'],
+                ['premise', 'forge.descriptionLabel'],
+                ['tone', 'forge.toneLabel'],
+                ['pov', 'forge.povLabel'],
+                ['content_rules', 'forge.contentRulesLabel'],
+                ['cover_prompt', 'forge.coverPromptLabel'],
+              ] as const).map(([key, labelKey]) => (
                 <label key={key} className="block">
-                  <span className="mb-1 block text-xs font-semibold capitalize" style={{ color: C.text2 }}>{key.replace('_', ' ')}</span>
+                  <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>{t(labelKey)}</span>
                   {key === 'premise' || key === 'content_rules' ? (
                     <textarea className="w-full rounded-xl border p-2 outline-none" style={{ borderColor: C.line, background: C.white, color: C.text }} rows={3} value={String(settings[key])} onChange={(e) => setSettings((s) => ({ ...s, [key]: e.target.value }))} />
                   ) : (
@@ -1035,36 +1050,36 @@ export default function ForgeStoryStudio({ storyId }: { storyId: number }) {
               ))}
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>Max parts</span>
+                  <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>{t('forge.maxPartsLabel')}</span>
                   <input type="number" min={2} max={100} className="w-full rounded-xl border px-3 py-2 outline-none" style={{ borderColor: C.line, background: C.white, color: C.text }} value={settings.max_segments} onChange={(e) => setSettings((s) => ({ ...s, max_segments: Number(e.target.value) }))} />
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>Writing goal (words)</span>
+                  <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>{t('forge.writingGoalWords')}</span>
                   <input type="number" min={0} className="w-full rounded-xl border px-3 py-2 outline-none" style={{ borderColor: C.line, background: C.white, color: C.text }} value={settings.writing_goal} onChange={(e) => setSettings((s) => ({ ...s, writing_goal: e.target.value }))} />
                 </label>
               </div>
               <label className="block">
-                <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>Studio mode</span>
+                <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>{t('forge.studioMode')}</span>
                 <select className="w-full rounded-xl border px-3 py-2 outline-none" style={{ borderColor: C.line, background: C.white, color: C.text }} value={settings.studio_mode} onChange={(e) => setSettings((s) => ({ ...s, studio_mode: e.target.value }))}>
-                  <option value="solo">Solo</option>
-                  <option value="collab">Collaborative</option>
+                  <option value="solo">{t('forge.studioModeSolo')}</option>
+                  <option value="collab">{t('forge.studioModeCollab')}</option>
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>Visibility</span>
+                <span className="mb-1 block text-xs font-semibold" style={{ color: C.text2 }}>{t('forge.visibilityLabel')}</span>
                 <select className="w-full rounded-xl border px-3 py-2 outline-none" style={{ borderColor: C.line, background: C.white, color: C.text }} value={settings.visibility} onChange={(e) => setSettings((s) => ({ ...s, visibility: e.target.value }))}>
-                  <option value="public">Public</option>
-                  <option value="invite_only">Invite only</option>
+                  <option value="public">{t('forge.visibilityPublic')}</option>
+                  <option value="invite_only">{t('forge.visibilityInviteOnly')}</option>
                 </select>
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={settings.require_approval} onChange={(e) => setSettings((s) => ({ ...s, require_approval: e.target.checked }))} />
-                Require approval for new parts
+                {t('forge.requireApprovalForParts')}
               </label>
             </div>
             <div className="mt-5 flex justify-end gap-2">
-              <button type="button" className="rounded-full px-4 py-2 text-sm" onClick={() => setSettingsOpen(false)}>Cancel</button>
-              <button type="button" disabled={busy === 'settings'} onClick={() => void handleSaveSettings()} className="rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ background: C.brownDk }}>Save</button>
+              <button type="button" className="rounded-full px-4 py-2 text-sm" onClick={() => setSettingsOpen(false)}>{t('common.cancel')}</button>
+              <button type="button" disabled={busy === 'settings'} onClick={() => void handleSaveSettings()} className="rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ background: C.brownDk }}>{t('common.save')}</button>
             </div>
           </div>
         </div>

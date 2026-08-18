@@ -10,6 +10,7 @@ import {
   ChatBubbleBottomCenterTextIcon,
   HashtagIcon,
 } from '@heroicons/react/24/outline';
+import { useLocale } from '@/components/LocaleProvider';
 
 type Colors = {
   line: string;
@@ -57,11 +58,12 @@ export default function ForgeFocusEditor({
   value,
   onChange,
   colors: C,
-  placeholder = 'Continue the story…',
+  placeholder,
   maxLength = 12000,
   minHeightClass = 'min-h-[220px] md:min-h-[320px]',
   disabled,
 }: Props) {
+  const { t } = useLocale();
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -88,16 +90,16 @@ export default function ForgeFocusEditor({
   }
 
   function insertImageUrl() {
-    const url = window.prompt('Image URL');
+    const url = window.prompt(t('forge.imageUrlPrompt'));
     if (!url?.trim()) return;
-    const alt = window.prompt('Alt text (optional)', 'scene') || 'scene';
+    const alt = window.prompt(t('forge.altTextPrompt'), 'scene') || 'scene';
     applyInsert(`\n![${alt}](${url.trim()})\n`);
   }
 
   function onPickFile(file: File | null) {
     if (!file || !file.type.startsWith('image/')) return;
     if (file.size > 400_000) {
-      window.alert('Image is large — paste a hosted URL instead (max ~400KB for inline insert).');
+      window.alert(t('forge.imageTooLarge'));
       return;
     }
     const reader = new FileReader();
@@ -117,45 +119,45 @@ export default function ForgeFocusEditor({
 
   const tools: {
     label: string;
-    title: string;
+    titleKey: string;
     icon?: typeof BoldIcon;
     onClick: () => void;
   }[] = [
-    { label: 'B', title: 'Bold', icon: BoldIcon, onClick: () => applyWrap('**') },
-    { label: 'I', title: 'Italic', icon: ItalicIcon, onClick: () => applyWrap('*') },
-    { label: 'U', title: 'Underline', icon: UnderlineIcon, onClick: () => applyWrap('~') },
-    { label: 'H', title: 'Heading', icon: HashtagIcon, onClick: () => applyWrap('\n## ', '\n', 'Scene title') },
-    { label: '“', title: 'Quote', icon: ChatBubbleBottomCenterTextIcon, onClick: () => applyWrap('\n> ', '\n', 'quoted line') },
-    { label: '•', title: 'List', icon: Bars3BottomLeftIcon, onClick: () => applyWrap('\n- ', '\n', 'detail') },
-    { label: '***', title: 'Scene break', onClick: () => applyInsert('\n\n* * *\n\n') },
-    { label: 'IMG', title: 'Image URL', icon: PhotoIcon, onClick: insertImageUrl },
+    { label: 'B', titleKey: 'forge.toolBold', icon: BoldIcon, onClick: () => applyWrap('**') },
+    { label: 'I', titleKey: 'forge.toolItalic', icon: ItalicIcon, onClick: () => applyWrap('*') },
+    { label: 'U', titleKey: 'forge.toolUnderline', icon: UnderlineIcon, onClick: () => applyWrap('~') },
+    { label: 'H', titleKey: 'forge.toolHeading', icon: HashtagIcon, onClick: () => applyWrap('\n## ', '\n', 'Scene title') },
+    { label: '“', titleKey: 'forge.toolQuote', icon: ChatBubbleBottomCenterTextIcon, onClick: () => applyWrap('\n> ', '\n', 'quoted line') },
+    { label: '•', titleKey: 'forge.toolList', icon: Bars3BottomLeftIcon, onClick: () => applyWrap('\n- ', '\n', 'detail') },
+    { label: '***', titleKey: 'forge.toolSceneBreak', onClick: () => applyInsert('\n\n* * *\n\n') },
+    { label: 'IMG', titleKey: 'forge.toolImage', icon: PhotoIcon, onClick: insertImageUrl },
   ];
 
   return (
     <div className="overflow-hidden rounded-xl border" style={{ borderColor: C.line, background: C.white }}>
       <div className="flex flex-wrap items-center gap-1 border-b px-2 py-1.5" style={{ borderColor: C.line, background: C.card }}>
-        {tools.map((t) => (
+        {tools.map((tool) => (
           <button
-            key={t.title}
+            key={tool.titleKey}
             type="button"
-            title={t.title}
+            title={t(tool.titleKey)}
             disabled={disabled}
-            onClick={t.onClick}
+            onClick={tool.onClick}
             className="inline-flex h-8 min-w-8 items-center justify-center rounded-lg border px-2 text-xs font-semibold disabled:opacity-50"
             style={btnStyle}
           >
-            {t.icon ? <t.icon className="h-3.5 w-3.5" /> : <span>{t.label}</span>}
+            {tool.icon ? <tool.icon className="h-3.5 w-3.5" /> : <span>{tool.label}</span>}
           </button>
         ))}
         <button
           type="button"
-          title="Upload image"
+          title={t('forge.toolUploadImage')}
           disabled={disabled}
           onClick={() => fileRef.current?.click()}
           className="inline-flex h-8 items-center gap-1 rounded-lg border px-2 text-[11px] font-semibold disabled:opacity-50"
           style={btnStyle}
         >
-          <PhotoIcon className="h-3.5 w-3.5" /> Upload
+          <PhotoIcon className="h-3.5 w-3.5" /> {t('forge.upload')}
         </button>
         <input
           ref={fileRef}
@@ -176,10 +178,10 @@ export default function ForgeFocusEditor({
         maxLength={maxLength}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('forge.editorPlaceholderDefault')}
       />
       <div className="flex justify-between border-t px-3 py-1.5 text-[10px]" style={{ borderColor: C.line, color: C.text2 }}>
-        <span>Markdown · **bold** *italic* ~underline~ ## heading · images supported</span>
+        <span>{t('forge.markdownHint')}</span>
         <span>{value.length}/{maxLength}</span>
       </div>
     </div>
