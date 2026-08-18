@@ -14,6 +14,7 @@ class FlaggedContent(models.Model):
         ('chat_message', 'Direct chat message'),
         ('room_message', 'Room chat message'),
         ('bottle', 'Emotion bottle'),
+        ('idea', 'Bazaar idea'),
     ]
     STATUS_CHOICES = [
         ('pending', 'Pending'),

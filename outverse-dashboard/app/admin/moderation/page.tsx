@@ -10,6 +10,7 @@ const TYPE_LABEL: Record<string, string> = {
   comment: 'Comment',
   reel: 'Signal',
   reel_comment: 'Signal comment',
+  idea: 'Bazaar idea',
 };
 
 const REASON_LABEL: Record<string, string> = {

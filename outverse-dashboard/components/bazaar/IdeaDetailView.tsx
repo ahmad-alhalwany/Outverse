@@ -318,6 +318,7 @@ export default function IdeaDetailView({
         method: 'POST',
         json: {
           type: 'idea',
+          object_id: idea.id,
           content: `${idea.title}\n\n${idea.description}`,
         },
       });
