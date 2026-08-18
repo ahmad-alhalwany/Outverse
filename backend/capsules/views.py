@@ -51,6 +51,17 @@ class TimeCapsuleViewSet(
         user = user_from_request(self.request)
         serializer.save(user=user)
 
+    def create(self, request, *args, **kwargs):
+        # The write serializer only exposes text/voice/open_at; respond with
+        # the full read representation so the client gets id/created_at/
+        # is_unlocked immediately instead of an incomplete object.
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        output = TimeCapsuleSerializer(serializer.instance, context=self.get_serializer_context())
+        headers = self.get_success_headers(output.data)
+        return Response(output.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def list(self, request, *args, **kwargs):
         # Override list to use the /mine/ action semantics.
         return self.mine(request)

@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import {
+  ArrowLeftIcon,
   LockClosedIcon,
   LockOpenIcon,
   PaperAirplaneIcon,
   MicrophoneIcon,
   XMarkIcon,
   SparklesIcon,
+  CalendarDaysIcon,
 } from '@heroicons/react/24/outline';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
@@ -16,15 +19,17 @@ import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import {
   createCapsule,
   fetchMyCapsules,
+  fetchCapsuleStats,
   openCapsule,
   capsuleVoiceUrl,
   type TimeCapsule,
+  type CapsuleStats,
 } from '@/lib/capsulesApi';
 import { polishVaultTone } from '@/lib/aiCoachApi';
 
-type Duration = 'week' | 'month' | 'halfYear' | 'year';
+type Duration = 'week' | 'month' | 'halfYear' | 'year' | 'custom';
 
-const DURATIONS: { id: Duration; days: number }[] = [
+const DURATIONS: { id: Exclude<Duration, 'custom'>; days: number }[] = [
   { id: 'week', days: 7 },
   { id: 'month', days: 30 },
   { id: 'halfYear', days: 182 },
@@ -35,6 +40,10 @@ function addDays(date: Date, days: number): Date {
   const d = new Date(date);
   d.setDate(d.getDate() + days);
   return d;
+}
+
+function toDateInputValue(date: Date): string {
+  return addDays(date, 0).toISOString().slice(0, 10);
 }
 
 function formatRemaining(openAt: string): string {
@@ -54,6 +63,7 @@ export default function CapsulesPage() {
   const isAuthed = !!user;
 
   const [capsules, setCapsules] = useState<TimeCapsule[]>([]);
+  const [stats, setStats] = useState<CapsuleStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
 
@@ -65,6 +75,7 @@ export default function CapsulesPage() {
   }, [searchParams]);
 
   const [duration, setDuration] = useState<Duration>('month');
+  const [customDate, setCustomDate] = useState('');
   const [voiceFile, setVoiceFile] = useState<File | null>(null);
   const [sealing, setSealing] = useState(false);
   const [formError, setFormError] = useState('');
@@ -80,10 +91,13 @@ export default function CapsulesPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const list = await fetchMyCapsules();
+    const [list, capsuleStats] = await Promise.all([fetchMyCapsules(), fetchCapsuleStats()]);
     setCapsules(list);
+    setStats(capsuleStats);
     setLoading(false);
   }, []);
+
+  const minCustomDate = useMemo(() => toDateInputValue(addDays(new Date(), 1)), []);
 
   useEffect(() => {
     if (isAuthed) load();
@@ -108,8 +122,21 @@ export default function CapsulesPage() {
       setFormError(t('capsules.tooShort'));
       return;
     }
+    let openAt: Date;
+    if (duration === 'custom') {
+      if (!customDate) {
+        setFormError(t('capsules.customRequired'));
+        return;
+      }
+      openAt = new Date(`${customDate}T09:00:00`);
+      if (Number.isNaN(openAt.getTime()) || openAt.getTime() <= Date.now()) {
+        setFormError(t('capsules.customPast'));
+        return;
+      }
+    } else {
+      openAt = addDays(new Date(), DURATIONS.find((d) => d.id === duration)!.days);
+    }
     setSealing(true);
-    const openAt = addDays(new Date(), DURATIONS.find((d) => d.id === duration)!.days);
     const created = await createCapsule({ text: text.trim(), openAt, voiceFile });
     setSealing(false);
     if (!created) {
@@ -119,7 +146,9 @@ export default function CapsulesPage() {
     setSuccess(t('capsules.sealed'));
     setText('');
     setVoiceFile(null);
+    setCustomDate('');
     setCapsules((prev) => [created, ...prev]);
+    setStats((prev) => (prev ? { ...prev, sealed: prev.sealed + 1 } : prev));
   }
 
   async function handleOpen(capsule: TimeCapsule) {
@@ -129,11 +158,21 @@ export default function CapsulesPage() {
     if (opened) {
       setRevealed(opened);
       setCapsules((prev) => prev.map((c) => (c.id === opened.id ? opened : c)));
+      setStats((prev) => (prev ? { ...prev, ready: Math.max(0, prev.ready - 1), opened: prev.opened + 1 } : prev));
     }
   }
 
   return (
     <div dir={dir} className="mx-auto max-w-3xl px-4 py-8 md:py-12" style={{ background: palette.page, minHeight: '100vh' }}>
+      <Link
+        href="/"
+        className="inline-flex items-center gap-1.5 text-sm font-medium mb-6"
+        style={{ color: palette.muted }}
+      >
+        <ArrowLeftIcon className="h-4 w-4" style={dir === 'rtl' ? { transform: 'scaleX(-1)' } : undefined} />
+        {t('common.back')}
+      </Link>
+
       <header className="mb-8">
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight" style={{ color: palette.text }}>
           {t('capsules.title')}
@@ -141,6 +180,13 @@ export default function CapsulesPage() {
         <p className="mt-2 text-sm md:text-base" style={{ color: palette.muted }}>
           {t('capsules.subtitle')}
         </p>
+        {isAuthed && stats && (stats.sealed + stats.ready + stats.opened > 0) && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <StatChip label={t('capsules.locked')} value={stats.sealed} palette={palette} />
+            <StatChip label={t('capsules.ready')} value={stats.ready} palette={palette} highlight={stats.ready > 0} />
+            <StatChip label={t('capsules.opened')} value={stats.opened} palette={palette} />
+          </div>
+        )}
       </header>
 
       {!isAuthed ? (
@@ -221,7 +267,38 @@ export default function CapsulesPage() {
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => setDuration('custom')}
+                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition"
+                style={{
+                  background: duration === 'custom' ? palette.accent : palette.chipBg,
+                  color: duration === 'custom' ? '#fff' : palette.text,
+                  border: `1px solid ${duration === 'custom' ? palette.accent : 'transparent'}`,
+                }}
+              >
+                <CalendarDaysIcon className="h-4 w-4" />
+                {t('capsules.custom')}
+              </button>
             </div>
+
+            {duration === 'custom' && (
+              <div className="mt-3">
+                <input
+                  type="date"
+                  value={customDate}
+                  min={minCustomDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                  className="rounded-2xl px-4 py-2.5 text-sm outline-none"
+                  style={{
+                    background: palette.inputBg,
+                    color: palette.text,
+                    border: `1px solid ${palette.border}`,
+                    colorScheme: theme === 'dark' ? 'dark' : 'light',
+                  }}
+                />
+              </div>
+            )}
 
             <div className="mt-5">
               <label className="block text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: palette.muted }}>
@@ -277,7 +354,7 @@ export default function CapsulesPage() {
               <button
                 type="button"
                 onClick={handleSeal}
-                disabled={sealing}
+                disabled={sealing || (duration === 'custom' && !customDate)}
                 className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white disabled:opacity-50"
                 style={{ background: palette.accent }}
               >
@@ -330,6 +407,38 @@ export default function CapsulesPage() {
 
 type Palette = typeof LIGHT;
 
+function StatChip({
+  label,
+  value,
+  palette,
+  highlight,
+}: {
+  label: string;
+  value: number;
+  palette: Palette;
+  highlight?: boolean;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${highlight ? 'animate-pulse' : ''}`}
+      style={{
+        background: highlight ? palette.accent : palette.chipBg,
+        color: highlight ? '#fff' : palette.muted,
+      }}
+    >
+      {value} {label}
+    </span>
+  );
+}
+
+function progressFraction(capsule: TimeCapsule): number {
+  const created = new Date(capsule.created_at).getTime();
+  const target = new Date(capsule.open_at).getTime();
+  const total = target - created;
+  if (total <= 0) return 1;
+  return Math.min(1, Math.max(0, (Date.now() - created) / total));
+}
+
 function CapsuleCard({
   capsule,
   palette,
@@ -351,17 +460,22 @@ function CapsuleCard({
       : t('capsules.ready');
 
   const Icon = capsule.is_unlocked ? LockOpenIcon : LockClosedIcon;
+  const readyToOpen = capsule.is_unlocked && !capsule.is_opened;
 
   return (
     <div
       className="rounded-2xl border p-5 md:p-6"
-      style={{ borderColor: palette.border, background: palette.card }}
+      style={{
+        borderColor: readyToOpen ? palette.accent : palette.border,
+        background: palette.card,
+        boxShadow: readyToOpen ? `0 0 0 1px ${palette.accent}, 0 0 20px -6px ${palette.accent}` : undefined,
+      }}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <div
-            className="flex h-10 w-10 items-center justify-center rounded-xl"
-            style={{ background: palette.chipBg, color: palette.accent }}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl ${readyToOpen ? 'animate-pulse' : ''}`}
+            style={{ background: readyToOpen ? palette.accent : palette.chipBg, color: readyToOpen ? '#fff' : palette.accent }}
           >
             <Icon className="h-5 w-5" />
           </div>
@@ -376,13 +490,22 @@ function CapsuleCard({
         </div>
         {remaining && (
           <span
-            className="rounded-full px-3 py-1 text-xs font-medium"
+            className="rounded-full px-3 py-1 text-xs font-medium whitespace-nowrap"
             style={{ background: palette.chipBg, color: palette.muted }}
           >
             {t('capsules.opensIn')} {remaining}
           </span>
         )}
       </div>
+
+      {!capsule.is_unlocked && (
+        <div className="mt-4 h-1.5 rounded-full overflow-hidden" style={{ background: palette.chipBg }}>
+          <div
+            className="h-full rounded-full transition-all"
+            style={{ width: `${Math.round(progressFraction(capsule) * 100)}%`, background: palette.accent }}
+          />
+        </div>
+      )}
 
       <div className="mt-4">
         {capsule.is_unlocked ? (
