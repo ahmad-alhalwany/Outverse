@@ -57,7 +57,7 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
   const removeReel = async (e: React.MouseEvent, id: number) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!(await confirm(t('reels.confirmDeleteReel'), { danger: true, confirmLabel: 'Delete' }))) return;
+    if (!(await confirm(t('reels.confirmDeleteReel'), { danger: true, confirmLabel: t('common.delete') }))) return;
     setError('');
     try {
       const res = await apiFetch(`reels/${id}/`, { method: 'DELETE' });
@@ -76,7 +76,7 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
       <div className="flex flex-col items-center gap-3 py-12">
         <span className="reels-feed__orb reels-feed__orb--small" />
         <p className="text-sm" style={{ color: C.text2 }}>
-          Loading signals…
+          {t('reels.profileLoading')}
         </p>
       </div>
     );
@@ -87,7 +87,7 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
       <div className="text-center py-12">
         <ReelsIcon size={40} className="mx-auto mb-3 opacity-70" />
         <p className="text-sm" style={{ color: error ? '#dc2626' : C.text2 }}>
-          {error || (mode === 'saved' ? 'No saved signals yet.' : 'No signals launched yet.')}
+          {error || (mode === 'saved' ? t('reels.profileEmptySaved') : t('reels.profileEmptyOwn'))}
         </p>
         {isOwn && !error && (
           <Link
@@ -95,7 +95,7 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
             className="inline-block mt-3 text-sm font-semibold"
             style={{ color: C.brown }}
           >
-            Launch a signal →
+            {t('reels.launchSignalLink')}
           </Link>
         )}
       </div>
@@ -153,7 +153,7 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
               </span>
             </div>
             <p className="profile-reels-grid__caption" style={{ color: C.text }}>
-              {(reel.caption || 'Signal').slice(0, 42)}
+              {(reel.caption || t('reels.singleTitle')).slice(0, 42)}
               {(reel.caption?.length ?? 0) > 42 ? '…' : ''}
             </p>
           </Link>

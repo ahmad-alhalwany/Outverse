@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { apiUrl, mediaUrl } from '@/lib/api';
 import { authFetch, getCurrentUserId, getUser, setAuth, getToken } from '@/lib/auth';
+import { useLocale } from '@/components/LocaleProvider';
 
 type ProfileShape = {
   id: number;
@@ -24,6 +25,7 @@ type Props = {
 };
 
 export default function EditProfileModal({ profile, colors: C, onClose, onSaved }: Props) {
+  const { t } = useLocale();
   const [firstName, setFirstName] = useState(profile.first_name || '');
   const [lastName, setLastName] = useState(profile.last_name || '');
   const [bio, setBio] = useState(profile.bio || '');
@@ -68,7 +70,7 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || err.error || 'Save failed');
+        throw new Error(err.detail || err.error || t('profile.saveFailed'));
       }
       const data = await res.json();
       const updated: ProfileShape = {
@@ -94,7 +96,7 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
       onSaved(updated);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save profile');
+      setError(err instanceof Error ? err.message : t('profile.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -124,11 +126,11 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
           onClick={onClose}
           className="absolute top-3 left-3 w-9 h-9 rounded-full text-xl"
           style={{ background: C.card, color: C.text }}
-          aria-label="Close"
+          aria-label={t('profile.close')}
         >
           ×
         </button>
-        <h2 className="text-lg font-bold mb-4 pr-8">Edit profile</h2>
+        <h2 className="text-lg font-bold mb-4 pr-8">{t('profile.editProfile')}</h2>
 
         <div className="mb-4">
           <div className="h-24 rounded-2xl overflow-hidden mb-2" style={{ background: C.card }}>
@@ -138,7 +140,7 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
             ) : null}
           </div>
           <label className="text-sm font-medium cursor-pointer" style={{ color: C.brown }}>
-            Change cover photo
+            {t('profile.changeCoverPhoto')}
             <input
               type="file"
               accept="image/*"
@@ -161,7 +163,7 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
             </span>
           )}
           <label className="text-sm font-medium cursor-pointer" style={{ color: C.brown }}>
-            Change photo
+            {t('profile.changePhoto')}
             <input
               type="file"
               accept="image/*"
@@ -173,7 +175,7 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
 
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-xs" style={{ color: C.text2 }}>First name</label>
+            <label className="text-xs" style={{ color: C.text2 }}>{t('profile.firstName')}</label>
             <input
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
@@ -182,7 +184,7 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
             />
           </div>
           <div>
-            <label className="text-xs" style={{ color: C.text2 }}>Last name</label>
+            <label className="text-xs" style={{ color: C.text2 }}>{t('profile.lastName')}</label>
             <input
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
@@ -193,18 +195,18 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
         </div>
 
         <div className="mb-3">
-          <label className="text-xs" style={{ color: C.text2 }}>Location</label>
+          <label className="text-xs" style={{ color: C.text2 }}>{t('profile.location')}</label>
           <input
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            placeholder="e.g. Damascus, Syria"
+            placeholder={t('profile.locationPlaceholder')}
             className="w-full mt-1 rounded-xl px-3 py-2 text-sm outline-none"
             style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
           />
         </div>
 
         <div className="mb-3">
-          <label className="text-xs" style={{ color: C.text2 }}>Bio</label>
+          <label className="text-xs" style={{ color: C.text2 }}>{t('profile.bio')}</label>
           <textarea
             value={bio}
             onChange={(e) => setBio(e.target.value)}
@@ -223,7 +225,7 @@ export default function EditProfileModal({ profile, colors: C, onClose, onSaved 
           className="w-full py-3 rounded-xl font-semibold text-white disabled:opacity-60"
           style={{ background: C.brownDk }}
         >
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? t('profile.saving') : t('common.save')}
         </button>
       </motion.form>
     </motion.div>

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { apiUrl, mediaUrl } from '@/lib/api';
 import { apiFetch } from '@/lib/api';
+import { useLocale } from '@/components/LocaleProvider';
 
 type UserRow = {
   id: number;
@@ -29,6 +30,7 @@ function displayName(u: UserRow) {
 }
 
 export default function FollowListModal({ userId, mode, title, colors: C, onClose }: Props) {
+  const { t } = useLocale();
   const [list, setList] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -75,32 +77,32 @@ export default function FollowListModal({ userId, mode, title, colors: C, onClos
       >
         <div className="flex items-center justify-between px-4 py-3 border-b" style={{ borderColor: C.line }}>
           <h2 className="font-bold">{title}</h2>
-          <button type="button" onClick={onClose} className="text-xl px-2" aria-label="Close">
+          <button type="button" onClick={onClose} className="text-xl px-2" aria-label={t('common.close')}>
             ×
           </button>
         </div>
         <div className="overflow-y-auto flex-1 p-3 space-y-2">
           {loading && (
             <p className="text-center text-sm py-8" style={{ color: C.text2 }}>
-              Loading…
+              {t('common.loading')}
             </p>
           )}
           {!loading && error && (
             <div className="text-center text-sm py-8" style={{ color: C.text2 }}>
-              <p className="mb-3">Could not load. Please try again.</p>
+              <p className="mb-3">{t('profile.followListLoadError')}</p>
               <button
                 type="button"
                 onClick={() => load()}
                 className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
                 style={{ background: C.brown }}
               >
-                Try again
+                {t('profile.followListRetry')}
               </button>
             </div>
           )}
           {!loading && !error && list.length === 0 && (
             <p className="text-center text-sm py-8" style={{ color: C.text2 }}>
-              No users yet.
+              {t('profile.followListEmpty')}
             </p>
           )}
           {list.map((u) => {

@@ -28,7 +28,7 @@ interface ProfileIdeasGridProps {
 }
 
 export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGridProps) {
-  const { locale } = useLocale();
+  const { t, locale } = useLocale();
   const authUser = useAuthUser();
   const isOwn = authUser ? String(authUser.id) === String(userId) : false;
   const [scope, setScope] = useState<IdeasScope>('owned');
@@ -62,7 +62,7 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
   if (loading) {
     return (
       <div className="text-center py-12 text-sm" style={{ color: C.text2 }}>
-        Loading ideas…
+        {t('bazaar.loading')}
       </div>
     );
   }
@@ -76,9 +76,9 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
         >
           {(
             [
-              { key: 'owned', label: 'My ideas' },
-              { key: 'collaborating', label: 'Collaborating' },
-              { key: 'supporting', label: 'Supporting' },
+              { key: 'owned', labelKey: 'bazaar.profileScopeOwned' },
+              { key: 'collaborating', labelKey: 'bazaar.profileScopeCollaborating' },
+              { key: 'supporting', labelKey: 'bazaar.profileScopeSupporting' },
             ] as const
           ).map((item) => (
             <button
@@ -91,7 +91,7 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
                 background: scope === item.key ? C.white : 'transparent',
               }}
             >
-              {item.label}
+              {t(item.labelKey)}
             </button>
           ))}
         </div>
@@ -102,8 +102,8 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
           <LightBulbIcon className="h-10 w-10 mx-auto mb-3 opacity-60" style={{ color: C.brown }} />
           <p className="text-sm" style={{ color: C.text2 }}>
             {isOwn && scope !== 'owned'
-              ? 'Nothing here yet.'
-              : 'No ideas in the bazaar yet.'}
+              ? t('bazaar.profileEmptyScoped')
+              : t('bazaar.profileEmptyBazaar')}
           </p>
           {isOwn && scope === 'owned' ? (
             <Link
@@ -111,7 +111,7 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
               className="inline-block mt-4 px-4 py-2 rounded-xl text-sm font-semibold text-white"
               style={{ background: C.brownDk }}
             >
-              Create an idea
+              {t('bazaar.createIdea')}
             </Link>
           ) : null}
         </div>
@@ -153,7 +153,7 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
                   </span>
                   {idea.funding_goal ? (
                     <span>
-                      {formatCount(idea.funding_raised)} / {formatCount(idea.funding_goal)} coins
+                      {formatCount(idea.funding_raised)} / {formatCount(idea.funding_goal)} {t('bazaar.coins')}
                     </span>
                   ) : null}
                 </div>

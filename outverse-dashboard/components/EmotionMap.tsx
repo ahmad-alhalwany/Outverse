@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { emotionMeta } from '@/lib/profileEmotions';
+import { useLocale } from '@/components/LocaleProvider';
 
 interface MapPoint {
   id: number;
@@ -26,7 +27,7 @@ const PREVIEW_BOTTLES: Array<{ id: string; emotion_type: string; location_lat: n
 
 function metaFor(emotion: string) {
   const m = emotionMeta(emotion);
-  return { color: m.color, emoji: m.emoji, label: m.label };
+  return { color: m.color, emoji: m.emoji, labelKey: m.labelKey };
 }
 
 function project(lat: number, lng: number) {
@@ -82,6 +83,7 @@ function BottleMarker({
 }
 
 export default function EmotionMap({ showLegend = true }: { showLegend?: boolean }) {
+  const { t } = useLocale();
   const [points, setPoints] = useState<MapPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -175,11 +177,11 @@ export default function EmotionMap({ showLegend = true }: { showLegend?: boolean
       {showLegend && !isPreview && distribution.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
           {distribution.map(([emotion, count]) => {
-            const { color, emoji, label } = metaFor(emotion);
+            const { color, emoji, labelKey } = metaFor(emotion);
             return (
               <span key={emotion} className="flex items-center gap-1 text-[11px] text-text-secondary">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                {emoji} {label} <span className="text-text/70">{count}</span>
+                {emoji} {t(labelKey)} <span className="text-text/70">{count}</span>
               </span>
             );
           })}
@@ -189,11 +191,11 @@ export default function EmotionMap({ showLegend = true }: { showLegend?: boolean
       {showLegend && isPreview && (
         <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
           {['joy', 'hope', 'love', 'mystery'].map((emotion) => {
-            const { color, emoji, label } = metaFor(emotion);
+            const { color, emoji, labelKey } = metaFor(emotion);
             return (
               <span key={emotion} className="flex items-center gap-1 text-[11px] text-text-secondary">
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                {emoji} {label}
+                {emoji} {t(labelKey)}
               </span>
             );
           })}

@@ -1,15 +1,15 @@
-export type ProfileEmotion = { key: string; label: string; emoji: string; color: string };
+export type ProfileEmotion = { key: string; labelKey: string; emoji: string; color: string };
 
 export const PROFILE_EMOTIONS: ProfileEmotion[] = [
-  { key: 'joy', label: 'Joy', emoji: '☀️', color: '#F2A93B' },
-  { key: 'hope', label: 'Hope', emoji: '🌅', color: '#3FB6A0' },
-  { key: 'calm', label: 'Calm', emoji: '🌊', color: '#4FA3D1' },
-  { key: 'love', label: 'Love', emoji: '💗', color: '#E86A9C' },
-  { key: 'sad', label: 'Sadness', emoji: '🌧️', color: '#6E7BD1' },
-  { key: 'lonely', label: 'Loneliness', emoji: '🌙', color: '#9385D6' },
-  { key: 'anxious', label: 'Anxiety', emoji: '🌪️', color: '#E08653' },
-  { key: 'nostalgic', label: 'Nostalgia', emoji: '📻', color: '#C49A5A' },
-  { key: 'mystery', label: 'Mystery', emoji: '✨', color: '#A86BB0' },
+  { key: 'joy', labelKey: 'bottles.emotionJoy', emoji: '☀️', color: '#F2A93B' },
+  { key: 'hope', labelKey: 'bottles.emotionHope', emoji: '🌅', color: '#3FB6A0' },
+  { key: 'calm', labelKey: 'bottles.emotionCalm', emoji: '🌊', color: '#4FA3D1' },
+  { key: 'love', labelKey: 'bottles.emotionLove', emoji: '💗', color: '#E86A9C' },
+  { key: 'sad', labelKey: 'bottles.emotionSad', emoji: '🌧️', color: '#6E7BD1' },
+  { key: 'lonely', labelKey: 'bottles.emotionLonely', emoji: '🌙', color: '#9385D6' },
+  { key: 'anxious', labelKey: 'bottles.emotionAnxious', emoji: '🌪️', color: '#E08653' },
+  { key: 'nostalgic', labelKey: 'bottles.emotionNostalgic', emoji: '📻', color: '#C49A5A' },
+  { key: 'mystery', labelKey: 'bottles.emotionMystery', emoji: '✨', color: '#A86BB0' },
 ];
 
 const HAPPY_KEYS = new Set(['joy', 'hope', 'calm', 'love']);

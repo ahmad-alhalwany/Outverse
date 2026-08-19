@@ -73,7 +73,7 @@ const PALETTES = {
   },
 };
 
-const WEEK_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const WEEK_LABEL_KEYS = ['profile.weekMon', 'profile.weekTue', 'profile.weekWed', 'profile.weekThu', 'profile.weekFri', 'profile.weekSat', 'profile.weekSun'];
 
 type TabKey = 'posts' | 'reels' | 'ideas' | 'challenges' | 'stories' | 'bottles';
 
@@ -100,10 +100,10 @@ interface Profile {
   spender_tier?: 'none' | 'bronze' | 'silver' | 'gold';
 }
 
-const SPENDER_TIER_META: Record<'bronze' | 'silver' | 'gold', { emoji: string; label: string; color: string }> = {
-  bronze: { emoji: '🥉', label: 'Bronze Patron', color: '#B08D57' },
-  silver: { emoji: '🥈', label: 'Silver Patron', color: '#9CA3AF' },
-  gold: { emoji: '🥇', label: 'Gold Patron', color: '#D4AF37' },
+const SPENDER_TIER_META: Record<'bronze' | 'silver' | 'gold', { emoji: string; labelKey: string; color: string }> = {
+  bronze: { emoji: '🥉', labelKey: 'profile.tierBronze', color: '#B08D57' },
+  silver: { emoji: '🥈', labelKey: 'profile.tierSilver', color: '#9CA3AF' },
+  gold: { emoji: '🥇', labelKey: 'profile.tierGold', color: '#D4AF37' },
 };
 
 type ChallengeEntry = {
@@ -182,9 +182,9 @@ function postThumbnail(post: ReturnType<typeof mapPost>): string | null {
   return null;
 }
 
-function postTitle(text: string) {
+function postTitle(text: string, fallback: string) {
   const line = (text || '').trim().split('\n')[0];
-  if (!line) return 'Untitled post';
+  if (!line) return fallback;
   return line.length > 48 ? `${line.slice(0, 48)}…` : line;
 }
 
@@ -230,7 +230,9 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         await Promise.all([
           apiFetch(`users/${userId}/`),
           apiFetch(`posts/?author=${userId}`),
-          apiFetch(`bottles/dashboard/?user=${userId}`),
+          isOwnProfile
+            ? apiFetch('bottles/dashboard/')
+            : Promise.resolve(new Response(JSON.stringify({ timeline: [], current_mood: null, insights: [] }), { status: 200 })),
           apiFetch(`forge/stories/?owner=${userId}`),
           apiFetch(`challenges/user_entries/?user=${userId}`),
           isOwnProfile
@@ -291,10 +293,11 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           followers_count: data.followers_count,
         });
       } else {
-        setFollowError('Could not update follow status.');
+        const data = await res.json().catch(() => null);
+        setFollowError(data?.error || t('profile.followError'));
       }
     } catch {
-      setFollowError('Could not update follow status.');
+      setFollowError(t('profile.followError'));
     }
   };
 
@@ -337,7 +340,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           json: payload,
         },
       );
-      if (!res.ok) throw new Error('failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.detail || data?.title?.[0] || '');
+      }
       const saved = (await res.json()) as Experience;
       setExperiences((prev) =>
         editingExperienceId
@@ -345,8 +351,8 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           : [saved, ...prev],
       );
       resetExperienceForm();
-    } catch {
-      setExperienceError('Could not save experience.');
+    } catch (err) {
+      setExperienceError((err instanceof Error && err.message) || t('profile.saveExperienceError'));
     } finally {
       setExperienceBusy(false);
     }
@@ -362,7 +368,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
       setExperiences((prev) => prev.filter((item) => item.id !== experienceId));
       if (editingExperienceId === experienceId) resetExperienceForm();
     } catch {
-      setExperienceError('Could not delete experience.');
+      setExperienceError(t('profile.deleteExperienceError'));
     } finally {
       setExperienceBusy(false);
     }
@@ -415,7 +421,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
   if (!profile) {
     return (
       <div className="text-center py-20" style={{ color: C.text2 }}>
-        User not found.
+        {t('profile.notFound')}
       </div>
     );
   }
@@ -476,7 +482,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
               style={{ background: C.white, color: C.text, border: `1px solid ${C.line}` }}
             >
               <SparklesIcon className="h-4 w-4" />
-              Creator Hub
+              {t('profile.creatorHub')}
             </Link>
             <button
               type="button"
@@ -531,7 +537,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                 <h1 className="flex items-center gap-1.5 text-xl sm:text-2xl font-bold">
                   {name}
                   {profile.badge_verified && (
-                    <CheckBadgeIcon className="h-5 w-5 shrink-0 text-vault" aria-label="Verified" />
+                    <CheckBadgeIcon className="h-5 w-5 shrink-0 text-vault" aria-label={t('profile.verified')} />
                   )}
                 </h1>
                 <p className="text-sm" style={{ color: C.text2 }}>
@@ -542,9 +548,9 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                     <span
                       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold"
                       style={{ background: `${moodMeta.color}22`, color: moodMeta.color }}
-                      title={moodMeta.label}
+                      title={t(moodMeta.labelKey)}
                     >
-                      {moodMeta.emoji} {t('profile.feeling')} {moodMeta.label}
+                      {moodMeta.emoji} {t('profile.feeling')} {t(moodMeta.labelKey)}
                     </span>
                   )}
                   {profile.spender_tier && profile.spender_tier !== 'none' && (
@@ -556,7 +562,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                       }}
                     >
                       {SPENDER_TIER_META[profile.spender_tier].emoji}
-                      {SPENDER_TIER_META[profile.spender_tier].label}
+                      {t(SPENDER_TIER_META[profile.spender_tier].labelKey)}
                     </span>
                   )}
                 </div>
@@ -575,7 +581,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                       border: profile.is_following ? `1px solid ${C.line}` : 'none',
                     }}
                   >
-                    {profile.is_following ? 'Following' : 'Follow'}
+                    {profile.is_following ? t('profile.following') : t('profile.follow')}
                   </button>
                   {!profile.social?.blocked_by_them && (
                     <>
@@ -637,7 +643,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                     className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium"
                     style={{ background: `${m.color}18`, color: m.color, border: `1px solid ${m.color}33` }}
                   >
-                    {m.emoji} {m.label} · {insight.pct}%
+                    {m.emoji} {t(m.labelKey)} · {insight.pct}%
                   </span>
                 );
               })}
@@ -650,7 +656,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             <span className="font-bold" style={{ color: C.text }}>
               {formatCount(profile.posts_count)}
             </span>{' '}
-            <span style={{ color: C.text2 }}>posts</span>
+            <span style={{ color: C.text2 }}>{t('profile.statPosts')}</span>
           </span>
           <button
             type="button"
@@ -661,7 +667,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             <span className="font-bold" style={{ color: C.text }}>
               {formatCount(profile.reels_count ?? 0)}
             </span>{' '}
-            <span style={{ color: C.text2 }}>signals</span>
+            <span style={{ color: C.text2 }}>{t('profile.statSignals')}</span>
           </button>
           <button
             type="button"
@@ -672,7 +678,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             <span className="font-bold" style={{ color: C.text }}>
               {formatCount(profile.followers_count)}
             </span>{' '}
-            <span style={{ color: C.text2 }}>followers</span>
+            <span style={{ color: C.text2 }}>{t('profile.statFollowers')}</span>
           </button>
           <button
             type="button"
@@ -683,7 +689,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             <span className="font-bold" style={{ color: C.text }}>
               {formatCount(profile.following_count)}
             </span>{' '}
-            <span style={{ color: C.text2 }}>following</span>
+            <span style={{ color: C.text2 }}>{t('profile.statFollowing')}</span>
           </button>
         </div>
         </div>
@@ -701,7 +707,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             return (
               <div key={day.day} className="flex flex-col items-center gap-1">
                 <span className="text-[10px] font-medium" style={{ color: C.text2 }}>
-                  {WEEK_LABELS[i] ?? `D${day.day}`}
+                  {WEEK_LABEL_KEYS[i] ? t(WEEK_LABEL_KEYS[i]) : `D${day.day}`}
                 </span>
                 <div
                   className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-lg"
@@ -709,7 +715,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                     background: m ? `${m.color}22` : C.white,
                     border: `1px solid ${m ? `${m.color}55` : C.line}`,
                   }}
-                  title={m?.label ?? 'No mood logged'}
+                  title={m ? t(m.labelKey) : t('profile.noMoodLogged')}
                 >
                   {m ? m.emoji : '·'}
                 </div>
@@ -773,15 +779,15 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             <div>
               <h2 className="flex items-center gap-2 text-sm font-bold">
                 <BriefcaseIcon className="h-5 w-5" style={{ color: C.brown }} />
-                Experience
+                {t('profile.experienceTitle')}
               </h2>
               <p className="mt-1 text-xs" style={{ color: C.text2 }}>
-                {isOwnProfile ? 'Add the roles and projects you want visible on your profile.' : `${name}'s roles and projects.`}
+                {isOwnProfile ? t('profile.experienceSubtitleOwn') : t('profile.experienceSubtitleOther', { name })}
               </p>
             </div>
             {isOwnProfile && editingExperienceId ? (
               <button type="button" onClick={resetExperienceForm} className="text-xs font-semibold" style={{ color: C.brown }}>
-                Cancel edit
+                {t('profile.cancelEdit')}
               </button>
             ) : null}
           </div>
@@ -792,19 +798,19 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                 <input
                   value={experienceForm.title}
                   onChange={(e) => setExperienceForm((form) => ({ ...form, title: e.target.value }))}
-                  placeholder="Title"
+                  placeholder={t('profile.experienceFieldTitle')}
                   className="rounded-xl border px-3 py-2 text-sm"
                   style={{ background: C.card2, borderColor: C.line, color: C.text }}
                 />
                 <input
                   value={experienceForm.organization}
                   onChange={(e) => setExperienceForm((form) => ({ ...form, organization: e.target.value }))}
-                  placeholder="Organization"
+                  placeholder={t('profile.experienceFieldOrganization')}
                   className="rounded-xl border px-3 py-2 text-sm"
                   style={{ background: C.card2, borderColor: C.line, color: C.text }}
                 />
                 <label className="text-xs font-semibold" style={{ color: C.text2 }}>
-                  Start date
+                  {t('profile.experienceFieldStartDate')}
                   <input
                     type="date"
                     value={experienceForm.start_date}
@@ -814,7 +820,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                   />
                 </label>
                 <label className="text-xs font-semibold" style={{ color: C.text2 }}>
-                  End date
+                  {t('profile.experienceFieldEndDate')}
                   <input
                     type="date"
                     value={experienceForm.end_date}
@@ -828,7 +834,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
               <textarea
                 value={experienceForm.description}
                 onChange={(e) => setExperienceForm((form) => ({ ...form, description: e.target.value }))}
-                placeholder="Description"
+                placeholder={t('profile.experienceFieldDescription')}
                 rows={2}
                 className="mt-2 w-full rounded-xl border px-3 py-2 text-sm"
                 style={{ background: C.card2, borderColor: C.line, color: C.text }}
@@ -840,7 +846,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                     checked={experienceForm.is_current}
                     onChange={(e) => setExperienceForm((form) => ({ ...form, is_current: e.target.checked, end_date: e.target.checked ? '' : form.end_date }))}
                   />
-                  I currently do this
+                  {t('profile.experienceCurrentCheckbox')}
                 </label>
                 <button
                   type="button"
@@ -850,7 +856,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                   style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
                 >
                   <PlusIcon className="h-4 w-4" />
-                  {editingExperienceId ? 'Save changes' : 'Add experience'}
+                  {editingExperienceId ? t('profile.experienceSaveChanges') : t('profile.experienceAdd')}
                 </button>
               </div>
               {experienceError ? <p className="mt-2 text-xs text-red-500">{experienceError}</p> : null}
@@ -859,7 +865,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
 
           <div className="mt-5 space-y-3">
             {experiences.length === 0 ? (
-              <p className="text-sm" style={{ color: C.text2 }}>No experience added yet.</p>
+              <p className="text-sm" style={{ color: C.text2 }}>{t('profile.experienceEmpty')}</p>
             ) : (
               experiences.map((experience) => (
                 <div key={experience.id} className="rounded-xl border p-3" style={{ background: C.card2, borderColor: C.line }}>
@@ -870,7 +876,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                       <p className="mt-1 text-xs" style={{ color: C.text2 }}>
                         {experience.start_date}
                         {' - '}
-                        {experience.is_current ? 'Present' : experience.end_date || 'Present'}
+                        {experience.is_current ? t('profile.experiencePresent') : experience.end_date || t('profile.experiencePresent')}
                       </p>
                     </div>
                     {isOwnProfile ? (
@@ -880,7 +886,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                         onClick={() => startEditExperience(experience)}
                         className="rounded-lg p-1.5"
                         style={{ background: C.white, color: C.brown }}
-                        aria-label="Edit experience"
+                        aria-label={t('profile.experienceEditLabel')}
                       >
                         <PencilSquareIcon className="h-4 w-4" />
                       </button>
@@ -889,7 +895,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                         onClick={() => void deleteExperience(experience.id)}
                         className="rounded-lg p-1.5 text-red-500"
                         style={{ background: C.white }}
-                        aria-label="Delete experience"
+                        aria-label={t('profile.experienceDeleteLabel')}
                       >
                         <TrashIcon className="h-4 w-4" />
                       </button>
@@ -913,19 +919,19 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         >
           <div className="flex items-center gap-2 mb-3">
             <SparklesIcon className="h-5 w-5" style={{ color: C.brown }} />
-            <h2 className="text-sm font-bold">Achievements</h2>
+            <h2 className="text-sm font-bold">{t('profile.achievementsTitle')}</h2>
           </div>
           <div className="flex items-center justify-between rounded-xl px-4 py-3 mb-3" style={{ background: C.card2 }}>
-            <span className="text-sm" style={{ color: C.text2 }}>Points balance</span>
+            <span className="text-sm" style={{ color: C.text2 }}>{t('profile.pointsBalance')}</span>
             <span className="text-lg font-bold" style={{ color: C.brown }}>{formatCount(profile.points ?? 0)}</span>
           </div>
           <div className="flex items-center justify-between rounded-xl px-4 py-3 mb-3" style={{ background: C.card2 }}>
-            <span className="text-sm" style={{ color: C.text2 }}>Signal Strength</span>
+            <span className="text-sm" style={{ color: C.text2 }}>{t('profile.signalStrength')}</span>
             <span className="text-lg font-bold" style={{ color: C.brown }}>{formatCount(profile.karma ?? 0)}</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {earnedAchievements.length === 0 ? (
-              <p className="text-sm" style={{ color: C.text2 }}>No achievements unlocked yet.</p>
+              <p className="text-sm" style={{ color: C.text2 }}>{t('profile.achievementsEmpty')}</p>
             ) : (
               earnedAchievements.map((achievement) => {
                 const label = typeof achievement === 'string' ? achievement : achievement.title || '';
@@ -949,10 +955,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           className="rounded-2xl p-4"
           style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
         >
-          <h2 className="text-sm font-bold mb-3">Suggested Users</h2>
+          <h2 className="text-sm font-bold mb-3">{t('profile.suggestedUsers')}</h2>
           <div className="space-y-3">
             {suggestions.length === 0 ? (
-              <p className="text-sm" style={{ color: C.text2 }}>No suggestions right now.</p>
+              <p className="text-sm" style={{ color: C.text2 }}>{t('profile.suggestionsEmpty')}</p>
             ) : (
               suggestions.map((suggested) => (
                 <Link key={suggested.id} href={`/profile/${suggested.id}`} className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:opacity-90" style={{ background: C.card2 }}>
@@ -983,33 +989,33 @@ export default function ProfileView({ userId }: ProfileViewProps) {
       >
         {(
           [
-            { key: 'posts', label: 'Posts' },
-            { key: 'reels', label: 'Signals', icon: true as const },
-            { key: 'ideas', label: 'Ideas' },
-            { key: 'challenges', label: 'Challenges' },
-            { key: 'stories', label: 'Stories' },
-            { key: 'bottles', label: 'Bottles' },
+            { key: 'posts', labelKey: 'profile.tabPosts' },
+            { key: 'reels', labelKey: 'profile.tabSignals', icon: true as const },
+            { key: 'ideas', labelKey: 'profile.tabIdeas' },
+            { key: 'challenges', labelKey: 'profile.tabChallenges' },
+            { key: 'stories', labelKey: 'profile.tabStories' },
+            { key: 'bottles', labelKey: 'profile.tabBottles' },
           ] as const
-        ).map((t) => (
+        ).map((tabDef) => (
           <button
-            key={t.key}
+            key={tabDef.key}
             type="button"
-            onClick={() => setTab(t.key)}
+            onClick={() => setTab(tabDef.key)}
             className="flex-1 min-w-[4.5rem] py-2.5 text-sm font-semibold rounded-lg relative whitespace-nowrap transition-colors"
             style={{
-              color: tab === t.key ? C.brown : C.text2,
-              background: tab === t.key ? C.white : 'transparent',
+              color: tab === tabDef.key ? C.brown : C.text2,
+              background: tab === tabDef.key ? C.white : 'transparent',
             }}
           >
-            {'icon' in t && t.icon ? (
+            {'icon' in tabDef && tabDef.icon ? (
               <span className="inline-flex items-center justify-center gap-1">
-                <ReelsIcon size={14} active={tab === t.key} />
-                {t.label}
+                <ReelsIcon size={14} active={tab === tabDef.key} />
+                {t(tabDef.labelKey)}
               </span>
             ) : (
-              t.label
+              t(tabDef.labelKey)
             )}
-            {tab === t.key && (
+            {tab === tabDef.key && (
               <motion.div
                 layoutId="profileTab"
                 className="absolute bottom-0 left-2 right-2 h-0.5 rounded"
@@ -1026,7 +1032,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <>
             {mappedPosts.length === 0 ? (
               <p className="text-center py-10 text-sm" style={{ color: C.text2 }}>
-                No posts yet.
+                {t('profile.noPostsYet')}
               </p>
             ) : (
               <>
@@ -1054,7 +1060,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                               className="absolute left-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white"
                               style={{ background: 'rgba(0,0,0,0.55)' }}
                             >
-                              Pin
+                              {t('signal.pinned')}
                             </span>
                           )}
                           <div
@@ -1071,7 +1077,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                           </div>
                         </div>
                         <p className="p-2 text-xs font-semibold truncate" style={{ color: C.text }}>
-                          {postTitle(post.text)}
+                          {postTitle(post.text, t('profile.untitledPost'))}
                         </p>
                       </Link>
                     );
@@ -1120,7 +1126,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                             </div>
                           </div>
                           <p className="p-2.5 text-sm font-semibold truncate" style={{ color: C.text }}>
-                            {postTitle(post.text)}
+                            {postTitle(post.text, t('profile.untitledPost'))}
                           </p>
                         </Link>
                         <button
@@ -1161,7 +1167,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
 
         {isOwnProfile && tab === 'reels' && (
           <div className="mt-6">
-            <h3 className="mb-3 text-sm font-bold" style={{ color: C.text }}>Saved Signals</h3>
+            <h3 className="mb-3 text-sm font-bold" style={{ color: C.text }}>{t('profile.savedSignals')}</h3>
             <ProfileReelsGrid userId={userId} palette={C} mode="saved" />
           </div>
         )}
@@ -1170,7 +1176,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <div className="grid sm:grid-cols-2 gap-3">
             {challenges.length === 0 ? (
               <p className="col-span-full text-center py-10 text-sm" style={{ color: C.text2 }}>
-                No challenge entries yet.
+                {t('profile.noChallengeEntries')}
               </p>
             ) : (
               challenges.map((entry) => (
@@ -1181,7 +1187,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                   style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}
                 >
                   <p className="font-semibold text-sm" style={{ color: C.text }}>
-                    {entry.challenge?.title ?? 'Challenge'}
+                    {entry.challenge?.title ?? t('profile.challengeFallbackTitle')}
                   </p>
                   <p className="text-xs mt-1 line-clamp-2" style={{ color: C.text2 }}>
                     {entry.content}
@@ -1191,7 +1197,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                       className="inline-block mt-2 text-[10px] px-2 py-0.5 rounded-full"
                       style={{ background: `${C.brown}22`, color: C.brown }}
                     >
-                      Approved
+                      {t('profile.approvedBadge')}
                     </span>
                   )}
                 </Link>
@@ -1204,7 +1210,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {stories.length === 0 ? (
               <p className="col-span-full text-center py-10 text-sm" style={{ color: C.text2 }}>
-                No stories in the forge yet.
+                {t('profile.noStoriesInForge')}
               </p>
             ) : (
               stories.map((story) => (
@@ -1227,7 +1233,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                       {story.title}
                     </p>
                     <p className="text-xs mt-1" style={{ color: C.text2 }}>
-                      {story.segment_count}/{story.max_segments} parts · {story.genre}
+                      {t('profile.storyParts', { count: String(story.segment_count), max: String(story.max_segments), genre: story.genre || '' })}
                     </p>
                   </div>
                 </Link>
@@ -1240,7 +1246,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <div className="space-y-3">
             {bottles.length === 0 ? (
               <p className="text-center py-10 text-sm" style={{ color: C.text2 }}>
-                No active drifting bottles — throw one from the emotion map.
+                {t('profile.noActiveBottles')}
               </p>
             ) : (
               bottles.map((b) => {
@@ -1259,14 +1265,14 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mb-2"
                       style={{ background: `${m.color}22`, color: m.color }}
                     >
-                      {m.emoji} {m.label}
+                      {m.emoji} {t(m.labelKey)}
                     </span>
                     <p className="text-sm leading-relaxed line-clamp-3" style={{ color: C.text }}>
                       {b.message}
                     </p>
                     {b.expires_at && (
                       <p className="text-[11px] mt-2" style={{ color: C.text2 }}>
-                        ⏳ Vanishes in {formatBottleTimeLeft(b.expires_at)}
+                        {t('bottles.vanishesIn', { time: formatBottleTimeLeft(b.expires_at) })}
                       </p>
                     )}
                   </div>
@@ -1290,7 +1296,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           <FollowListModal
             userId={userId}
             mode={followModal}
-            title={followModal === 'followers' ? 'Followers' : 'Following'}
+            title={followModal === 'followers' ? t('profile.followersTitle') : t('profile.followingTitle')}
             colors={C}
             onClose={() => setFollowModal(null)}
           />

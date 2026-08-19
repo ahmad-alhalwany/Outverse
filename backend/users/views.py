@@ -308,6 +308,8 @@ class UserByUsernameView(APIView):
         if not user:
             return Response({'detail': 'Not found.'}, status=404)
         viewer = user_from_request(request)
+        if viewer and viewer.id != user.id and is_blocked_between(viewer.id, user.id):
+            return Response({'detail': 'Not found.'}, status=404)
         is_following = False
         social = None
         if viewer and viewer.id != user.id:
@@ -712,6 +714,9 @@ class UserFollowersView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, user_id):
+        viewer = user_from_request(request)
+        if viewer and viewer.id != user_id and is_blocked_between(viewer.id, user_id):
+            return Response({'detail': 'Not found.'}, status=404)
         following_ids = _following_ids_for_viewer(request)
         rows = (
             Follow.objects.filter(following_id=user_id)
@@ -735,6 +740,9 @@ class UserFollowingView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, user_id):
+        viewer = user_from_request(request)
+        if viewer and viewer.id != user_id and is_blocked_between(viewer.id, user_id):
+            return Response({'detail': 'Not found.'}, status=404)
         following_ids = _following_ids_for_viewer(request)
         rows = (
             Follow.objects.filter(follower_id=user_id)

@@ -21,7 +21,7 @@ export default function ProfileStoryConstellations({
   userId: string | number;
   isOwner?: boolean;
 }) {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const [constellations, setConstellations] = useState<StoryConstellation[]>([]);
   const [playlist, setPlaylist] = useState<StoryItem[]>([]);
   const [showStory, setShowStory] = useState<StoryItem | null>(null);
@@ -80,7 +80,7 @@ export default function ProfileStoryConstellations({
   if (constellations.length === 0 && !isOwner) return null;
 
   const idx = showStory ? playlist.findIndex((s) => s.id === showStory.id) : -1;
-  const isEn = t('feed.seeMore') === 'See more';
+  const isEn = locale === 'en';
 
   return (
     <>
