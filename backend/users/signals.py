@@ -81,6 +81,9 @@ def _hook_capsules():
     def on_capsule_saved(sender, instance, created, **kwargs):
         if created:
             return
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and 'opened_at' not in update_fields:
+            return
         # opened_at transitioning from None → set means it was just opened
         if instance.opened_at is not None:
             try:
@@ -101,6 +104,9 @@ def _hook_live():
     @receiver(post_save, sender=LiveSession, weak=False, dispatch_uid='ach_live_end')
     def on_live_session_saved(sender, instance, created, **kwargs):
         if created:
+            return
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and 'status' not in update_fields:
             return
         if instance.status == 'ended':
             try:

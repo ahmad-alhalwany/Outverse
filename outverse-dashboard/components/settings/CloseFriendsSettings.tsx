@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { UserPlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { apiFetch, apiFetchJson } from '@/lib/api';
+import { useLocale } from '@/components/LocaleProvider';
 import {
   addCloseFriend,
   fetchCloseFriends,
@@ -11,6 +12,7 @@ import {
 } from '@/lib/storyUtils';
 
 export default function CloseFriendsSettings() {
+  const { t } = useLocale();
   const [friends, setFriends] = useState<CloseFriendItem[]>([]);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ id: number; username: string; name: string }[]>([]);
@@ -62,7 +64,7 @@ export default function CloseFriendsSettings() {
       setResults([]);
       await load();
     } else {
-      setError('Could not add this friend. Try again.');
+      setError(t('social.closeFriendAddFailed'));
     }
   }
 
@@ -72,14 +74,14 @@ export default function CloseFriendsSettings() {
       setError('');
       await load();
     } else {
-      setError('Could not remove this friend. Try again.');
+      setError(t('social.closeFriendRemoveFailed'));
     }
   }
 
   return (
     <div className="space-y-3">
       <p className="text-sm" style={{ color: 'var(--settings-muted, #79709E)' }}>
-        Your inner orbit sees stories marked Orbit-only — closest signals, not the whole feed.
+        {t('social.closeFriendsHint')}
       </p>
       {error && (
         <p className="text-xs font-medium text-red-500" role="alert">
@@ -87,11 +89,11 @@ export default function CloseFriendsSettings() {
         </p>
       )}
       {loading ? (
-        <p className="text-sm opacity-60">Loading…</p>
+        <p className="text-sm opacity-60">{t('common.loading')}</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {friends.length === 0 ? (
-            <span className="text-sm opacity-60">No close friends yet.</span>
+            <span className="text-sm opacity-60">{t('social.closeFriendsEmpty')}</span>
           ) : (
             friends.map((f) => (
               <span
@@ -99,7 +101,7 @@ export default function CloseFriendsSettings() {
                 className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium bg-surface"
               >
                 {f.username}
-                <button type="button" aria-label="Remove" onClick={() => void handleRemove(f.id)}>
+                <button type="button" aria-label={t('social.removeCloseFriend')} onClick={() => void handleRemove(f.id)}>
                   <XMarkIcon className="h-3.5 w-3.5" />
                 </button>
               </span>
@@ -112,7 +114,7 @@ export default function CloseFriendsSettings() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search users to add…"
+          placeholder={t('social.closeFriendsSearchPlaceholder')}
           className="w-full rounded-xl px-3 py-2 text-sm border border-surface bg-background"
         />
         {results.length > 0 && (

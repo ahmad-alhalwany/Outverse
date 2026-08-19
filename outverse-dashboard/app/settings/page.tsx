@@ -36,6 +36,7 @@ import {
   type SettingsPrefs,
 } from '@/lib/settingsPrefs';
 import { useLocale } from '@/components/LocaleProvider';
+import { persistVaultMapStyle } from '@/lib/vaultMapStyle';
 import { isAuthenticated, logout } from '@/lib/auth';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { apiFetch, apiFetchJson, mediaUrl } from '@/lib/api';
@@ -202,6 +203,7 @@ export default function SettingsPage() {
         };
         setPrefs(nextPrefs);
         persistSettingsPrefs(nextPrefs);
+        persistVaultMapStyle(nextPrefs.vaultMapStyle);
         setLocale(nextPrefs.locale);
       })
       .catch(() => {});
@@ -233,9 +235,9 @@ export default function SettingsPage() {
         },
       });
       if (!res.ok) throw new Error('save failed');
-      setStatus('Preferences saved');
+      setStatus(t('settings.prefsSaved'));
     } catch {
-      setStatus('Saved locally. Backend sync unavailable.');
+      setStatus(t('settings.prefsSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -254,35 +256,34 @@ export default function SettingsPage() {
 
   const themeOptions = useMemo<(ThemeOption & { available: boolean })[]>(
     () => [
-      { id: 'cosmic', label: 'Cosmic Calm', active: prefs.theme === 'dark', available: true },
-      { id: 'nebula', label: 'Nebula Glow', active: false, available: false },
-      { id: 'stardust', label: 'Stardust Mist', active: false, available: false },
-      { id: 'aurora', label: 'Aurora Drift', active: prefs.theme === 'light', available: true },
+      { id: 'cosmic', label: t('settings.themeCosmicCalm'), active: prefs.theme === 'dark', available: true },
+      { id: 'nebula', label: t('settings.themeNebulaGlow'), active: false, available: false },
+      { id: 'stardust', label: t('settings.themeStardustMist'), active: false, available: false },
+      { id: 'aurora', label: t('settings.themeAuroraDrift'), active: prefs.theme === 'light', available: true },
     ],
-    [prefs.theme],
+    [prefs.theme, t],
   );
 
   const weirdnessValue = prefs.weirdnessLevel;
   const weirdnessPercent = `${weirdnessValue}%`;
   const frequencyOptions: Array<{ id: SettingsPrefs['messageFrequency']; label: string }> = [
-    { id: 'hourly', label: 'Frequent' },
-    { id: 'daily', label: 'Balanced' },
-    { id: 'weekly', label: 'Rare' },
+    { id: 'hourly', label: t('settings.freqFrequent') },
+    { id: 'daily', label: t('settings.freqBalanced') },
+    { id: 'weekly', label: t('settings.freqRare') },
   ];
   const notificationRows: Array<{
     key: NotificationKey;
     label: string;
     icon: typeof GlobeAltIcon;
   }> = [
-    { key: 'likes', label: 'Push Notifications', icon: BellIcon },
-    { key: 'comments', label: 'Email Updates', icon: EnvelopeIcon },
-    { key: 'stories', label: 'Sound Effects', icon: SpeakerWaveIcon },
-    { key: 'follows', label: 'Vibration', icon: BellIcon },
+    { key: 'likes', label: t('settings.notifLikes'), icon: BellIcon },
+    { key: 'comments', label: t('settings.notifComments'), icon: EnvelopeIcon },
+    { key: 'shop', label: t('settings.notifShop'), icon: SpeakerWaveIcon },
+    { key: 'follows', label: t('settings.notifFollows'), icon: BellIcon },
   ];
 
-  const displayName =
-    [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || 'John Doe';
-  const displayEmail = user?.email || 'john.doe@email.com';
+  const displayName = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username : '';
+  const displayEmail = user?.email || '';
   const avatarSrc = user?.avatar ? mediaUrl(user.avatar) : null;
 
   return (
@@ -299,15 +300,15 @@ export default function SettingsPage() {
               type="button"
               onClick={() => router.back()}
               className="rounded-full p-1"
-              aria-label="Back"
+              aria-label={t('settings.back')}
             >
               <ArrowLeftIcon className="h-6 w-6" style={{ color: palette.text }} />
             </button>
-            <h1 className="text-[2rem] font-semibold tracking-tight">Settings</h1>
+            <h1 className="text-[2rem] font-semibold tracking-tight">{t('settings.title')}</h1>
           </div>
 
           <section className="-mx-5 mb-6" style={{ background: palette.section }}>
-            <SectionTitle icon={GlobeAltIcon} title="Account" color={palette.icon} />
+            <SectionTitle icon={GlobeAltIcon} title={t('settings.account')} color={palette.icon} />
             <div className="px-5 pb-5">
               <div
                 className="flex items-center gap-4 rounded-[1.35rem] px-4 py-4"
@@ -324,20 +325,28 @@ export default function SettingsPage() {
                   )}
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-[1.35rem] font-semibold">{displayName}</p>
-                  <p className="truncate text-base" style={{ color: palette.textMuted }}>
-                    {displayEmail}
-                  </p>
+                  {user ? (
+                    <>
+                      <p className="truncate text-[1.35rem] font-semibold">{displayName}</p>
+                      <p className="truncate text-base" style={{ color: palette.textMuted }}>
+                        {displayEmail}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="truncate text-base" style={{ color: palette.textMuted }}>
+                      {t('settings.notSignedIn')}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
           </section>
 
           <section className="mb-6">
-            <SectionTitle icon={PaintBrushIcon} title="Personalization" color={palette.icon} />
+            <SectionTitle icon={PaintBrushIcon} title={t('settings.personalization')} color={palette.icon} />
             <div className="px-5 pb-1">
               <div className="mb-5">
-                <p className="mb-3 text-[1.05rem] font-semibold">Mood Theme</p>
+                <p className="mb-3 text-[1.05rem] font-semibold">{t('settings.moodTheme')}</p>
                 <div className="grid grid-cols-2 gap-3">
                   {themeOptions.map((option) => (
                     <button
@@ -372,7 +381,7 @@ export default function SettingsPage() {
 
               <div className="mb-2">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <p className="text-[1.05rem] font-semibold">Weirdness Level</p>
+                  <p className="text-[1.05rem] font-semibold">{t('settings.weirdnessLevel')}</p>
                   <button
                     type="button"
                     onClick={() => {
@@ -398,11 +407,11 @@ export default function SettingsPage() {
                   }}
                 />
                 <div className="mt-2 flex items-center justify-between text-sm" style={{ color: palette.textMuted }}>
-                  <span>Mild</span>
+                  <span>{t('settings.mild')}</span>
                   <span className="font-semibold" style={{ color: palette.text }}>
                     {weirdnessValue}
                   </span>
-                  <span>Wild</span>
+                  <span>{t('settings.wild')}</span>
                 </div>
               </div>
 
@@ -411,7 +420,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="mb-2">
-                <p className="mb-3 text-[1.05rem] font-semibold">Bottle & Message Frequency</p>
+                <p className="mb-3 text-[1.05rem] font-semibold">{t('settings.bottleFrequency')}</p>
                 <div className="grid grid-cols-3 gap-3">
                   {frequencyOptions.map((option) => (
                     <button
@@ -433,7 +442,7 @@ export default function SettingsPage() {
           </section>
 
           <section className="-mx-5 mb-6" style={{ background: palette.section }}>
-            <SectionTitle icon={BellIcon} title="Notifications" color={palette.icon} />
+            <SectionTitle icon={BellIcon} title={t('settings.notificationsTitle')} color={palette.icon} />
             <div className="px-5 pb-5">
               {notificationRows.map((row) => (
                 <ToggleRow
@@ -477,13 +486,13 @@ export default function SettingsPage() {
                 {t('settings.enableBrowserPush')}
               </button>
               <p className="mt-3 text-sm" style={{ color: palette.textMuted }}>
-                {saving ? 'Saving…' : status || 'Preferences sync to your account when available.'}
+                {saving ? t('settings.saving') : status || t('settings.prefsSyncHint')}
               </p>
             </div>
           </section>
 
           <section className="mb-6">
-            <SectionTitle icon={UserGroupIcon} title="Inner Orbit" color={palette.icon} />
+            <SectionTitle icon={UserGroupIcon} title={t('settings.innerOrbit')} color={palette.icon} />
             <div className="px-5 pb-2">
               <CloseFriendsSettings />
             </div>
@@ -567,17 +576,17 @@ export default function SettingsPage() {
           </section>
 
           <section className="-mx-5 mb-6" style={{ background: palette.section }}>
-            <SectionTitle icon={ChatBubbleLeftRightIcon} title="Messaging" color={palette.icon} />
+            <SectionTitle icon={ChatBubbleLeftRightIcon} title={t('settings.messaging')} color={palette.icon} />
             <div className="px-5 pb-5">
               <ToggleRow
                 icon={ChatBubbleLeftRightIcon}
-                label="Read receipts"
+                label={t('settings.readReceipts')}
                 checked={prefs.readReceiptsEnabled}
                 onChange={(next) => updatePrefs({ readReceiptsEnabled: next })}
                 palette={palette}
               />
               <p className="text-sm" style={{ color: palette.icon }}>
-                When off, others won&apos;t see when you&apos;ve read their messages.
+                {t('settings.readReceiptsHint')}
               </p>
             </div>
           </section>
@@ -601,11 +610,11 @@ export default function SettingsPage() {
           </section>
 
           <section className="mb-6">
-            <SectionTitle icon={InformationCircleIcon} title="Legal" color={palette.icon} />
+            <SectionTitle icon={InformationCircleIcon} title={t('settings.legal')} color={palette.icon} />
             <div className="space-y-3 px-5 pb-2">
               <RowLink href="/privacy" icon={LockClosedIcon} label={t('legal.privacyTitle')} palette={palette} />
               <RowLink href="/terms" icon={InformationCircleIcon} label={t('legal.termsTitle')} palette={palette} />
-              <RowLink href="/chat" icon={ChatBubbleLeftRightIcon} label="Message Settings" palette={palette} />
+              <RowLink href="/chat" icon={ChatBubbleLeftRightIcon} label={t('settings.messageSettings')} palette={palette} />
             </div>
           </section>
 
@@ -617,7 +626,7 @@ export default function SettingsPage() {
               style={{ background: palette.cardStrong }}
             >
               <ArrowRightOnRectangleIcon className="h-5 w-5" />
-              Log Out
+              {t('settings.logOut')}
             </button>
           ) : (
             <Link
@@ -625,7 +634,7 @@ export default function SettingsPage() {
               className="block rounded-2xl px-4 py-4 text-center text-[1.05rem] font-semibold text-white"
               style={{ background: palette.cardStrong }}
             >
-              Sign In
+              {t('settings.signIn')}
             </Link>
           )}
         </div>

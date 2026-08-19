@@ -51,6 +51,7 @@ const PALETTES = {
 
 type Achievement = {
   title?: string;
+  key?: string;
   category?: string;
   completed?: boolean;
   progress?: number;
@@ -69,6 +70,26 @@ const CATEGORY_ICON: Record<string, typeof TrophyIcon> = {
   live: VideoCameraIcon,
 };
 
+// Matches backend/users/achievements.py:ACHIEVEMENT_DEFINITIONS keys —
+// the backend only ever returns an English title, so it's translated here.
+const ACHIEVEMENT_TITLE_KEYS: Record<string, string> = {
+  first_post: 'achievements.titleFirstPost',
+  post_10: 'achievements.titlePost10',
+  post_50: 'achievements.titlePost50',
+  community_join_1: 'achievements.titleCommunityJoin1',
+  community_join_5: 'achievements.titleCommunityJoin5',
+  idea_create_1: 'achievements.titleIdeaCreate1',
+  idea_create_5: 'achievements.titleIdeaCreate5',
+  capsule_open_1: 'achievements.titleCapsuleOpen1',
+  live_end_1: 'achievements.titleLiveEnd1',
+  live_end_5: 'achievements.titleLiveEnd5',
+};
+
+function achievementTitle(a: Achievement, t: (key: string) => string): string {
+  const key = a.key ? ACHIEVEMENT_TITLE_KEYS[a.key] : undefined;
+  return key ? t(key) : a.title || '';
+}
+
 function isUnlocked(a: Achievement) {
   const goal = a.goal ?? 0;
   const progress = a.progress ?? 0;
@@ -82,22 +103,29 @@ export default function AchievementsPage() {
   const user = useAuthUser();
   const [achievements, setAchievements] = useState<Achievement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [shared, setShared] = useState<string | null>(null);
   const [shareFailed, setShareFailed] = useState<string | null>(null);
   const [passport, setPassport] = useState<WorldPassport | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!user) {
       setLoading(false);
       return;
     }
+    setLoading(true);
+    setLoadError(false);
     void fetchWorldPassports().then(setPassport);
     apiFetch(`users/${user.id}/`)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('load failed'))))
       .then((data) => setAchievements(Array.isArray(data?.achievements) ? data.achievements : []))
-      .catch(() => setAchievements([]))
+      .catch(() => {
+        setAchievements([]);
+        setLoadError(true);
+      })
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, reloadKey]);
 
   const total = achievements.length;
   const unlocked = achievements.filter(isUnlocked).length;
@@ -120,20 +148,22 @@ export default function AchievementsPage() {
   }, [byCategory]);
 
   async function shareAchievement(achievement: Achievement) {
-    const text = `${achievement.title} — ${t('achievements.shareText')}`;
+    const title = achievementTitle(achievement, t);
+    const text = `${title} — ${t('achievements.shareText')}`;
+    const id = achievement.key || title;
     try {
       if (navigator.share) {
-        await navigator.share({ title: achievement.title, text });
+        await navigator.share({ title, text });
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(text);
       } else {
         throw new Error('sharing unsupported');
       }
-      setShared(achievement.title || null);
+      setShared(id || null);
       window.setTimeout(() => setShared(null), 2200);
     } catch (err) {
       if ((err as { name?: string })?.name === 'AbortError') return; // user cancelled, not a failure
-      setShareFailed(achievement.title || null);
+      setShareFailed(id || null);
       window.setTimeout(() => setShareFailed(null), 2200);
     }
   }
@@ -160,6 +190,18 @@ export default function AchievementsPage() {
         ) : loading ? (
           <div className="py-16 text-center" style={{ color: C.text2 }}>
             {t('common.loading')}
+          </div>
+        ) : loadError ? (
+          <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
+            <p className="mb-3">{t('achievements.loadError')}</p>
+            <button
+              type="button"
+              onClick={() => setReloadKey((k) => k + 1)}
+              className="rounded-full px-4 py-1.5 text-xs font-semibold text-white"
+              style={{ background: C.brownDk }}
+            >
+              {t('achievements.retry')}
+            </button>
           </div>
         ) : total === 0 ? (
           <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
@@ -216,7 +258,7 @@ export default function AchievementsPage() {
                             />
                           </div>
                           <p className="text-sm font-semibold" style={{ color: C.text }}>
-                            {achievement.title}
+                            {achievementTitle(achievement, t)}
                           </p>
                           <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: C.progressBg }}>
                             <div className="h-full rounded-full" style={{ width: `${pct}%`, background: C.brown }} />
@@ -232,9 +274,9 @@ export default function AchievementsPage() {
                               style={{ background: C.card2, color: C.brownDk }}
                             >
                               <ShareIcon className="h-3.5 w-3.5" />
-                              {shared === achievement.title
+                              {shared === (achievement.key || achievementTitle(achievement, t))
                                 ? t('achievements.shared')
-                                : shareFailed === achievement.title
+                                : shareFailed === (achievement.key || achievementTitle(achievement, t))
                                   ? t('achievements.shareFailed')
                                   : t('achievements.share')}
                             </button>

@@ -817,11 +817,7 @@ class FollowView(APIView):
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
-
-    def get_permissions(self):
-        if self.action in ('list', 'retrieve'):
-            return [AllowAny()]
-        return [IsAdminUser()]
+    permission_classes = [IsAdminUser]
 
     def perform_update(self, serializer):
         previous_unlocked = _unlocked_achievement_titles(serializer.instance.achievements)

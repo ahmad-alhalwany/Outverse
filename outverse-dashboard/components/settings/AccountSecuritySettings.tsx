@@ -31,7 +31,8 @@ export default function AccountSecuritySettings({ palette }: { palette: Palette 
   const [twoFa, setTwoFa] = useState<{ secret: string; otpauth_uri: string; is_enabled: boolean } | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [code, setCode] = useState('');
-  const [password, setPassword] = useState('');
+  const [disable2faPassword, setDisable2faPassword] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const [verifyReason, setVerifyReason] = useState('');
   const [verifyLink, setVerifyLink] = useState('');
@@ -123,16 +124,17 @@ export default function AccountSecuritySettings({ palette }: { palette: Palette 
           <div className="mt-3">
             <input
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={disable2faPassword}
+              onChange={(e) => setDisable2faPassword(e.target.value)}
               placeholder={t('security.passwordConfirm')}
               className="w-full rounded-xl px-3 py-2 text-sm mb-2"
             />
             <button
               type="button"
               onClick={async () => {
-                if (await disable2fa(password)) {
+                if (await disable2fa(disable2faPassword)) {
                   setStatus(t('security.twoFactorOff'));
+                  setDisable2faPassword('');
                   void load();
                 }
               }}
@@ -206,16 +208,16 @@ export default function AccountSecuritySettings({ palette }: { palette: Palette 
         <p className="text-sm font-semibold mb-2 text-red-400">{t('security.deleteAccount')}</p>
         <input
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          value={deletePassword}
+          onChange={(e) => setDeletePassword(e.target.value)}
           placeholder={t('security.passwordConfirm')}
           className="w-full rounded-xl px-3 py-2 text-sm mb-2"
         />
         <button
           type="button"
           onClick={async () => {
-            if (!(await confirm(t('security.deleteConfirm'), { danger: true, confirmLabel: 'Delete' }))) return;
-            if (await deleteAccount(password)) {
+            if (!(await confirm(t('security.deleteConfirm'), { danger: true, confirmLabel: t('common.delete') }))) return;
+            if (await deleteAccount(deletePassword)) {
               clearAuth();
               router.push('/');
             }
