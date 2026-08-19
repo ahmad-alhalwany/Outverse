@@ -4,6 +4,7 @@ import { PhoneXMarkIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
 import { MicrophoneIcon as MicSolid } from '@heroicons/react/24/solid';
 import type { CallKind, IncomingCall } from '@/hooks/useWebRTCCall';
 import { mediaUrl } from '@/lib/api';
+import { useLocale } from '@/components/LocaleProvider';
 
 type Props = {
   mode: 'incoming' | 'active';
@@ -39,6 +40,7 @@ export default function CallOverlay({
   onHangUp,
   onToggleMute,
 }: Props) {
+  const { t } = useLocale();
   const name = incoming?.fromName || peerName;
   const avatar = incoming?.fromAvatar ?? peerAvatar;
   const kind = incoming?.callType || callKind;
@@ -52,14 +54,14 @@ export default function CallOverlay({
             <img src={avatarSrc(name, avatar)} alt="" className="cosmic-call-avatar" />
             <h2 className="cosmic-call-title">{name}</h2>
             <p className="cosmic-call-sub">
-              Incoming {kind === 'video' ? 'video' : 'voice'} call…
+              {kind === 'video' ? t('chat.incomingVideoCall') : t('chat.incomingVoiceCall')}
             </p>
             <div className="cosmic-call-actions">
               <button type="button" className="cosmic-call-btn cosmic-call-btn--reject" onClick={onReject}>
-                Decline
+                {t('chat.decline')}
               </button>
               <button type="button" className="cosmic-call-btn cosmic-call-btn--accept" onClick={onAccept}>
-                Accept
+                {t('chat.accept')}
               </button>
             </div>
           </>
@@ -71,12 +73,12 @@ export default function CallOverlay({
                 <video ref={localVideoRef as React.Ref<HTMLVideoElement>} autoPlay playsInline muted className="cosmic-call-local" />
               )}
             </div>
-            <p className="cosmic-call-sub">{peerName} · {kind === 'video' ? 'Video' : 'Voice'}</p>
+            <p className="cosmic-call-sub">{peerName} · {kind === 'video' ? t('chat.video') : t('chat.voice')}</p>
             <div className="cosmic-call-toolbar">
-              <button type="button" className="cosmic-call-round" onClick={onToggleMute} title={muted ? 'Unmute' : 'Mute'}>
+              <button type="button" className="cosmic-call-round" onClick={onToggleMute} title={muted ? t('chat.callUnmute') : t('chat.callMute')}>
                 {muted ? <MicrophoneIcon className="h-6 w-6" /> : <MicSolid className="h-6 w-6" />}
               </button>
-              <button type="button" className="cosmic-call-round cosmic-call-round--end" onClick={onHangUp} title="End call">
+              <button type="button" className="cosmic-call-round cosmic-call-round--end" onClick={onHangUp} title={t('chat.endCall')}>
                 <PhoneXMarkIcon className="h-6 w-6" />
               </button>
             </div>

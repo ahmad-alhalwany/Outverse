@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
+import { useLocale } from '@/components/LocaleProvider';
 
 /**
  * Standalone web chat (responsive). Not a separate native app — links back to Cosmory only.
  * Height is locked to the viewport so the message composer stays visible.
  */
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
+  const { t } = useLocale();
   const router = useRouter();
   const [ready, setReady] = useState(false);
 
@@ -27,7 +29,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         className="h-dvh max-h-dvh flex items-center justify-center text-sm overflow-hidden"
         style={{ background: 'var(--cc-cream, #F3F0FC)', color: 'var(--cc-text-2, #79709E)' }}
       >
-        Loading chat…
+        {t('chat.loadingChat')}
       </div>
     );
   }
@@ -43,9 +45,9 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <Link href="/" className="font-semibold hover:underline" style={{ color: 'var(--cc-text, #211B3D)' }}>
-          ← Back to Cosmory
+          {t('chat.backToCosmory')}
         </Link>
-        <span>Standalone chat</span>
+        <span>{t('chat.standaloneChat')}</span>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">{children}</div>
     </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useLocale } from '@/components/LocaleProvider';
 
 type PickerCandidate = {
   id: number;
@@ -28,6 +29,7 @@ export default function MemberPickerModal({
   onConfirm,
   onClose,
 }: Props) {
+  const { t } = useLocale();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [name, setName] = useState(initialName);
@@ -62,7 +64,7 @@ export default function MemberPickerModal({
           <input
             type="text"
             className="cosmic-modal-input"
-            placeholder="Room name"
+            placeholder={t('chat.roomNamePlaceholder')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
@@ -71,12 +73,12 @@ export default function MemberPickerModal({
         <input
           type="text"
           className="cosmic-modal-input"
-          placeholder="Search friends…"
+          placeholder={t('chat.searchFriends')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <div className="cosmic-modal-list">
-          {filtered.length === 0 && <p className="cosmic-modal-empty">No friends found.</p>}
+          {filtered.length === 0 && <p className="cosmic-modal-empty">{t('chat.noFriendsFound')}</p>}
           {filtered.map((c) => (
             <label key={c.id} className="cosmic-modal-row">
               <input
@@ -98,7 +100,7 @@ export default function MemberPickerModal({
         </div>
         <div className="cosmic-modal-actions">
           <button type="button" className="cosmic-modal-btn cosmic-modal-btn--ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"

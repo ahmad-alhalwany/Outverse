@@ -5,6 +5,7 @@ import { PhoneXMarkIcon, MicrophoneIcon } from '@heroicons/react/24/outline';
 import { MicrophoneIcon as MicSolid } from '@heroicons/react/24/solid';
 import type { CallKind } from '@/hooks/useWebRTCCall';
 import type { GroupCallPeer } from '@/hooks/useGroupCall';
+import { useLocale } from '@/components/LocaleProvider';
 
 type Props = {
   roomName: string;
@@ -42,20 +43,23 @@ export default function GroupCallOverlay({
   onHangUp,
   onToggleMute,
 }: Props) {
+  const { t } = useLocale();
   return (
     <div className="cosmic-call-overlay">
       <div className="cosmic-call-panel cosmic-call-panel--group">
         <h2 className="cosmic-call-title">{roomName}</h2>
         <p className="cosmic-call-sub">
           {peers.length === 0
-            ? 'Waiting for others to join…'
-            : `${peers.length} other${peers.length === 1 ? '' : 's'} on the call`}
+            ? t('chat.waitingForOthers')
+            : peers.length === 1
+              ? t('chat.othersOnCallOne', { count: String(peers.length) })
+              : t('chat.othersOnCallMany', { count: String(peers.length) })}
         </p>
         <div className="cosmic-call-grid">
           {callKind === 'video' && (
             <div className="cosmic-call-tile cosmic-call-tile--local">
               <video ref={localVideoRef as React.Ref<HTMLVideoElement>} autoPlay playsInline muted className="cosmic-call-tile-video" />
-              <span className="cosmic-call-tile-name">You</span>
+              <span className="cosmic-call-tile-name">{t('chat.youLabel')}</span>
             </div>
           )}
           {peers.map((peer) => (
@@ -63,10 +67,10 @@ export default function GroupCallOverlay({
           ))}
         </div>
         <div className="cosmic-call-toolbar">
-          <button type="button" className="cosmic-call-round" onClick={onToggleMute} title={muted ? 'Unmute' : 'Mute'}>
+          <button type="button" className="cosmic-call-round" onClick={onToggleMute} title={muted ? t('chat.callUnmute') : t('chat.callMute')}>
             {muted ? <MicrophoneIcon className="h-6 w-6" /> : <MicSolid className="h-6 w-6" />}
           </button>
-          <button type="button" className="cosmic-call-round cosmic-call-round--end" onClick={onHangUp} title="Leave call">
+          <button type="button" className="cosmic-call-round cosmic-call-round--end" onClick={onHangUp} title={t('chat.leaveCall')}>
             <PhoneXMarkIcon className="h-6 w-6" />
           </button>
         </div>

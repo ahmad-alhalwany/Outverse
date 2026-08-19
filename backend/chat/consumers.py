@@ -119,10 +119,17 @@ class RoomChatConsumer(AsyncJsonWebsocketConsumer):
                     expires_in_seconds=content.get('expires_in_seconds'),
                 )
             except Exception as exc:
-                # Slowmode / permission
+                # Slowmode / expired prompt room / other permission failure
+                reason = str(exc).lower()
+                if 'expired' in reason:
+                    error = 'expired'
+                elif 'slowmode' in reason:
+                    error = 'slowmode'
+                else:
+                    error = 'send_failed'
                 await self.send_json({
                     'type': 'room.error',
-                    'error': 'slowmode' if 'slowmode' in str(exc).lower() else 'send_failed',
+                    'error': error,
                 })
                 return
             payload = await database_sync_to_async(room_message_to_payload)(saved)

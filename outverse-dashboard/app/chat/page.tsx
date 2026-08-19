@@ -33,7 +33,7 @@ import {
   ArrowUturnLeftIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
-import { fetchPromptRooms, createOrJoinPromptRoom, type PromptRoom } from '@/lib/roomsApi';
+import { fetchPromptRooms, createOrJoinPromptRoom, fetchRoomRecap, type PromptRoom, type RoomRecap } from '@/lib/roomsApi';
 import InspirationPicker from '@/components/posts/InspirationPicker';
 import type { InspirationQuestion } from '@/lib/questionsApi';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
@@ -95,20 +95,20 @@ const MOOD_STAMPS = [
 
 type ReactionBurstState = { id: number; emoji: string; x: number; y: number };
 
-const VANISH_PRESETS: { label: string; seconds: number }[] = [
-  { label: '1 hour', seconds: 3600 },
-  { label: '24 hours', seconds: 86400 },
-  { label: '7 days', seconds: 7 * 86400 },
+const VANISH_PRESETS: { labelKey: string; seconds: number }[] = [
+  { labelKey: 'chat.vanish1Hour', seconds: 3600 },
+  { labelKey: 'chat.vanish24Hours', seconds: 86400 },
+  { labelKey: 'chat.vanish7Days', seconds: 7 * 86400 },
 ];
 
-function formatTimeLeft(expiresAt: string): string {
+function formatTimeLeft(expiresAt: string, t: (key: string, vars?: Record<string, string>) => string): string {
   const ms = new Date(expiresAt).getTime() - Date.now();
-  if (ms <= 0) return 'vanishing…';
+  if (ms <= 0) return t('chat.vanishing');
   const mins = Math.round(ms / 60000);
-  if (mins < 60) return `vanishes in ${mins}m`;
+  if (mins < 60) return t('chat.vanishesInMinutes', { n: String(mins) });
   const hours = Math.round(mins / 60);
-  if (hours < 24) return `vanishes in ${hours}h`;
-  return `vanishes in ${Math.round(hours / 24)}d`;
+  if (hours < 24) return t('chat.vanishesInHours', { n: String(hours) });
+  return t('chat.vanishesInDays', { n: String(Math.round(hours / 24)) });
 }
 
 type ScheduledMessageEntry = {
@@ -184,11 +184,19 @@ function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function extractStageIds(list: unknown): number[] {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((item) => (typeof item === 'number' ? item : (item as { id?: number } | null)?.id))
+    .filter((id): id is number => typeof id === 'number');
+}
+
 function normalizeStageState(data: Partial<StageState> | null | undefined): StageState {
   return {
-    speakers: Array.isArray(data?.speakers) ? data.speakers : [],
-    listeners: Array.isArray(data?.listeners) ? data.listeners : [],
-    raised_hands: Array.isArray(data?.raised_hands) ? data.raised_hands : [],
+    // The API sends {id, username, name, avatar} objects in each bucket, not bare IDs.
+    speakers: extractStageIds(data?.speakers),
+    listeners: extractStageIds(data?.listeners),
+    raised_hands: extractStageIds(data?.raised_hands),
     host_id: typeof data?.host_id === 'number' ? data.host_id : null,
   };
 }
@@ -234,14 +242,15 @@ function normalizeMsg(
 }
 
 function MessageBody({ m, highlightQuery }: { m: ChatMessage; highlightQuery?: string }) {
+  const { t } = useLocale();
   if (m.is_deleted) {
-    return <span className="italic opacity-60">This message was deleted</span>;
+    return <span className="italic opacity-60">{t('chat.deletedMessage')}</span>;
   }
   const url = m.attachment_url ? mediaUrl(m.attachment_url) : null;
   if (m.message_type === 'image' && url) {
     return (
       <>
-        <Image src={url} alt="Shared chat image" width={320} height={240} className="max-w-full rounded-lg mb-1" unoptimized />
+        <Image src={url} alt={t('chat.sharedImageAlt')} width={320} height={240} className="max-w-full rounded-lg mb-1" unoptimized />
         {m.text ? <HighlightedText text={m.text} query={highlightQuery || ''} /> : null}
       </>
     );
@@ -257,7 +266,7 @@ function MessageBody({ m, highlightQuery }: { m: ChatMessage; highlightQuery?: s
   if (m.message_type === 'file' && url) {
     return (
       <a href={url} target="_blank" rel="noopener noreferrer" className="underline">
-        {m.text ? <HighlightedText text={m.text} query={highlightQuery || ''} /> : 'Download file'}
+        {m.text ? <HighlightedText text={m.text} query={highlightQuery || ''} /> : t('chat.downloadFile')}
       </a>
     );
   }
@@ -339,6 +348,8 @@ function CosmicChatPageContent() {
   const [promptRooms, setPromptRooms] = useState<PromptRoom[]>([]);
   const [promptPickerOpen, setPromptPickerOpen] = useState(false);
   const [activePromptRoom, setActivePromptRoom] = useState<PromptRoom | null>(null);
+  const [roomRecap, setRoomRecap] = useState<RoomRecap | null>(null);
+  const [roomRecapLoading, setRoomRecapLoading] = useState(false);
   const [archivedConversationIds, setArchivedConversationIds] = useState<number[]>([]);
   const [mutedConversationIds, setMutedConversationIds] = useState<number[]>([]);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
@@ -451,12 +462,18 @@ function CosmicChatPageContent() {
       );
       return;
     }
+    if (payload.type === 'stage.update') {
+      if (payload.room_id === activeRoomId) {
+        setStageState(normalizeStageState(payload as Partial<StageState>));
+      }
+      return;
+    }
     if (String(payload.type).startsWith('call.room.')) {
       void groupCallSignalRef.current(payload);
       return;
     }
     void rtcSignalRef.current(payload);
-  }, [showToast]);
+  }, [activeRoomId, showToast]);
 
   const { connected: signalConnected, sendSignal, joinRoom, leaveRoom } =
     useSignalWebSocket({
@@ -477,7 +494,7 @@ function CosmicChatPageContent() {
     hangUp,
     handleSignal: callHandleSignal,
     toggleMute,
-  } = useWebRTCCall(meId, sendSignal, () => showToast('Call ended'));
+  } = useWebRTCCall(meId, sendSignal, () => showToast(t('chat.callEnded')));
 
   const {
     active: groupCallActive,
@@ -553,6 +570,11 @@ function CosmicChatPageContent() {
     },
     onEdited: handleMessageEdited,
     onDeleted: handleMessageDeleted,
+    onError: (error) => {
+      if (error === 'expired') showToast(t('chat.roomExpired'));
+      else if (error === 'slowmode') showToast(t('chat.slowmodeActive'));
+      else showToast(t('chat.sendMessageFailed'));
+    },
   });
 
   useEffect(() => {
@@ -586,7 +608,7 @@ function CosmicChatPageContent() {
         if (data.me) setMe(data.me);
       }
     } catch {
-      showToast('Could not load friends');
+      showToast(t('chat.loadFriendsFailed'));
     }
   }, [showToast]);
 
@@ -600,7 +622,7 @@ function CosmicChatPageContent() {
         syncConversationPrefs(rows);
       }
     } catch {
-      showToast('Could not load conversations');
+      showToast(t('chat.loadConversationsFailed'));
     }
   }, [syncConversationPrefs, showToast]);
 
@@ -612,7 +634,7 @@ function CosmicChatPageContent() {
         setRequestConversations(Array.isArray(data) ? data : []);
       }
     } catch {
-      showToast('Could not load message requests');
+      showToast(t('chat.loadRequestsFailed'));
     }
   }, [showToast]);
 
@@ -624,7 +646,7 @@ function CosmicChatPageContent() {
         setScheduledMessages(Array.isArray(data) ? data : []);
       }
     } catch {
-      showToast('Could not load scheduled messages');
+      showToast(t('chat.loadScheduledFailed'));
     }
   }, [showToast]);
 
@@ -644,13 +666,13 @@ function CosmicChatPageContent() {
         json: { text: text.trim(), send_at: isoSendAt },
       });
       if (res.ok) {
-        showToast('Message scheduled');
+        showToast(t('chat.messageScheduled'));
         setDraft('');
         setScheduleDraft('');
         setScheduleMenuOpen(false);
         await loadScheduled();
       } else {
-        showToast('Could not schedule message');
+        showToast(t('chat.scheduleFailed'));
       }
     },
     [viewMode, activeRoomId, conversationId, showToast, loadScheduled],
@@ -691,7 +713,7 @@ function CosmicChatPageContent() {
         setMedia(data.media || []);
       }
     } catch {
-      showToast('Could not load shared space');
+      showToast(t('chat.loadSharedSpaceFailed'));
     }
   }, [showToast]);
 
@@ -703,7 +725,7 @@ function CosmicChatPageContent() {
         setRooms(Array.isArray(data) ? data : []);
       }
     } catch {
-      showToast('Could not load rooms');
+      showToast(t('chat.loadRoomsFailed'));
     }
   }, [showToast]);
 
@@ -739,7 +761,7 @@ function CosmicChatPageContent() {
           setMessages(list);
         }
       } catch {
-        showToast('Could not load room');
+        showToast(t('chat.loadRoomFailed'));
       }
     },
     [showToast],
@@ -751,7 +773,7 @@ function CosmicChatPageContent() {
       if (pr.question) {
         const joined = await createOrJoinPromptRoom(pr.question);
         if (!joined) {
-          showToast('Could not join prompt room');
+          showToast(t('chat.joinPromptRoomFailed'));
           return;
         }
         roomMeta = joined;
@@ -774,7 +796,7 @@ function CosmicChatPageContent() {
     setPromptPickerOpen(false);
     const room = await createOrJoinPromptRoom(q.id);
     if (!room) {
-      showToast('Could not open prompt room');
+      showToast(t('chat.openPromptRoomFailed'));
       return;
     }
     await loadPromptRooms();
@@ -833,10 +855,10 @@ function CosmicChatPageContent() {
         if (res.ok) {
           await refreshMessages();
         } else {
-          showToast('Could not edit message');
+          showToast(t('chat.editMessageFailed'));
         }
       } catch {
-        showToast('Could not edit message');
+        showToast(t('chat.editMessageFailed'));
       }
     },
     [viewMode, refreshMessages, showToast],
@@ -844,17 +866,17 @@ function CosmicChatPageContent() {
 
   const deleteMessage = useCallback(
     async (m: ChatMessage) => {
-      if (!(await confirm('Delete this message?', { danger: true, confirmLabel: 'Delete' }))) return;
+      if (!(await confirm(t('chat.confirmDeleteMessage'), { danger: true, confirmLabel: t('chat.delete') }))) return;
       const path = viewMode === 'room' ? `chat/room-messages/${m.id}/` : `chat/messages/${m.id}/`;
       try {
         const res = await apiFetch(path, { method: 'DELETE' });
         if (res.ok) {
           setMessages((prev) => prev.map((row) => (row.id === m.id ? { ...row, is_deleted: true, text: '' } : row)));
         } else {
-          showToast('Could not delete message');
+          showToast(t('chat.deleteMessageFailed'));
         }
       } catch {
-        showToast('Could not delete message');
+        showToast(t('chat.deleteMessageFailed'));
       }
     },
     [viewMode, showToast, confirm],
@@ -908,7 +930,7 @@ function CosmicChatPageContent() {
         openRoom(room);
       }
     } catch {
-      showToast('Could not create room');
+      showToast(t('chat.createRoomFailed'));
     }
   }, [loadRooms, openRoom, showToast]);
 
@@ -941,7 +963,7 @@ function CosmicChatPageContent() {
         }
         await loadConversations();
       } catch {
-        showToast('Could not load conversation');
+        showToast(t('chat.loadConversationFailed'));
       }
     },
     [loadConversations, showToast],
@@ -1057,6 +1079,24 @@ function CosmicChatPageContent() {
     [activeRoom?.members, meBarName, meId],
   );
 
+  useEffect(() => {
+    if (!activePromptRoom?.is_expired) {
+      setRoomRecap(null);
+      return;
+    }
+    let cancelled = false;
+    setRoomRecapLoading(true);
+    void fetchRoomRecap(activePromptRoom.id).then((recap) => {
+      if (!cancelled) {
+        setRoomRecap(recap);
+        setRoomRecapLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activePromptRoom]);
+
   const fetchStageState = useCallback(
     async (silent = false) => {
       if (!activeRoomId || !isStageLikeRoom) return;
@@ -1066,10 +1106,10 @@ function CosmicChatPageContent() {
         if (res.ok) {
           setStageState(normalizeStageState(await res.json()));
         } else if (!silent) {
-          showToast('Could not load stage');
+          showToast(t('chat.loadStageFailed'));
         }
       } catch {
-        if (!silent) showToast('Could not load stage');
+        if (!silent) showToast(t('chat.loadStageFailed'));
       } finally {
         if (!silent) setStageLoading(false);
       }
@@ -1092,7 +1132,7 @@ function CosmicChatPageContent() {
     if (!activeRoomId || !stageState?.speakers.includes(meId) || groupCallActive) return;
     if (autoJoinedStageRoomRef.current === activeRoomId) return;
     autoJoinedStageRoomRef.current = activeRoomId;
-    showToast('You are a speaker — joining stage audio…');
+    showToast(t('chat.autoJoinStageAudio'));
     void handleGroupCall('audio');
   }, [activeRoomId, groupCallActive, meId, showToast, stageState?.speakers]);
 
@@ -1133,7 +1173,7 @@ function CosmicChatPageContent() {
           setDraft('');
           setReplyingTo(null);
         } else {
-          showToast('Message not sent — start backend with runserver or daphne');
+          showToast(t('chat.sendMessageFailed'));
         }
       } else if (viewMode === 'room' && activeRoomId) {
         const res = await apiFetch(`chat/rooms/${activeRoomId}/messages/`, {
@@ -1146,14 +1186,14 @@ function CosmicChatPageContent() {
           setDraft('');
           setReplyingTo(null);
         } else {
-          showToast('Message not sent');
+          showToast(t('chat.sendMessageFailed'));
         }
       }
       await loadConversations();
       await loadRequests();
       await loadRooms();
     } catch {
-      showToast('Message not sent');
+      showToast(t('chat.sendMessageFailed'));
     } finally {
       setSending(false);
     }
@@ -1194,9 +1234,9 @@ function CosmicChatPageContent() {
           ? await roomUploadFile(file, undefined, setUploadProgress)
           : await uploadFile(file, undefined, setUploadProgress);
       if (msg) appendMessage(msg);
-      else showToast('Upload failed');
+      else showToast(t('chat.uploadFailed'));
     } catch {
-      showToast('Upload failed');
+      showToast(t('chat.uploadFailed'));
     } finally {
       setSending(false);
       setTimeout(() => setUploadProgress(null), 1200);
@@ -1205,13 +1245,13 @@ function CosmicChatPageContent() {
 
   async function handleVoiceCall() {
     if (viewMode !== 'dm' || !activePeer) {
-      showToast('Select a friend for a voice call');
+      showToast(t('chat.selectFriendForCall'));
       return;
     }
     try {
       await startCall(activePeer.id, 'audio', meBarName, meAvatar);
     } catch {
-      showToast('Allow microphone access to call');
+      showToast(t('chat.micPermissionNeeded'));
     }
   }
 
@@ -1220,7 +1260,7 @@ function CosmicChatPageContent() {
     try {
       await startCall(activePeer.id, 'video', meBarName, meAvatar);
     } catch {
-      showToast('Allow camera & microphone to video call');
+      showToast(t('chat.cameraPermissionNeeded'));
     }
   }
 
@@ -1248,10 +1288,10 @@ function CosmicChatPageContent() {
           await handleGroupCall('audio');
         }
       } else {
-        showToast('Stage action failed');
+        showToast(t('chat.stageActionFailed'));
       }
     } catch {
-      showToast('Stage action failed');
+      showToast(t('chat.stageActionFailed'));
     } finally {
       setStageActionPending(null);
     }
@@ -1273,9 +1313,9 @@ function CosmicChatPageContent() {
     if (res.ok) {
       await loadRooms();
       setActiveRoomName(name);
-      showToast('Room renamed');
+      showToast(t('chat.roomRenamed'));
     } else {
-      showToast('Could not rename room');
+      showToast(t('chat.renameRoomFailed'));
     }
     setRenameOpen(false);
   }
@@ -1288,9 +1328,9 @@ function CosmicChatPageContent() {
     });
     if (res.ok) {
       await loadRooms();
-      showToast('Members invited');
+      showToast(t('chat.membersInvited'));
     } else {
-      showToast('Could not invite members');
+      showToast(t('chat.inviteMembersFailed'));
     }
   }
 
@@ -1302,9 +1342,9 @@ function CosmicChatPageContent() {
     });
     if (res.ok) {
       await loadRooms();
-      showToast('Member removed');
+      showToast(t('chat.memberRemoved'));
     } else {
-      showToast('Could not remove member');
+      showToast(t('chat.removeMemberFailed'));
     }
   }
 
@@ -1316,9 +1356,9 @@ function CosmicChatPageContent() {
       setActiveRoomName('');
       setMessages([]);
       await loadRooms();
-      showToast('Left room');
+      showToast(t('chat.leftRoom'));
     } else {
-      showToast('Could not leave room');
+      showToast(t('chat.leaveRoomFailed'));
     }
   }
 
@@ -1340,7 +1380,7 @@ function CosmicChatPageContent() {
     });
     if (!res.ok) {
       setArchivedConversationIds(archivedConversationIds);
-      showToast('Could not update archive state');
+      showToast(t('chat.archiveStateFailed'));
       return;
     }
     showToast(nextArchived ? 'Conversation archived' : 'Conversation restored');
@@ -1364,7 +1404,7 @@ function CosmicChatPageContent() {
     });
     if (!res.ok) {
       setMutedConversationIds(mutedConversationIds);
-      showToast('Could not update mute state');
+      showToast(t('chat.muteStateFailed'));
       return;
     }
     showToast(nextMuted ? 'Conversation muted' : 'Conversation unmuted');
@@ -1445,7 +1485,7 @@ function CosmicChatPageContent() {
                           <img src={avatarSrc({ name: conversation.peer?.name || 'Friend', avatar: conversation.peer?.avatar })} alt="" />
                         </div>
                         <div className="cosmic-chat-friend-meta min-w-0">
-                          <div className="name">{conversation.peer?.name || 'Unknown'}</div>
+                          <div className="name">{conversation.peer?.name || t('chat.unknownUser')}</div>
                           <div className="status truncate">
                             {conversation.last_message?.text || ''}
                           </div>
@@ -1466,7 +1506,7 @@ function CosmicChatPageContent() {
             </div>
           )}
           <p className="text-[10px] uppercase tracking-wide px-3 pt-2 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
-            Conversations
+            {t('chat.conversationsLabel')}
           </p>
           <div className="px-2 space-y-1">
             {visibleConversations.map((conversation) => (
@@ -1482,9 +1522,9 @@ function CosmicChatPageContent() {
                   {conversation.peer?.is_online && <span className="cosmic-chat-online-dot" />}
                 </div>
                 <div className="cosmic-chat-friend-meta min-w-0">
-                  <div className="name">{conversation.peer?.name || 'Unknown'}</div>
+                  <div className="name">{conversation.peer?.name || t('chat.unknownUser')}</div>
                   <div className="status truncate">
-                    {conversation.last_message?.text || 'No messages yet'}
+                    {conversation.last_message?.text || t('chat.noMessagesYet')}
                   </div>
                 </div>
                 {conversation.unread_count > 0 && (
@@ -1496,7 +1536,7 @@ function CosmicChatPageContent() {
             ))}
           </div>
           <p className="text-[10px] uppercase tracking-wide px-3 pt-2 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
-            Prompt rooms
+            {t('chat.promptRooms')}
           </p>
           <div className="px-2 pb-2 flex gap-1">
             <button
@@ -1506,12 +1546,12 @@ function CosmicChatPageContent() {
               onClick={() => setPromptPickerOpen(true)}
             >
               <SparklesIcon className="h-3.5 w-3.5" />
-              New prompt
+              {t('chat.newPrompt')}
             </button>
           </div>
           {promptRooms.length === 0 ? (
             <p className="text-[10px] px-3 pb-2" style={{ color: 'var(--cc-text-2)' }}>
-              Start a 24h room from a cosmic question.
+              {t('chat.startPromptHint')}
             </p>
           ) : (
             promptRooms.map((pr) => (
@@ -1524,13 +1564,13 @@ function CosmicChatPageContent() {
                 <div className="cosmic-chat-friend-avatar flex items-center justify-center text-lg">✨</div>
                 <div className="cosmic-chat-friend-meta min-w-0">
                   <div className="name truncate">{pr.question_text || pr.name}</div>
-                  <div className="status">{pr.member_count} explorers</div>
+                  <div className="status">{t('chat.explorersCount', { count: String(pr.member_count) })}</div>
                 </div>
               </button>
             ))
           )}
           <p className="text-[10px] uppercase tracking-wide px-3 pt-2 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
-            Group rooms
+            {t('chat.groupRooms')}
           </p>
           <div className="px-2 pb-2 flex gap-1">
             <button
@@ -1539,7 +1579,7 @@ function CosmicChatPageContent() {
               style={{ background: 'var(--cc-panel)' }}
               onClick={() => setMemberPickerMode('create')}
             >
-              + New room
+              + {t('chat.newRoom')}
             </button>
           </div>
           {rooms.map((r) => (
@@ -1552,17 +1592,17 @@ function CosmicChatPageContent() {
               <div className="cosmic-chat-friend-avatar flex items-center justify-center text-lg">👥</div>
               <div className="cosmic-chat-friend-meta hidden sm:block">
                 <div className="name">{r.name}</div>
-                <div className="status">{r.member_count} members</div>
+                <div className="status">{t('chat.membersCount', { count: String(r.member_count) })}</div>
               </div>
             </button>
           ))}
           <p className="text-[10px] uppercase tracking-wide px-3 pt-2 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
-            Friends
+            {t('chat.friendsLabel')}
           </p>
           <div className="pb-2">
             {filteredFriends.length === 0 ? (
               <p className="text-xs text-center py-6 px-2" style={{ color: 'var(--cc-text-2)' }}>
-                Follow creators to chat with them.
+                {t('chat.followToChat')}
               </p>
             ) : (
               filteredFriends.map((f) => (
@@ -1613,7 +1653,7 @@ function CosmicChatPageContent() {
                 <button
                   type="button"
                   className="cosmic-chat-icon-btn md:hidden"
-                  title="Back to conversations"
+                  title={t('chat.backToConversations')}
                   onClick={closeActiveChat}
                 >
                   <ArrowLeftIcon className="h-5 w-5" />
@@ -1634,49 +1674,49 @@ function CosmicChatPageContent() {
                   <div className="text-xs flex items-center gap-1" style={{ color: 'var(--cc-text-2)' }}>
                     {viewMode === 'room'
                       ? activePromptRoom
-                        ? 'Prompt room · 24h orbit'
-                        : 'Group room'
+                        ? t('chat.promptRoomOrbit')
+                        : t('chat.groupRoom')
                       : activePeer?.is_online
-                        ? 'Online'
-                        : 'Away'}
+                        ? t('chat.online')
+                        : t('chat.away')}
                     {viewMode === 'dm' && activePeer && <span>{moodEmoji(activePeer.mood_icon)}</span>}
                   </div>
                 </div>
                 {viewMode === 'dm' && activePeer && (
                   <>
-                    <button type="button" className="cosmic-chat-icon-btn" title="Voice call" onClick={() => void handleVoiceCall()}>
+                    <button type="button" className="cosmic-chat-icon-btn" title={t('chat.voiceCall')} onClick={() => void handleVoiceCall()}>
                       <PhoneIcon className="h-5 w-5" />
                     </button>
-                    <button type="button" className="cosmic-chat-icon-btn hidden sm:inline-flex" title="Video call" onClick={() => void handleVideoCall()}>
+                    <button type="button" className="cosmic-chat-icon-btn hidden sm:inline-flex" title={t('chat.videoCall')} onClick={() => void handleVideoCall()}>
                       <VideoCameraIcon className="h-5 w-5" />
                     </button>
-                    <button type="button" className="cosmic-chat-icon-btn" title="Archive conversation" onClick={toggleArchiveConversation}>
+                    <button type="button" className="cosmic-chat-icon-btn" title={t('chat.archive')} onClick={toggleArchiveConversation}>
                       <ArchiveBoxIcon className="h-5 w-5" />
                     </button>
-                    <button type="button" className="cosmic-chat-icon-btn" title="Mute conversation" onClick={toggleMuteConversation}>
+                    <button type="button" className="cosmic-chat-icon-btn" title={t('chat.muteConversation')} onClick={toggleMuteConversation}>
                       <BellSlashIcon className="h-5 w-5" />
                     </button>
                   </>
                 )}
                 {viewMode === 'room' && activeRoomId && !groupCallActive && (
                   <>
-                    <button type="button" className="cosmic-chat-icon-btn" title="Voice call" onClick={() => void handleGroupCall('audio')}>
+                    <button type="button" className="cosmic-chat-icon-btn" title={t('chat.voiceCall')} onClick={() => void handleGroupCall('audio')}>
                       <PhoneIcon className="h-5 w-5" />
                     </button>
-                    <button type="button" className="cosmic-chat-icon-btn hidden sm:inline-flex" title="Video call" onClick={() => void handleGroupCall('video')}>
+                    <button type="button" className="cosmic-chat-icon-btn hidden sm:inline-flex" title={t('chat.videoCall')} onClick={() => void handleGroupCall('video')}>
                       <VideoCameraIcon className="h-5 w-5" />
                     </button>
                   </>
                 )}
                 {viewMode === 'room' && activeRoom && !activePromptRoom && (
                   <div className="flex items-center gap-1">
-                    <button type="button" className="cosmic-chat-icon-btn" title="Rename room" onClick={() => void renameRoom()}>
+                    <button type="button" className="cosmic-chat-icon-btn" title={t('chat.renameRoom')} onClick={() => void renameRoom()}>
                       <PencilSquareIcon className="h-5 w-5" />
                     </button>
-                    <button type="button" className="cosmic-chat-icon-btn" title="Invite members" onClick={() => setMemberPickerMode('invite')}>
+                    <button type="button" className="cosmic-chat-icon-btn" title={t('chat.inviteMembers')} onClick={() => setMemberPickerMode('invite')}>
                       <UserPlusIcon className="h-5 w-5" />
                     </button>
-                    <button type="button" className="cosmic-chat-icon-btn" title="Leave room" onClick={() => void leaveActiveRoom()}>
+                    <button type="button" className="cosmic-chat-icon-btn" title={t('chat.leaveRoom')} onClick={() => void leaveActiveRoom()}>
                       <UserMinusIcon className="h-5 w-5" />
                     </button>
                   </div>
@@ -1684,7 +1724,7 @@ function CosmicChatPageContent() {
                 <button
                   type="button"
                   className="cosmic-chat-icon-btn"
-                  title="Search in conversation"
+                  title={t('chat.searchInConversation')}
                   aria-pressed={messageSearchOpen}
                   style={messageSearchOpen || messageSearch ? { color: 'var(--cc-brown)' } : undefined}
                   onClick={() => {
@@ -1708,7 +1748,7 @@ function CosmicChatPageContent() {
                     <input
                       className="cosmic-chat-search w-full pl-9 pr-8"
                       style={{ margin: 0, width: '100%' }}
-                      placeholder="Search in conversation…"
+                      placeholder={t('chat.searchInConversationPlaceholder')}
                       value={messageSearch}
                       autoFocus
                       onChange={(e) => setMessageSearch(e.target.value)}
@@ -1721,7 +1761,7 @@ function CosmicChatPageContent() {
                       <button
                         type="button"
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-black/10"
-                        title="Clear search"
+                        title={t('chat.clearSearch')}
                         onClick={() => setMessageSearch('')}
                       >
                         <XMarkIcon className="h-4 w-4" style={{ color: 'var(--cc-text-2)' }} />
@@ -1730,7 +1770,9 @@ function CosmicChatPageContent() {
                   </div>
                   {messageSearch.trim() && (
                     <p className="text-[10px] mt-1 px-1" style={{ color: 'var(--cc-text-2)' }}>
-                      {threadDisplayMessages.length} match{threadDisplayMessages.length === 1 ? '' : 'es'}
+                      {threadDisplayMessages.length === 1
+                        ? t('chat.matchCount', { count: String(threadDisplayMessages.length) })
+                        : t('chat.matchesCount', { count: String(threadDisplayMessages.length) })}
                     </p>
                   )}
                 </div>
@@ -1749,6 +1791,30 @@ function CosmicChatPageContent() {
                 </div>
               )}
 
+              {viewMode === 'room' && activePromptRoom?.is_expired && (
+                <div className="px-4 py-3 border-b border-surface text-xs" style={{ background: 'var(--cc-panel)' }}>
+                  <p className="font-semibold mb-1" style={{ color: 'var(--cc-text)' }}>{t('chat.roomExpiredRecapHint')}</p>
+                  {roomRecapLoading ? (
+                    <p style={{ color: 'var(--cc-text-2)' }}>{t('chat.recapLoading')}</p>
+                  ) : roomRecap ? (
+                    <>
+                      <p style={{ color: 'var(--cc-text-2)' }}>
+                        {t('chat.recapParticipants', { count: String(roomRecap.participant_count) })}
+                        {' · '}
+                        {t('chat.recapMessages', { count: String(roomRecap.message_count) })}
+                        {' · '}
+                        {t('chat.recapDuration', { minutes: String(roomRecap.duration_minutes) })}
+                      </p>
+                      {roomRecap.summary && (
+                        <p className="mt-1" style={{ color: 'var(--cc-text)' }}>{roomRecap.summary}</p>
+                      )}
+                    </>
+                  ) : (
+                    <p style={{ color: 'var(--cc-text-2)' }}>{t('chat.recapUnavailable')}</p>
+                  )}
+                </div>
+              )}
+
               {isStageLikeRoom && activeRoom && (
                 <div className="border-b px-4 py-3" style={{ borderColor: 'var(--cc-line)', background: 'var(--cc-panel)' }}>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1756,35 +1822,35 @@ function CosmicChatPageContent() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="inline-flex items-center gap-1 rounded-full bg-vault/15 px-2.5 py-1 text-xs font-bold text-vault">
                           <MicrophoneIcon className="h-3.5 w-3.5" />
-                          {activeRoom.channel_type === 'stage' ? 'Stage' : 'Voice room'}
+                          {activeRoom.channel_type === 'stage' ? t('chat.stage') : t('chat.voiceRoom')}
                         </span>
                         <span className="text-xs font-semibold" style={{ color: 'var(--cc-text-2)' }}>
-                          {stageLoading ? 'Syncing…' : `${stageState?.speakers.length ?? 0} speakers · ${stageState?.listeners.length ?? 0} listeners · ${stageState?.raised_hands.length ?? 0} hands`}
+                          {stageLoading ? t('chat.syncing') : t('chat.stageSummary', { speakers: String(stageState?.speakers.length ?? 0), listeners: String(stageState?.listeners.length ?? 0), hands: String(stageState?.raised_hands.length ?? 0) })}
                         </span>
                       </div>
                       <div className="mt-2 grid gap-2 text-xs sm:grid-cols-3" style={{ color: 'var(--cc-text-2)' }}>
                         <div>
-                          <p className="font-semibold" style={{ color: 'var(--cc-text)' }}>Speakers</p>
+                          <p className="font-semibold" style={{ color: 'var(--cc-text)' }}>{t('chat.speakers')}</p>
                           <p className="truncate">
                             {stageState?.speakers.length
                               ? stageState.speakers.map(stageMemberName).join(', ')
-                              : 'No speakers yet'}
+                              : t('chat.noSpeakersYet')}
                           </p>
                         </div>
                         <div>
-                          <p className="font-semibold" style={{ color: 'var(--cc-text)' }}>Listeners</p>
+                          <p className="font-semibold" style={{ color: 'var(--cc-text)' }}>{t('chat.listeners')}</p>
                           <p className="truncate">
                             {stageState?.listeners.length
                               ? stageState.listeners.slice(0, 5).map(stageMemberName).join(', ')
-                              : 'No listeners yet'}
+                              : t('chat.noListenersYet')}
                           </p>
                         </div>
                         <div>
-                          <p className="font-semibold" style={{ color: 'var(--cc-text)' }}>Raised hands</p>
+                          <p className="font-semibold" style={{ color: 'var(--cc-text)' }}>{t('chat.raisedHands')}</p>
                           <p className="truncate">
                             {stageState?.raised_hands.length
                               ? stageState.raised_hands.slice(0, 5).map(stageMemberName).join(', ')
-                              : 'No hands raised'}
+                              : t('chat.noHandsRaised')}
                           </p>
                         </div>
                       </div>
@@ -1796,7 +1862,7 @@ function CosmicChatPageContent() {
                         disabled={myStageRole !== 'none' || stageActionPending !== null}
                         onClick={() => void sendStageAction('join')}
                       >
-                        {stageActionPending === 'join' ? 'Joining…' : 'Join'}
+                        {stageActionPending === 'join' ? t('chat.stageJoining') : t('chat.stageJoin')}
                       </button>
                       <button
                         type="button"
@@ -1804,7 +1870,7 @@ function CosmicChatPageContent() {
                         disabled={myStageRole === 'none' || stageActionPending !== null}
                         onClick={() => void sendStageAction('leave')}
                       >
-                        {stageActionPending === 'leave' ? 'Leaving…' : 'Leave'}
+                        {stageActionPending === 'leave' ? t('chat.stageLeaving') : t('chat.stageLeave')}
                       </button>
                       <button
                         type="button"
@@ -1812,7 +1878,7 @@ function CosmicChatPageContent() {
                         disabled={myHandRaised || myStageRole === 'speaker' || stageActionPending !== null}
                         onClick={() => void sendStageAction('raise_hand')}
                       >
-                        {stageActionPending === 'raise_hand' ? 'Raising…' : myHandRaised ? 'Hand raised' : 'Raise hand'}
+                        {stageActionPending === 'raise_hand' ? t('chat.stageRaisingHand') : myHandRaised ? t('chat.stageHandRaised') : t('chat.stageRaiseHand')}
                       </button>
                       <button
                         type="button"
@@ -1820,7 +1886,7 @@ function CosmicChatPageContent() {
                         disabled={myStageRole === 'speaker' || stageActionPending !== null}
                         onClick={() => void sendStageAction('speak')}
                       >
-                        {stageActionPending === 'speak' ? 'Opening mic…' : 'Speak'}
+                        {stageActionPending === 'speak' ? t('chat.stageOpeningMic') : t('chat.stageSpeak')}
                       </button>
                     </div>
                   </div>
@@ -1855,7 +1921,7 @@ function CosmicChatPageContent() {
                         <ClockIcon className="h-3.5 w-3.5" />
                         &quot;{s.text}&quot; — sends {new Date(s.send_at).toLocaleString()}
                       </span>
-                      <button type="button" className="p-0.5 rounded hover:bg-black/10" title="Cancel" onClick={() => void cancelScheduled(s.id)}>
+                      <button type="button" className="p-0.5 rounded hover:bg-black/10" title={t('chat.cancelScheduled')} onClick={() => void cancelScheduled(s.id)}>
                         <TrashIcon className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -1866,7 +1932,7 @@ function CosmicChatPageContent() {
               <div className="cosmic-chat-messages" ref={messagesContainerRef}>
                 {threadDisplayMessages.length === 0 && (
                   <p className="text-center text-sm py-8" style={{ color: 'var(--cc-text-2)' }}>
-                    {messageSearch.trim() ? 'No messages match your search' : t('chat.startConversation')}
+                    {messageSearch.trim() ? t('chat.noSearchMatches') : t('chat.startConversation')}
                   </p>
                 )}
                 {threadDisplayMessages.map((m) => {
@@ -1880,9 +1946,9 @@ function CosmicChatPageContent() {
                           style={{ color: 'var(--cc-brown)', opacity: Math.min(1, Math.abs(swipeDx) / SWIPE_TRIGGER_PX) }}
                         >
                           {swipeDx < 0 ? (
-                            <span className="flex items-center gap-1"><ArrowUturnLeftIcon className="h-4 w-4" /> Reply</span>
+                            <span className="flex items-center gap-1"><ArrowUturnLeftIcon className="h-4 w-4" /> {t('chat.reply')}</span>
                           ) : (
-                            <span className="flex items-center gap-1"><MapPinIcon className="h-4 w-4" /> {m.is_pinned ? 'Unpin' : 'Pin'}</span>
+                            <span className="flex items-center gap-1"><MapPinIcon className="h-4 w-4" /> {m.is_pinned ? t('chat.unpin') : t('chat.pin')}</span>
                           )}
                         </div>
                       )}
@@ -1896,7 +1962,7 @@ function CosmicChatPageContent() {
                       {m.is_pinned && (
                         <span className="text-[10px] flex items-center gap-1 opacity-80 mb-1">
                           <MapPinIcon className="h-3 w-3" />
-                          Pinned
+                          {t('chat.pinned')}
                         </span>
                       )}
                       {viewMode === 'room' && !out && m.sender_name && (
@@ -1936,12 +2002,12 @@ function CosmicChatPageContent() {
                         <MessageBody m={m} highlightQuery={messageSearch.trim()} />
                       )}
                       {!m.is_deleted && m.edited_at && (
-                        <span className="text-[10px] opacity-60 italic ml-1">(edited)</span>
+                        <span className="text-[10px] opacity-60 italic ml-1">{t('chat.edited')}</span>
                       )}
                       {!m.is_deleted && m.expires_at && (
                         <span className="text-[10px] opacity-60 italic ml-1 inline-flex items-center gap-0.5" title={new Date(m.expires_at).toLocaleString()}>
                           <FireIcon className="h-3 w-3" />
-                          {formatTimeLeft(m.expires_at)}
+                          {formatTimeLeft(m.expires_at, t)}
                         </span>
                       )}
                       {m.reaction_counts && Object.keys(m.reaction_counts).length > 0 && (
@@ -1963,7 +2029,7 @@ function CosmicChatPageContent() {
                               key={emoji}
                               type="button"
                               className={`text-xs px-1 rounded hover:bg-black/10 ${m.my_reaction === emoji ? 'bg-vault/20' : ''}`}
-                              title="React"
+                              title={t('chat.react')}
                               onClick={(e) => {
                                 spawnReactionBurst(emoji, e.clientX, e.clientY);
                                 void reactToMessage(m, emoji);
@@ -1975,7 +2041,7 @@ function CosmicChatPageContent() {
                           <button
                             type="button"
                             className="p-0.5 rounded hover:bg-black/10"
-                            title={m.is_pinned ? 'Unpin' : 'Pin'}
+                            title={m.is_pinned ? t('chat.unpin') : t('chat.pin')}
                             onClick={() => void togglePinMessage(m)}
                           >
                             <MapPinIcon className={`h-3.5 w-3.5 ${m.is_pinned ? 'text-vault' : ''}`} />
@@ -1985,7 +2051,7 @@ function CosmicChatPageContent() {
                               <button
                                 type="button"
                                 className="p-0.5 rounded hover:bg-black/10"
-                                title="Edit"
+                                title={t('chat.edit')}
                                 onClick={() => {
                                   setEditingMessageId(m.id);
                                   setEditDraft(m.text);
@@ -1996,7 +2062,7 @@ function CosmicChatPageContent() {
                               <button
                                 type="button"
                                 className="p-0.5 rounded hover:bg-black/10"
-                                title="Delete"
+                                title={t('chat.delete')}
                                 onClick={() => void deleteMessage(m)}
                               >
                                 <TrashIcon className="h-3.5 w-3.5" />
@@ -2012,12 +2078,12 @@ function CosmicChatPageContent() {
                             {m.is_read ? (
                               <>
                                 <CheckCircleIcon className="h-3.5 w-3.5" />
-                                Seen
+                                {t('chat.seen')}
                               </>
                             ) : (
                               <>
                                 <SpeakerWaveIcon className="h-3.5 w-3.5" />
-                                Delivered
+                                {t('chat.delivered')}
                               </>
                             )}
                           </span>
@@ -2025,7 +2091,7 @@ function CosmicChatPageContent() {
                         {out && viewMode === 'room' && typeof m.read_count === 'number' && typeof m.member_count === 'number' && (
                           <span className="text-[10px] opacity-80 inline-flex items-center gap-1">
                             <CheckCircleIcon className="h-3.5 w-3.5" />
-                            {m.member_count > 0 ? `Seen by ${m.read_count}/${m.member_count}` : 'Sent'}
+                            {m.member_count > 0 ? t('chat.seenByCount', { seen: String(m.read_count), total: String(m.member_count) }) : t('chat.sent')}
                           </span>
                         )}
                       </div>
@@ -2035,7 +2101,7 @@ function CosmicChatPageContent() {
                 })}
                 {peerTyping && (
                   <p className="text-xs italic px-1" style={{ color: 'var(--cc-text-2)' }}>
-                    {viewMode === 'room' ? 'Someone is typing…' : `${activePeer?.name} is typing…`}
+                    {viewMode === 'room' ? t('chat.someoneTyping') : t('chat.nameTyping', { name: activePeer?.name || '' })}
                   </p>
                 )}
                 <div ref={messagesEndRef} />
@@ -2071,7 +2137,7 @@ function CosmicChatPageContent() {
                     />
                   </div>
                   <p className="mt-1 text-xs text-text-secondary">
-                    Uploading attachment… {uploadProgress.percent}%
+                    {t('chat.uploadingAttachment', { percent: String(uploadProgress.percent) })}
                   </p>
                 </div>
               )}
@@ -2083,10 +2149,13 @@ function CosmicChatPageContent() {
                   <span className="flex items-center gap-1.5 min-w-0">
                     <ArrowUturnLeftIcon className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--cc-brown)' }} />
                     <span className="truncate">
-                      Replying to {replyingTo.sender_id === meId ? 'yourself' : replyingTo.sender_name || activePeer?.name || 'them'}: &quot;{replyingTo.text.slice(0, 60)}{replyingTo.text.length > 60 ? '…' : ''}&quot;
+                      {t('chat.replyingToQuote', {
+                        name: replyingTo.sender_id === meId ? t('chat.you') : replyingTo.sender_name || activePeer?.name || t('chat.them'),
+                        text: `${replyingTo.text.slice(0, 60)}${replyingTo.text.length > 60 ? '…' : ''}`,
+                      })}
                     </span>
                   </span>
-                  <button type="button" className="shrink-0 p-0.5 rounded hover:bg-black/10" title="Cancel reply" onClick={() => setReplyingTo(null)}>
+                  <button type="button" className="shrink-0 p-0.5 rounded hover:bg-black/10" title={t('chat.cancelReply')} onClick={() => setReplyingTo(null)}>
                     <XMarkIcon className="h-4 w-4" />
                   </button>
                 </div>
@@ -2095,7 +2164,7 @@ function CosmicChatPageContent() {
                 <button
                   type="button"
                   className="cosmic-chat-icon-btn"
-                  aria-label="Insert emoji"
+                  aria-label={t('chat.insertEmoji')}
                   onClick={() => {
                     setEmojiOpen((v) => !v);
                     setMoodMenuOpen(false);
@@ -2146,7 +2215,7 @@ function CosmicChatPageContent() {
                 <button
                   type="button"
                   className="cosmic-chat-icon-btn hidden md:inline-flex"
-                  title="Attach file"
+                  title={t('chat.attachFile')}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <PaperClipIcon className="h-5 w-5" />
@@ -2154,7 +2223,7 @@ function CosmicChatPageContent() {
                 <button
                   type="button"
                   className="cosmic-chat-icon-btn"
-                  title={vanishSeconds ? `Vanish mode: ${VANISH_PRESETS.find((p) => p.seconds === vanishSeconds)?.label ?? 'on'}` : 'Vanish mode: off'}
+                  title={vanishSeconds ? t('chat.vanishModeLabel', { label: VANISH_PRESETS.find((p) => p.seconds === vanishSeconds)?.labelKey ? t(VANISH_PRESETS.find((p) => p.seconds === vanishSeconds)!.labelKey as never) : '' }) : t('chat.vanishModeOff')}
                   style={vanishSeconds ? { color: 'var(--cc-brown)' } : undefined}
                   onClick={() => setVanishMenuOpen((v) => !v)}
                 >
@@ -2171,7 +2240,7 @@ function CosmicChatPageContent() {
                         setVanishMenuOpen(false);
                       }}
                     >
-                      Off
+                      {t('chat.vanishOff')}
                     </button>
                     {VANISH_PRESETS.map((preset) => (
                       <button
@@ -2184,7 +2253,7 @@ function CosmicChatPageContent() {
                           setVanishMenuOpen(false);
                         }}
                       >
-                        Vanish after {preset.label}
+                        {t('chat.vanishAfter', { label: t(preset.labelKey as never) })}
                       </button>
                     ))}
                   </div>
@@ -2192,7 +2261,7 @@ function CosmicChatPageContent() {
                 <button
                   type="button"
                   className="cosmic-chat-icon-btn"
-                  title="Schedule message"
+                  title={t('chat.scheduleMessage')}
                   onClick={() => {
                     setScheduleDraft('');
                     setScheduleMenuOpen((v) => !v);
@@ -2202,7 +2271,7 @@ function CosmicChatPageContent() {
                 </button>
                 {scheduleMenuOpen ? (
                   <div className="absolute bottom-full left-0 mb-2 flex flex-col gap-2 rounded-xl border p-3 shadow-lg z-20 min-w-[16rem]" style={{ background: 'var(--cc-panel)', borderColor: 'var(--cc-line)' }}>
-                    <span className="text-xs font-semibold">Send at…</span>
+                    <span className="text-xs font-semibold">{t('chat.sendAt')}</span>
                     <input
                       type="datetime-local"
                       className="cosmic-modal-input"
@@ -2225,7 +2294,7 @@ function CosmicChatPageContent() {
                         disabled={!draft.trim() || !scheduleDraft}
                         onClick={() => void scheduleMessage(draft, scheduleDraft)}
                       >
-                        Schedule
+                        {t('chat.schedule')}
                       </button>
                     </div>
                   </div>
@@ -2234,6 +2303,7 @@ function CosmicChatPageContent() {
                   className="cosmic-chat-input"
                   placeholder={t('chat.messagePlaceholder')}
                   value={draft}
+                  disabled={!!activePromptRoom?.is_expired}
                   onChange={(e) => {
                     setDraft(e.target.value);
                     const fn = viewMode === 'room' ? roomSendTyping : sendTyping;
@@ -2244,16 +2314,16 @@ function CosmicChatPageContent() {
                     void fn(false);
                   }}
                 />
-                <button type="submit" className="cosmic-chat-send" disabled={sending}>
+                <button type="submit" className="cosmic-chat-send" disabled={sending || !!activePromptRoom?.is_expired}>
                   <PaperAirplaneIcon className="h-4 w-4 inline sm:mr-1" />
-                  <span className="hidden sm:inline">Send</span>
+                  <span className="hidden sm:inline">{t('chat.send')}</span>
                 </button>
               </form>
               </div>
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-sm" style={{ color: 'var(--cc-text-2)' }}>
-              Select a friend to chat
+              {t('chat.selectFriendToChat')}
             </div>
           )}
         </section>
@@ -2262,13 +2332,13 @@ function CosmicChatPageContent() {
           <div className="cosmic-chat-col-head">{t('chat.sharedSpace')}</div>
           <div className="cosmic-chat-col-scroll">
             <p className="text-[10px] uppercase tracking-wide px-3 pt-2 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
-              Joint challenges
+              {t('chat.jointChallenges')}
             </p>
             {challenges.map((c) => (
               <Link key={c.id} href={c.href} className="cosmic-chat-shared-card block hover:opacity-90">
                 <div className="font-semibold text-sm">{c.title}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--cc-text-2)' }}>
-                  {c.participants} participants
+                  {t('chat.participantsCount', { count: String(c.participants) })}
                 </div>
                 <div className="cosmic-chat-progress">
                   <span style={{ width: `${c.progress}%` }} />
@@ -2277,19 +2347,19 @@ function CosmicChatPageContent() {
             ))}
 
             <p className="text-[10px] uppercase tracking-wide px-3 pt-3 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
-              Collaborative stories
+              {t('chat.collaborativeStories')}
             </p>
             {stories.map((s) => (
               <Link key={s.id} href={s.href} className="cosmic-chat-shared-card block hover:opacity-90">
                 <div className="font-semibold text-sm">{s.title}</div>
                 <div className="text-xs mt-0.5" style={{ color: 'var(--cc-text-2)' }}>
-                  {s.subtitle} · {s.words} words
+                  {s.subtitle} · {t('chat.wordsCount', { count: String(s.words) })}
                 </div>
               </Link>
             ))}
 
             <p className="text-[10px] uppercase tracking-wide px-3 pt-3 font-semibold" style={{ color: 'var(--cc-text-2)' }}>
-              Shared media
+              {t('chat.sharedMedia')}
             </p>
             <div className="cosmic-chat-media-grid">
               {media.length === 0
@@ -2304,7 +2374,7 @@ function CosmicChatPageContent() {
                   ))
                 : media.map((m) => (
                     <Link key={m.id} href={`/post/${m.post_id}`}>
-                      <Image src={mediaUrl(m.url)} alt="Shared media preview" width={160} height={160} unoptimized />
+                      <Image src={mediaUrl(m.url)} alt={t('chat.sharedMediaAlt')} width={160} height={160} unoptimized />
                     </Link>
                   ))}
             </div>
@@ -2312,43 +2382,43 @@ function CosmicChatPageContent() {
             <div className="px-3 pb-3 grid grid-cols-2 gap-2">
               <Link href="/bottles" className="cosmic-chat-shared-card text-center py-3 text-xs font-semibold">
                 <ArchiveBoxIcon className="h-6 w-6 mx-auto mb-1" />
-                Send a Bottle
+                {t('chat.sendBottle')}
               </Link>
               <Link href="/lab" className="cosmic-chat-shared-card text-center py-3 text-xs font-semibold">
                 <BeakerIcon className="h-6 w-6 mx-auto mb-1" />
-                Daily Challenge
+                {t('chat.dailyChallenge')}
               </Link>
             </div>
           </div>
         </aside>
       </div>
 
-      <nav className="cosmic-chat-bottom-nav" aria-label="Chat shortcuts">
-        <Link href="/bottles" title="Bottle">
+      <nav className="cosmic-chat-bottom-nav" aria-label={t('chat.chatShortcuts')}>
+        <Link href="/bottles" title={t('chat.bottle')}>
           <ArchiveBoxIcon className="h-5 w-5" />
-          Bottle
+          {t('chat.bottle')}
         </Link>
-        <Link href="/" title="Gallery">
+        <Link href="/" title={t('chat.gallery')}>
           <PhotoIcon className="h-5 w-5" />
-          Gallery
+          {t('chat.gallery')}
         </Link>
-        <Link href="/#create-post" title="Create post">
+        <Link href="/#create-post" title={t('chat.createPost')}>
           <PlusCircleIcon className="h-6 w-6" />
-          Create
+          {t('chat.createPostShort')}
         </Link>
         <button
           type="button"
-          title="Voice call"
+          title={t('chat.voiceCall')}
           className={viewMode === 'dm' && activePeer ? '' : 'opacity-40'}
           disabled={viewMode !== 'dm' || !activePeer}
           onClick={() => void handleVoiceCall()}
         >
           <MicrophoneIcon className="h-5 w-5" />
-          Voice
+          {t('chat.voiceCallShort')}
         </button>
-        <Link href="/settings" title="Mood & settings">
+        <Link href="/settings" title={t('chat.moodSettings')}>
           <FaceSmileIcon className="h-5 w-5" />
-          Mood
+          {t('chat.moodShort')}
         </Link>
       </nav>
 
@@ -2356,7 +2426,7 @@ function CosmicChatPageContent() {
         <CallOverlay
           mode={incoming ? 'incoming' : 'active'}
           callKind={callKind}
-          peerName={viewMode === 'room' ? activeRoomName || 'Room' : activePeer?.name || 'Friend'}
+          peerName={viewMode === 'room' ? activeRoomName || t('chat.roomFallback') : activePeer?.name || t('chat.friendFallback')}
           peerAvatar={viewMode === 'dm' ? activePeer?.avatar ?? null : null}
           incoming={incoming}
           muted={muted}
@@ -2371,7 +2441,7 @@ function CosmicChatPageContent() {
 
       {groupCallActive && (
         <GroupCallOverlay
-          roomName={activeRoomName || 'Group call'}
+          roomName={activeRoomName || t('chat.groupCallFallback')}
           callKind={groupCallKind}
           muted={groupCallMuted}
           peers={groupCallPeers}
@@ -2383,8 +2453,8 @@ function CosmicChatPageContent() {
 
       {memberPickerMode && (
         <MemberPickerModal
-          title={memberPickerMode === 'create' ? 'New group room' : 'Invite members'}
-          confirmLabel={memberPickerMode === 'create' ? 'Create room' : 'Invite'}
+          title={memberPickerMode === 'create' ? t('chat.newGroupRoom') : t('chat.inviteMembers')}
+          confirmLabel={memberPickerMode === 'create' ? t('chat.createRoomLabel') : t('chat.inviteLabel')}
           showNameField={memberPickerMode === 'create'}
           candidates={
             memberPickerMode === 'invite'
@@ -2406,7 +2476,7 @@ function CosmicChatPageContent() {
       {renameOpen && (
         <div className="cosmic-modal-overlay" onClick={() => setRenameOpen(false)}>
           <div className="cosmic-modal-panel" onClick={(e) => e.stopPropagation()}>
-            <h2 className="cosmic-modal-title">Rename room</h2>
+            <h2 className="cosmic-modal-title">{t('chat.renameRoomTitle')}</h2>
             <input
               type="text"
               className="cosmic-modal-input"
@@ -2419,7 +2489,7 @@ function CosmicChatPageContent() {
             />
             <div className="cosmic-modal-actions">
               <button type="button" className="cosmic-modal-btn cosmic-modal-btn--ghost" onClick={() => setRenameOpen(false)}>
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -2427,7 +2497,7 @@ function CosmicChatPageContent() {
                 onClick={() => void submitRename()}
                 disabled={!renameDraft.trim()}
               >
-                Save
+                {t('common.save')}
               </button>
             </div>
           </div>
@@ -2455,11 +2525,12 @@ function CosmicChatPageContent() {
 }
 
 export default function CosmicChatPage() {
+  const { t } = useLocale();
   return (
     <Suspense
       fallback={
         <div className="min-h-[60vh] flex items-center justify-center text-sm" style={{ color: 'var(--cc-text-2)' }}>
-          Loading chat…
+          {t('chat.loadingChat')}
         </div>
       }
     >

@@ -379,7 +379,6 @@ class FriendsListView(ChatAuthView):
                 | Q(last_name__icontains=q)
             )
 
-        me = request.user
         users = users.select_related('presence')
         me = User.objects.select_related('presence').filter(pk=request.user.pk).first() or request.user
         results = [friend_dict(u, uid, request) for u in users[:50]]
@@ -471,9 +470,15 @@ class ConversationMessagesView(ChatAuthView):
             'reactions',
         ).order_by('-is_pinned', 'created_at')
         if _read_receipts_enabled(uid):
-            Message.objects.filter(conversation=conv, is_read=False).exclude(
-                sender_id=uid
-            ).update(is_read=True)
+            newly_read_ids = list(
+                Message.objects.filter(conversation=conv, is_read=False)
+                .exclude(sender_id=uid)
+                .values_list('id', flat=True)
+            )
+            if newly_read_ids:
+                Message.objects.filter(id__in=newly_read_ids).update(is_read=True)
+                for mid in newly_read_ids:
+                    broadcast_chat_event(conv.id, {'type': 'chat.read', 'message_id': mid})
         serializer = MessageSerializer(
             msgs, many=True, context={'request': request, 'viewer_id': uid},
         )
@@ -850,9 +855,14 @@ class RoomStagePresenceView(ChatAuthView):
         try:
             layer = get_channel_layer()
             if layer:
+                # Reaches viewers connected via SignalConsumer's 'room.join'
+                # (the group that WebRTC/stage participants actually sit in —
+                # ponytail: no consumer defines a bare 'stage.update' handler,
+                # so this must go out as a relay.signal.event like every
+                # other signaling message).
                 async_to_sync(layer.group_send)(
-                    f'chat_room_{room.id}',
-                    {'type': 'stage.update', 'payload': payload},
+                    f'room_{room.id}',
+                    {'type': 'relay.signal.event', 'payload': payload},
                 )
         except Exception:
             pass

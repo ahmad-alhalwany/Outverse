@@ -191,6 +191,8 @@ def create_room_message(
     from django.core.exceptions import PermissionDenied
 
     room = ChatRoom.objects.get(pk=room_id)
+    if room.is_expired:
+        raise PermissionDenied('expired')
     slow = int(getattr(room, 'slowmode_seconds', 0) or 0)
     if slow > 0:
         key = f'room:slowmode:{room_id}:{sender_id}'

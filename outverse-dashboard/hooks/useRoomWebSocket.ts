@@ -25,6 +25,7 @@ type Options = {
   onTyping?: (userId: number, isTyping: boolean) => void;
   onEdited?: (msg: WsRoomMessage) => void;
   onDeleted?: (messageId: number) => void;
+  onError?: (error: string) => void;
 };
 
 export function useRoomWebSocket({
@@ -33,6 +34,7 @@ export function useRoomWebSocket({
   onTyping,
   onEdited,
   onDeleted,
+  onError,
 }: Options) {
   const [connected, setConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
@@ -41,13 +43,15 @@ export function useRoomWebSocket({
   const onTypingRef = useRef(onTyping);
   const onEditedRef = useRef(onEdited);
   const onDeletedRef = useRef(onDeleted);
+  const onErrorRef = useRef(onError);
 
   useEffect(() => {
     onMessageRef.current = onMessage;
     onTypingRef.current = onTyping;
     onEditedRef.current = onEdited;
     onDeletedRef.current = onDeleted;
-  }, [onMessage, onTyping, onEdited, onDeleted]);
+    onErrorRef.current = onError;
+  }, [onMessage, onTyping, onEdited, onDeleted, onError]);
 
   useEffect(() => {
     if (!roomId) {
@@ -90,6 +94,8 @@ export function useRoomWebSocket({
             onDeletedRef.current?.(data.id);
           } else if (data.type === 'room.typing') {
             onTypingRef.current?.(data.user_id, data.is_typing);
+          } else if (data.type === 'room.error') {
+            onErrorRef.current?.(data.error);
           }
         } catch {
           /* ignore */
