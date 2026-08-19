@@ -1876,6 +1876,9 @@ export const ar = {
     featureDiamondBottlesDesc: 'أرسل زجاجات بتأثيرات مميزة تبرز على الخريطة.',
     featurePriorityStoriesTitle: 'أولوية عرض القصص',
     featurePriorityStoriesDesc: 'تظهر مساهماتك في Story Forge أولًا.',
+    activePlan: 'نشطة: {tier}',
+    currentPlan: 'باقتك الحالية',
+    loading: 'جارٍ التحميل…',
   },
   simulator: {
     title: 'محاكي الكون الموازي',

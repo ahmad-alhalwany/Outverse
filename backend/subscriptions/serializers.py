@@ -14,6 +14,11 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
     def get_price_usd(self, obj):
         return round(obj.price_usd_cents / 100, 2)
 
+    def validate_price_usd_cents(self, value):
+        if value < 100:
+            raise serializers.ValidationError('Minimum plan price is $1.00.')
+        return value
+
     def get_available(self, obj):
         # Checkout is disabled server-side until a real Stripe price is
         # attached — expose that as a plain flag instead of the raw id.

@@ -86,8 +86,7 @@ function PremiumContent() {
     void apiFetch('subscriptions/me/').then(async (res) => {
       if (!res.ok) return;
       const data = await res.json();
-      if (data?.plan?.tier) setActivePlan(data.plan.tier);
-      else if (data?.tier) setActivePlan(data.tier);
+      if (data?.active && data?.subscription?.plan?.tier) setActivePlan(data.subscription.plan.tier);
     });
   }, [user]);
 
@@ -128,7 +127,7 @@ function PremiumContent() {
           <p className="text-sm md:text-base max-w-xl mx-auto" style={{ color: C.text2 }}>{t('premium.subtitle')}</p>
           {activePlan && (
             <p className="mt-3 inline-block rounded-full px-4 py-1 text-xs font-semibold" style={{ background: C.brown, color: '#fff' }}>
-              Active: {activePlan}
+              {t('premium.activePlan', { tier: activePlan })}
             </p>
           )}
         </div>
@@ -210,18 +209,20 @@ function PremiumContent() {
                 <button
                   type="button"
                   onClick={() => void choosePlan(plan.tier)}
-                  disabled={busyTier === plan.tier || !plan.available}
+                  disabled={busyTier === plan.tier || !plan.available || activePlan === plan.tier}
                   className="w-full py-3 rounded-xl font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                   style={{
                     background: plan.is_recommended ? '#fff' : C.brownDk,
                     color: plan.is_recommended ? C.brownDk : '#fff',
                   }}
                 >
-                  {busyTier === plan.tier
-                    ? t('premium.redirecting')
-                    : plan.available
-                      ? t('premium.choosePlanCta')
-                      : t('premium.comingSoon')}
+                  {activePlan === plan.tier
+                    ? t('premium.currentPlan')
+                    : busyTier === plan.tier
+                      ? t('premium.redirecting')
+                      : plan.available
+                        ? t('premium.choosePlanCta')
+                        : t('premium.comingSoon')}
                 </button>
               </div>
             ))}
@@ -232,9 +233,14 @@ function PremiumContent() {
   );
 }
 
+function PremiumFallback() {
+  const { t } = useLocale();
+  return <div className="min-h-screen flex items-center justify-center">{t('premium.loading')}</div>;
+}
+
 export default function PremiumPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading…</div>}>
+    <Suspense fallback={<PremiumFallback />}>
       <PremiumContent />
     </Suspense>
   );

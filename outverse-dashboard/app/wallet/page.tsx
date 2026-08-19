@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { SparklesIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
@@ -40,14 +40,23 @@ function WalletContent() {
       .finally(() => setLoading(false));
   }, [t]);
 
-  useEffect(() => {
+  const loadBalance = useCallback(() => {
     if (!user) return;
-    void apiFetch(`users/${user.id}/`).then(async (res) => {
+    void apiFetch('shop/items/wallet/').then(async (res) => {
       if (!res.ok) return;
       const data = await res.json();
-      if (typeof data.points === 'number') setBalance(data.points);
+      if (typeof data.balance === 'number') setBalance(data.balance);
     });
   }, [user]);
+
+  useEffect(() => {
+    loadBalance();
+  }, [loadBalance]);
+
+  useEffect(() => {
+    if (checkoutState === 'success') loadBalance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutState]);
 
   async function handleBuy(packId: number) {
     if (!user) {
@@ -138,9 +147,14 @@ function WalletContent() {
   );
 }
 
+function WalletFallback() {
+  const { t } = useLocale();
+  return <div className="min-h-screen flex items-center justify-center">{t('common.loading')}</div>;
+}
+
 export default function WalletPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading…</div>}>
+    <Suspense fallback={<WalletFallback />}>
       <WalletContent />
     </Suspense>
   );

@@ -1874,6 +1874,9 @@ export const en = {
     featureDiamondBottlesDesc: 'Send bottles with premium effects that stand out on the map.',
     featurePriorityStoriesTitle: 'Priority Story Placement',
     featurePriorityStoriesDesc: 'Your Story Forge contributions get featured first.',
+    activePlan: 'Active: {tier}',
+    currentPlan: 'Current plan',
+    loading: 'Loading…',
   },
   simulator: {
     title: 'Parallel Universe Simulator',

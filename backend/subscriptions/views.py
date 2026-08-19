@@ -88,6 +88,12 @@ class CreateCheckoutSessionView(APIView):
             plan = SubscriptionPlan.objects.get(tier=tier)
         except SubscriptionPlan.DoesNotExist:
             return Response({'error': 'Unknown plan.'}, status=status.HTTP_400_BAD_REQUEST)
+        existing = Subscription.objects.filter(user=user, status='active').select_related('plan').first()
+        if existing:
+            return Response(
+                {'error': f'You already have an active {existing.plan.name} subscription.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if not plan.stripe_price_id:
             return Response(
                 {'error': f'Plan "{plan.name}" has no Stripe price configured yet.'},
@@ -272,7 +278,7 @@ class StripeWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        if not _stripe_configured():
+        if not _stripe_configured() or not settings.STRIPE_WEBHOOK_SECRET:
             return Response(status=status.HTTP_503_SERVICE_UNAVAILABLE)
 
         payload = request.body
