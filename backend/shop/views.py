@@ -59,7 +59,7 @@ class ShopItemViewSet(viewsets.ModelViewSet):
             and not (user.is_staff or user.is_shop_seller)
         ):
             raise PermissionDenied('Apply to become a seller to list digital or physical products.')
-        extra = {}
+        extra = {'creator': instance.creator}
         if not user.is_staff:
             extra['is_featured'] = instance.is_featured
         # Same multipart BooleanField quirk as perform_create: preserve the

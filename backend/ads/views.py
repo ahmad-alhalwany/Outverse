@@ -218,6 +218,9 @@ class AdCreativeViewSet(viewsets.ModelViewSet):
         campaign_id = self.request.query_params.get('campaign')
         if campaign_id:
             qs = qs.filter(campaign_id=campaign_id)
+        status_filter = self.request.query_params.get('status')
+        if status_filter:
+            qs = qs.filter(status=status_filter)
         return qs
 
     def perform_create(self, serializer):
@@ -242,6 +245,8 @@ class AdCreativeViewSet(viewsets.ModelViewSet):
         creative.status = 'approved'
         creative.reviewed_at = timezone.now()
         creative.save(update_fields=['status', 'reviewed_at'])
+        from audit.utils import log_action
+        log_action(request, 'MODERATE', f'Approved ad creative #{creative.id}.')
         return Response(AdCreativeSerializer(creative).data)
 
     @action(detail=True, methods=['post'], permission_classes=[])
@@ -253,6 +258,8 @@ class AdCreativeViewSet(viewsets.ModelViewSet):
         creative.status = 'rejected'
         creative.reviewed_at = timezone.now()
         creative.save(update_fields=['status', 'reviewed_at'])
+        from audit.utils import log_action
+        log_action(request, 'MODERATE', f'Rejected ad creative #{creative.id}.')
         return Response(AdCreativeSerializer(creative).data)
 
 

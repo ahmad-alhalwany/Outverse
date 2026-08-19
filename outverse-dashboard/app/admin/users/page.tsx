@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { fetchAdminProfiles, patchProfile, promoteProfileToStaff, toggleShadowBan } from '@/lib/adminApi';
 import type { AdminProfile } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 export default function AdminUsersPage() {
+  const confirm = useConfirm();
   const [profiles, setProfiles] = useState<AdminProfile[]>([]);
   const [search, setSearch] = useState('');
   const [msg, setMsg] = useState('');
@@ -28,7 +30,7 @@ export default function AdminUsersPage() {
       (p.user.email || '').toLowerCase().includes(search.toLowerCase()),
   );
 
-  const confirm = async () => {
+  const confirmStatusChange = async () => {
     if (!modal) return;
     const status = modal.action === 'suspend' ? 'suspended' : 'active';
     const res = await patchProfile(modal.profile.id, { status });
@@ -36,31 +38,35 @@ export default function AdminUsersPage() {
       setMsg(`User @${modal.profile.user.username} ${status}.`);
       load();
     } else {
-      setMsg('Update failed.');
+      const data = await res.json().catch(() => null);
+      setMsg(data?.error || data?.detail || 'Update failed.');
     }
     setModal(null);
   };
 
   const promote = async (profile: AdminProfile) => {
+    if (!(await confirm(`Grant @${profile.user.username} staff/admin privileges? This cannot be undone from this panel.`, { danger: true, confirmLabel: 'Promote' }))) return;
     const res = await promoteProfileToStaff(profile.user.id);
     if (res.ok) {
       setMsg(`@${profile.user.username} promoted to staff.`);
       load();
     } else {
-      setMsg('Promotion failed.');
+      const data = await res.json().catch(() => null);
+      setMsg(data?.error || data?.detail || 'Promotion failed.');
     }
   };
 
   const shadowBan = async (profile: AdminProfile) => {
+    if (!(await confirm(`Toggle shadow-ban for @${profile.user.username}?`, { danger: true, confirmLabel: 'Toggle' }))) return;
     const result = await toggleShadowBan(profile.user.id);
     if (result.ok) {
       setMsg(
         result.is_shadow_banned
-          ? `@${profile.user.username} is now shadow-banned — their content is hidden from public feeds, but they aren't notified.`
-          : `Shadow-ban lifted for @${profile.user.username}.`,
+          ? `@${profile.user.username} is flagged as shadow-banned (not yet enforced by any feed — flag only).`
+          : `Shadow-ban flag lifted for @${profile.user.username}.`,
       );
     } else {
-      setMsg('Shadow-ban toggle failed.');
+      setMsg(result.error || 'Shadow-ban toggle failed.');
     }
   };
 
@@ -160,7 +166,7 @@ export default function AdminUsersPage() {
             <p>@{modal.profile.user.username} — {modal.action}?</p>
             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
               <button type="button" className="admin-btn admin-btn--ghost" onClick={() => setModal(null)}>Cancel</button>
-              <button type="button" className="admin-btn admin-btn--primary" onClick={confirm}>Confirm</button>
+              <button type="button" className="admin-btn admin-btn--primary" onClick={confirmStatusChange}>Confirm</button>
             </div>
           </div>
         </div>

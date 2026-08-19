@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { fetchSellerApplications, reviewSellerApplication } from '@/lib/adminApi';
 import type { AdminSellerApplication } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 export default function AdminSellerApplicationsPage() {
+  const confirm = useConfirm();
   const [requests, setRequests] = useState<AdminSellerApplication[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
@@ -21,11 +23,18 @@ export default function AdminSellerApplicationsPage() {
   }, [load]);
 
   const act = async (id: number, action: 'approve' | 'reject') => {
+    if (!(await confirm(
+      action === 'approve' ? 'Approve this seller application?' : 'Reject this seller application?',
+      { danger: action === 'reject', confirmLabel: action === 'approve' ? 'Approve' : 'Reject' },
+    ))) return;
     setBusy(id);
     try {
       const res = await reviewSellerApplication(id, action);
       if (res.ok) setRequests((prev) => prev.filter((r) => r.id !== id));
-      else setError('Action failed');
+      else {
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || data?.error || 'Action failed');
+      }
     } catch {
       setError('Action failed');
     } finally {

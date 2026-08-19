@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, API_ORIGIN } from '@/lib/api';
 
 type Overview = {
   conversations: number;
@@ -55,7 +55,7 @@ export default function AdminChatPage() {
           Message moderation and stats are shown here. To edit or delete individual chat
           messages, use{' '}
           <a
-            href="http://127.0.0.1:8000/admin/"
+            href={`${API_ORIGIN}/admin/`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-vault hover:underline"

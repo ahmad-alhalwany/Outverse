@@ -42,6 +42,14 @@ class FlaggedContentViewSet(viewsets.ModelViewSet):
         reporter = user.username if user else 'anonymous'
         serializer.save(reporter=reporter[:100])
 
+    def perform_update(self, serializer):
+        flagged = serializer.save()
+        from audit.utils import log_action
+        log_action(
+            self.request, 'MODERATE',
+            f'Reviewed flagged {flagged.type} #{flagged.object_id}: {flagged.status}.',
+        )
+
 
 class ContentAppealViewSet(viewsets.ModelViewSet):
     serializer_class = ContentAppealSerializer

@@ -17,6 +17,13 @@ class SoftTokenAuthentication(TokenAuthentication):
 
     def authenticate(self, request):
         try:
-            return super().authenticate(request)
+            result = super().authenticate(request)
         except AuthenticationFailed:
             return None
+        if result is None:
+            return None
+        user, token = result
+        profile_status = getattr(getattr(user, 'profile', None), 'status', None)
+        if profile_status == 'suspended':
+            return None
+        return result

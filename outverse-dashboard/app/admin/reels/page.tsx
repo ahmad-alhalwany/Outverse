@@ -22,11 +22,19 @@ export default function AdminReelsPage() {
   const toggleFeatured = async (reel: AdminReel) => {
     const res = await patchReel(reel.id, { is_featured: !reel.is_featured } as Partial<AdminReel>);
     if (res.ok) load();
+    else {
+      const data = await res.json().catch(() => null);
+      setMsg(data?.detail || data?.error || 'Update failed.');
+    }
   };
 
   const toggleActive = async (reel: AdminReel) => {
     const res = await patchReel(reel.id, { is_active: !reel.is_active } as Partial<AdminReel>);
     if (res.ok) load();
+    else {
+      const data = await res.json().catch(() => null);
+      setMsg(data?.detail || data?.error || 'Update failed.');
+    }
   };
 
   const remove = async (id: number) => {
@@ -35,6 +43,9 @@ export default function AdminReelsPage() {
     if (res.ok) {
       setMsg('Signal deleted.');
       load();
+    } else {
+      const data = await res.json().catch(() => null);
+      setMsg(data?.detail || data?.error || 'Delete failed.');
     }
   };
 

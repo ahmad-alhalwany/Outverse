@@ -146,7 +146,7 @@ class IdeaViewSet(viewsets.ModelViewSet):
         user, err = require_user(self.request)
         if err:
             raise exceptions.PermissionDenied(err.data.get("error", "Authentication required."))
-        if idea.owner_id != user.id:
+        if idea.owner_id != user.id and not user.is_staff:
             raise exceptions.PermissionDenied("Only the owner can update this idea.")
         serializer.save()
         _clear_ideas_list_cache()
@@ -156,7 +156,7 @@ class IdeaViewSet(viewsets.ModelViewSet):
         user, err = require_user(request)
         if err:
             return err
-        if idea.owner_id != user.id:
+        if idea.owner_id != user.id and not user.is_staff:
             return Response({"detail": "Only the owner can delete this idea."}, status=status.HTTP_403_FORBIDDEN)
         response = super().destroy(request, *args, **kwargs)
         _clear_ideas_list_cache()

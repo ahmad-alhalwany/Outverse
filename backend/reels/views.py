@@ -624,7 +624,13 @@ class ReelViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         viewer = user_from_request(self.request)
-        if viewer and viewer.is_staff and self.request.query_params.get('admin') == '1':
+        # Staff can always manage a specific reel by id (retrieve/update/destroy)
+        # regardless of admin=1 — that param only widens the `list` action, so a
+        # reel hidden via is_active=False doesn't become unmanageable afterward.
+        staff_full_access = viewer and viewer.is_staff and (
+            self.action != 'list' or self.request.query_params.get('admin') == '1'
+        )
+        if staff_full_access:
             qs = Reel.objects.all().select_related('user', 'music_track', 'template')
         else:
             qs = Reel.objects.filter(is_active=True).select_related(

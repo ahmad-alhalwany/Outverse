@@ -94,6 +94,8 @@ class StoryViewSet(viewsets.ModelViewSet):
                         | Q(saves__user=viewer)
                         | Q(collaborators__user=viewer, collaborators__status='accepted')
                     ).distinct()
+            elif viewer and viewer.is_staff and params.get('admin') == '1':
+                pass  # staff moderation view (opt-in via ?admin=1) — no visibility filter
             elif viewer:
                 qs = qs.filter(
                     Q(visibility='public')

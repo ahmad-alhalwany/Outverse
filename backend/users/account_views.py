@@ -344,6 +344,12 @@ class AdminVerificationReviewView(APIView):
         if action == 'approve':
             req.user.badge_verified = True
             req.user.save(update_fields=['badge_verified'])
+        from audit.utils import log_action
+        log_action(
+            request, 'UPDATE',
+            f'{"Approved" if action == "approve" else "Rejected"} verification request for @{req.user.username}.',
+            target_user=req.user,
+        )
         return Response({'id': req.id, 'status': req.status})
 
 
@@ -419,4 +425,10 @@ class AdminSellerApplicationReviewView(APIView):
         if action == 'approve':
             app.user.is_shop_seller = True
             app.user.save(update_fields=['is_shop_seller'])
+        from audit.utils import log_action
+        log_action(
+            request, 'UPDATE',
+            f'{"Approved" if action == "approve" else "Rejected"} seller application for @{app.user.username}.',
+            target_user=app.user,
+        )
         return Response({'id': app.id, 'status': app.status})

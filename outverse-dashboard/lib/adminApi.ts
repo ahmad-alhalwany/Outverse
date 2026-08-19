@@ -48,10 +48,10 @@ export async function promoteProfileToStaff(userId: number) {
   return apiFetchJson(`users/${userId}/promote/`, { method: 'POST' });
 }
 
-export async function toggleShadowBan(userId: number): Promise<{ ok: boolean; is_shadow_banned: boolean }> {
+export async function toggleShadowBan(userId: number): Promise<{ ok: boolean; is_shadow_banned: boolean; error?: string }> {
   const res = await apiFetchJson(`users/${userId}/shadow-ban/`, { method: 'POST' });
   const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, is_shadow_banned: !!data.is_shadow_banned };
+  return { ok: res.ok, is_shadow_banned: !!data.is_shadow_banned, error: data.error || data.detail };
 }
 
 export type MarketingSegment = 'all' | 'inactive_30d';
@@ -235,7 +235,7 @@ export async function deleteBottle(id: number) {
 }
 
 export async function fetchStoriesAdmin(): Promise<AdminStory[]> {
-  const res = await apiFetch('forge/stories/');
+  const res = await apiFetch('forge/stories/?admin=1');
   if (!res.ok) throw new Error('Failed to load stories');
   return unwrapList<AdminStory>(res);
 }

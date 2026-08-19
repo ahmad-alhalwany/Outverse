@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connections
@@ -5,6 +7,8 @@ from rest_framework.views import APIView
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from outverse.throttles import AnonReadThrottle, BurstThrottle, ContentPostCreateThrottle
+
+logger = logging.getLogger(__name__)
 
 
 def _database_ok(alias: str) -> bool:
@@ -16,12 +20,24 @@ def _database_ok(alias: str) -> bool:
 
 
 class SystemHealthView(APIView):
+    """AllowAny on purpose — load balancers/uptime monitors hit this without
+    auth. Exception detail is only included for staff callers so an
+    unauthenticated caller can't fingerprint internal DB/cache errors."""
+
     throttle_classes = [BurstThrottle, AnonReadThrottle]
     permission_classes = [AllowAny]
 
     def get(self, request):
+        show_detail = bool(request.user and request.user.is_authenticated and request.user.is_staff)
         checks = []
         overall_ok = True
+
+        def _fail(name, exc):
+            logger.error('health check failed: %s', name, exc_info=exc)
+            entry = {'name': name, 'status': 'error'}
+            if show_detail:
+                entry['detail'] = str(exc)
+            return entry
 
         database_primary = False
         try:
@@ -29,7 +45,7 @@ class SystemHealthView(APIView):
             checks.append({'name': 'database', 'status': 'ok'})
         except Exception as exc:
             overall_ok = False
-            checks.append({'name': 'database', 'status': 'error', 'detail': str(exc)})
+            checks.append(_fail('database', exc))
 
         database_replica = None
         if 'replica' in settings.DATABASES:
@@ -39,7 +55,7 @@ class SystemHealthView(APIView):
             except Exception as exc:
                 overall_ok = False
                 database_replica = False
-                checks.append({'name': 'database_replica', 'status': 'error', 'detail': str(exc)})
+                checks.append(_fail('database_replica', exc))
 
         try:
             cache.set('healthcheck', 'ok', 5)
@@ -49,7 +65,7 @@ class SystemHealthView(APIView):
             checks.append({'name': 'cache', 'status': 'ok'})
         except Exception as exc:
             overall_ok = False
-            checks.append({'name': 'cache', 'status': 'error', 'detail': str(exc)})
+            checks.append(_fail('cache', exc))
 
         status_code = 200 if overall_ok else 503
         return Response(

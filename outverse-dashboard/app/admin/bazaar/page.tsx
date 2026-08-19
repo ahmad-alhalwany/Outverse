@@ -38,7 +38,8 @@ export default function AdminBazaarPage() {
       setForm(EMPTY);
       load();
     } else {
-      setMsg('Save failed.');
+      const data = await res.json().catch(() => null);
+      setMsg(data?.detail || Object.values(data || {})[0] || 'Save failed.');
     }
   };
 
@@ -90,8 +91,14 @@ export default function AdminBazaarPage() {
                         style={{ marginLeft: 6 }}
                         onClick={async () => {
                           if (!(await confirm('Delete idea?', { danger: true, confirmLabel: 'Delete' }))) return;
-                          await deleteIdea(idea.id);
-                          load();
+                          const res = await deleteIdea(idea.id);
+                          if (res.ok) {
+                            setMsg('Idea deleted.');
+                            load();
+                          } else {
+                            const data = await res.json().catch(() => null);
+                            setMsg(data?.detail || 'Delete failed.');
+                          }
                         }}
                       >
                         Delete

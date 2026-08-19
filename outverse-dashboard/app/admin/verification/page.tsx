@@ -4,8 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { fetchVerificationRequests, reviewVerificationRequest } from '@/lib/adminApi';
 import type { AdminVerificationRequest } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 export default function AdminVerificationPage() {
+  const confirm = useConfirm();
   const [requests, setRequests] = useState<AdminVerificationRequest[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
@@ -21,11 +23,18 @@ export default function AdminVerificationPage() {
   }, [load]);
 
   const act = async (id: number, action: 'approve' | 'reject') => {
+    if (!(await confirm(
+      action === 'approve' ? 'Approve this verification request?' : 'Reject this verification request?',
+      { danger: action === 'reject', confirmLabel: action === 'approve' ? 'Approve' : 'Reject' },
+    ))) return;
     setBusy(id);
     try {
       const res = await reviewVerificationRequest(id, action);
       if (res.ok) setRequests((prev) => prev.filter((r) => r.id !== id));
-      else setError('Action failed');
+      else {
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || data?.error || 'Action failed');
+      }
     } catch {
       setError('Action failed');
     } finally {

@@ -116,7 +116,7 @@ export default function AdminAchievementsPage() {
                   <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>{cat}</h4>
                   <div className="admin-achievement-grid">
                     {byCategory(cat).map((a, idx) => {
-                      const goal = a.goal ?? 10;
+                      const goal = Math.max(1, a.goal ?? 10);
                       const prog = a.progress ?? 0;
                       const pct = Math.min(100, Math.round((prog / goal) * 100));
                       return (

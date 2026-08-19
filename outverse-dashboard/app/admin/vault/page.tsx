@@ -80,6 +80,9 @@ export default function AdminVaultPage() {
                         if (res.ok) {
                           setMsg('Bottle removed.');
                           load();
+                        } else {
+                          const data = await res.json().catch(() => null);
+                          setMsg(data?.detail || data?.error || 'Delete failed.');
                         }
                       }}
                     >

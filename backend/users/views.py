@@ -223,6 +223,11 @@ class LoginView(APIView):
         )
         if not user:
             return Response({'error': 'Invalid credentials.'}, status=400)
+        if getattr(getattr(user, 'profile', None), 'status', None) == 'suspended':
+            return Response(
+                {'error': 'This account has been suspended.', 'code': 'account_suspended'},
+                status=403,
+            )
         # Staff/superusers (local demo/admin) skip the email gate.
         if not user.is_verified and not (user.is_staff or user.is_superuser):
             return Response(
@@ -821,7 +826,15 @@ class ProfileViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         previous_unlocked = _unlocked_achievement_titles(serializer.instance.achievements)
+        previous_status = serializer.instance.status
         profile = serializer.save()
+        if profile.status != previous_status:
+            from audit.utils import log_action
+            log_action(
+                self.request, 'UPDATE',
+                f'Changed @{profile.user.username} status: {previous_status} -> {profile.status}.',
+                target_user=profile.user,
+            )
         newly_unlocked = _unlocked_achievement_titles(profile.achievements) - previous_unlocked
         for achievement in profile.achievements or []:
             if achievement.get('title') in newly_unlocked:
@@ -847,6 +860,8 @@ class PromoteStaffView(APIView):
             return Response({'promoted': False, 'detail': 'User is already staff.'})
         user.is_staff = True
         user.save(update_fields=['is_staff'])
+        from audit.utils import log_action
+        log_action(request, 'UPDATE', f'Promoted @{user.username} to staff.', target_user=user)
         return Response({'promoted': True, 'user_id': user.id})
 
 
@@ -857,6 +872,12 @@ class ToggleShadowBanView(APIView):
         user = get_object_or_404(User, id=user_id)
         user.is_shadow_banned = not user.is_shadow_banned
         user.save(update_fields=['is_shadow_banned'])
+        from audit.utils import log_action
+        log_action(
+            request, 'MODERATE',
+            f'{"Shadow-banned" if user.is_shadow_banned else "Lifted shadow-ban for"} @{user.username}.',
+            target_user=user,
+        )
         return Response({'is_shadow_banned': user.is_shadow_banned, 'user_id': user.id})
 
 

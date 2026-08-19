@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { fetchFlagged, patchFlagged } from '@/lib/adminApi';
 import type { AdminFlagged } from '@/lib/adminTypes';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 const TYPE_LABEL: Record<string, string> = {
   post: 'Post',
@@ -22,6 +23,7 @@ const REASON_LABEL: Record<string, string> = {
 };
 
 export default function AdminModerationPage() {
+  const confirm = useConfirm();
   const [flagged, setFlagged] = useState<AdminFlagged[]>([]);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<number | null>(null);
@@ -40,12 +42,19 @@ export default function AdminModerationPage() {
   }, [load]);
 
   const act = async (id: number, status: 'approved' | 'rejected') => {
+    if (!(await confirm(
+      status === 'approved' ? 'Approve this report? This confirms the content violates policy.' : 'Reject this report as unfounded?',
+      { danger: status === 'approved', confirmLabel: status === 'approved' ? 'Approve' : 'Reject' },
+    ))) return;
     setBusy(id);
     setError('');
     try {
       const res = await patchFlagged(id, status);
       if (res.ok) load();
-      else setError('Action failed');
+      else {
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || data?.error || 'Action failed');
+      }
     } catch {
       setError('Action failed');
     } finally {
