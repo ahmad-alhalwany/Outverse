@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeftIcon, EyeIcon, PaperAirplaneIcon, TrashIcon, VideoCameraSlashIcon } from '@heroicons/react/24/outline';
+import { ArrowLeftIcon, EyeIcon, NoSymbolIcon, PaperAirplaneIcon, TrashIcon, VideoCameraSlashIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import { useLocale } from '@/components/LocaleProvider';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
@@ -18,6 +18,9 @@ import {
   sendMessage,
   sendReaction,
   deleteMessage,
+  banChatUser,
+  setSlowmode,
+  sendGift,
   type LiveSession,
   type LiveChatMessage,
   type ReactionType,
@@ -63,6 +66,13 @@ export default function LiveSessionPage() {
   const [assistQuestions, setAssistQuestions] = useState<string[]>([]);
   const [recapBusy, setRecapBusy] = useState(false);
   const [recap, setRecap] = useState('');
+  const [giftAmount, setGiftAmount] = useState('50');
+  const [giftBusy, setGiftBusy] = useState(false);
+  const [giftMessage, setGiftMessage] = useState('');
+  const [slowmodeDraft, setSlowmodeDraft] = useState('0');
+  const [slowmodeBusy, setSlowmodeBusy] = useState(false);
+  const [slowmodeMessage, setSlowmodeMessage] = useState('');
+  const [banBusyId, setBanBusyId] = useState<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerVideoRef = useRef<HTMLVideoElement>(null);
@@ -87,6 +97,7 @@ export default function LiveSessionPage() {
     }
     setLoadError(false);
     setSession(result.session);
+    setSlowmodeDraft(String(result.session.slowmode_seconds ?? 0));
     setLoading(false);
   }, [sessionId]);
 
@@ -294,6 +305,37 @@ export default function LiveSessionPage() {
     if (ok) setMessages((prev) => prev.filter((m) => m.id !== id));
   }
 
+  async function handleBanUser(userId: number) {
+    setBanBusyId(userId);
+    const ok = await banChatUser(sessionId, userId);
+    setBanBusyId(null);
+    if (ok) {
+      setMessages((prev) => prev.filter((m) => m.user_id !== userId));
+    }
+  }
+
+  async function handleSetSlowmode() {
+    const seconds = Math.max(0, Math.min(600, Number.parseInt(slowmodeDraft, 10) || 0));
+    setSlowmodeBusy(true);
+    setSlowmodeMessage('');
+    const ok = await setSlowmode(sessionId, seconds);
+    setSlowmodeBusy(false);
+    if (ok) {
+      setSlowmodeMessage(t('live.slowmodeSaved'));
+      setSession((prev) => (prev ? { ...prev, slowmode_seconds: seconds } : prev));
+    }
+  }
+
+  async function handleSendGift() {
+    const amount = Number.parseInt(giftAmount, 10);
+    if (!amount || amount <= 0) return;
+    setGiftBusy(true);
+    setGiftMessage('');
+    const res = await sendGift(sessionId, amount);
+    setGiftBusy(false);
+    setGiftMessage(res.ok ? t('live.giftSent') : res.error || t('live.giftFailed'));
+  }
+
   async function handleHostAssist() {
     setAssistBusy(true);
     const result = await liveHostAssist(sessionId);
@@ -437,6 +479,9 @@ export default function LiveSessionPage() {
               <div className="flex h-full items-center justify-center px-6 text-center">
                 <p className="text-sm" style={{ color: 'rgb(var(--c-text-secondary))' }}>{t('live.scheduledNotLive')}</p>
               </div>
+            ) : session.recording_url ? (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <video src={session.recording_url} controls playsInline className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
                 <p className="text-lg font-semibold text-white">{t('live.endedTitle')}</p>
@@ -455,6 +500,14 @@ export default function LiveSessionPage() {
               ))}
             </div>
           </section>
+
+          {session.status === 'ended' && session.recording_url && (
+            <section className="mb-4 flex gap-6 text-sm" style={{ color: 'rgb(var(--c-text-secondary))' }}>
+              <span>{t('live.duration')}: {formatDuration(session.duration_seconds)}</span>
+              <span>{t('live.peakViewers')}: {session.peak_viewers}</span>
+              <span>{t('live.totalViews')}: {session.total_views}</span>
+            </section>
+          )}
 
           {/* Host controls */}
           {isOwner && (
@@ -487,8 +540,30 @@ export default function LiveSessionPage() {
                       className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                       style={{ background: 'var(--c-focus)' }}
                     >
-                      {assistBusy ? '✨ Getting ideas…' : '✨ Host assist'}
+                      {assistBusy ? t('live.gettingIdeas') : t('live.hostAssist')}
                     </button>
+                    <label className="flex items-center gap-2 text-xs" style={{ color: 'rgb(var(--c-text-secondary))' }}>
+                      {t('live.slowmodeLabel')}
+                      <input
+                        type="number"
+                        min={0}
+                        max={600}
+                        value={slowmodeDraft}
+                        onChange={(e) => setSlowmodeDraft(e.target.value)}
+                        className="w-16 rounded-lg px-2 py-1 text-sm"
+                        style={{ background: 'rgb(var(--c-surface))', color: 'rgb(var(--c-text))', border: '1px solid var(--c-border)' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void handleSetSlowmode()}
+                        disabled={slowmodeBusy}
+                        className="rounded-lg px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-60"
+                        style={{ background: 'var(--c-focus)' }}
+                      >
+                        {t('common.save')}
+                      </button>
+                      {slowmodeMessage && <span>{slowmodeMessage}</span>}
+                    </label>
                   </>
                 )}
                 {(session.status === 'ended' || session.status === 'cancelled') && (
@@ -499,14 +574,14 @@ export default function LiveSessionPage() {
                     className="rounded-xl px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                     style={{ background: 'var(--c-focus)' }}
                   >
-                    {recapBusy ? '✨ Generating…' : '✨ Session recap'}
+                    {recapBusy ? t('live.generatingRecap') : t('live.sessionRecap')}
                   </button>
                 )}
               </div>
 
               {assistQuestions.length > 0 && (
                 <div className="rounded-2xl border p-4 text-sm space-y-2" style={{ background: 'rgb(var(--c-surface))', borderColor: 'var(--c-border)' }}>
-                  <p className="font-semibold text-xs uppercase tracking-wide" style={{ color: 'rgb(var(--c-text-secondary))' }}>Questions to spark the conversation</p>
+                  <p className="font-semibold text-xs uppercase tracking-wide" style={{ color: 'rgb(var(--c-text-secondary))' }}>{t('live.assistQuestionsTitle')}</p>
                   <ul className="space-y-1.5" style={{ color: 'rgb(var(--c-text))' }}>
                     {assistQuestions.map((q, i) => (
                       <li key={i} className="flex gap-2"><span style={{ color: 'var(--c-focus)' }}>›</span>{q}</li>
@@ -517,7 +592,7 @@ export default function LiveSessionPage() {
 
               {recap && (
                 <div className="rounded-2xl border p-4 text-sm" style={{ background: 'rgb(var(--c-surface))', borderColor: 'var(--c-border)' }}>
-                  <p className="font-semibold text-xs uppercase tracking-wide mb-2" style={{ color: 'rgb(var(--c-text-secondary))' }}>Session summary</p>
+                  <p className="font-semibold text-xs uppercase tracking-wide mb-2" style={{ color: 'rgb(var(--c-text-secondary))' }}>{t('live.recapTitle')}</p>
                   <p style={{ color: 'rgb(var(--c-text))' }}>{recap}</p>
                 </div>
               )}
@@ -535,7 +610,7 @@ export default function LiveSessionPage() {
 
           {/* Reactions */}
           {session.status === 'live' && (
-            <section className="mb-4 flex items-center gap-2">
+            <section className="mb-4 flex flex-wrap items-center gap-2">
               {REACTIONS.map((r) => (
                 <button
                   key={r.type}
@@ -547,6 +622,32 @@ export default function LiveSessionPage() {
                   {r.emoji}
                 </button>
               ))}
+              {!isOwner && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min={1}
+                    value={giftAmount}
+                    onChange={(e) => setGiftAmount(e.target.value)}
+                    className="w-16 rounded-full px-3 py-2 text-sm"
+                    style={{ background: 'rgb(var(--c-surface))', color: 'rgb(var(--c-text))', border: '1px solid var(--c-border)' }}
+                    aria-label={t('live.giftAmountPlaceholder')}
+                    placeholder={t('live.giftAmountPlaceholder')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleSendGift()}
+                    disabled={giftBusy}
+                    className="rounded-full px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+                    style={{ background: 'var(--c-focus)' }}
+                  >
+                    🎁 {giftBusy ? t('live.giftSending') : t('live.giftSend')}
+                  </button>
+                  {giftMessage && (
+                    <span className="text-xs" style={{ color: 'rgb(var(--c-text-secondary))' }}>{giftMessage}</span>
+                  )}
+                </div>
+              )}
             </section>
           )}
 
@@ -565,15 +666,28 @@ export default function LiveSessionPage() {
                         <span style={{ color: 'rgb(var(--c-text-secondary))' }}>{m.text}</span>
                       </p>
                       {isOwner && (
-                        <button
-                          type="button"
-                          onClick={() => void handleDeleteMessage(m.id)}
-                          aria-label={t('live.deleteMessage')}
-                          className="shrink-0"
-                          style={{ color: 'rgb(var(--c-text-secondary))' }}
-                        >
-                          <TrashIcon className="h-3.5 w-3.5" />
-                        </button>
+                        <span className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteMessage(m.id)}
+                            aria-label={t('live.deleteMessage')}
+                            style={{ color: 'rgb(var(--c-text-secondary))' }}
+                          >
+                            <TrashIcon className="h-3.5 w-3.5" />
+                          </button>
+                          {m.user_id !== user?.id && (
+                            <button
+                              type="button"
+                              onClick={() => void handleBanUser(m.user_id)}
+                              disabled={banBusyId === m.user_id}
+                              aria-label={t('live.banUser')}
+                              title={t('live.banUser')}
+                              style={{ color: 'rgb(var(--c-text-secondary))' }}
+                            >
+                              <NoSymbolIcon className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </span>
                       )}
                     </div>
                   ))}

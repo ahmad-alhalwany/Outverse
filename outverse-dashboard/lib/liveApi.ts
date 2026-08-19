@@ -23,8 +23,10 @@ export interface LiveSession {
   is_public: boolean;
   chat_enabled: boolean;
   recording_enabled: boolean;
+  recording_url?: string;
   moderation_enabled: boolean;
   auto_moderation: boolean;
+  slowmode_seconds: number;
   is_live: boolean;
   duration_seconds: number;
   created_at: string;
@@ -46,6 +48,7 @@ export interface LiveChatMessage {
   id: number;
   session: number;
   user: string;
+  user_id: number;
   text: string;
   created_at: string;
   is_deleted: boolean;
@@ -200,5 +203,43 @@ export async function deleteMessage(id: number, messageId: number): Promise<bool
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+export async function banChatUser(id: number, userId: number): Promise<boolean> {
+  try {
+    const res = await apiFetchJson(`live/${id}/ban_chat/`, { method: 'POST', json: { user_id: userId } });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function unbanChatUser(id: number, userId: number): Promise<boolean> {
+  try {
+    const res = await apiFetchJson(`live/${id}/unban_chat/`, { method: 'POST', json: { user_id: userId } });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function setSlowmode(id: number, seconds: number): Promise<boolean> {
+  try {
+    const res = await apiFetchJson(`live/${id}/set_slowmode/`, { method: 'POST', json: { seconds } });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function sendGift(id: number, amount: number): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await apiFetchJson(`live/${id}/gift/`, { method: 'POST', json: { amount } });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false, error: (body as { detail?: string }).detail };
+    return { ok: true };
+  } catch {
+    return { ok: false };
   }
 }

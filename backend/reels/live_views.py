@@ -86,11 +86,12 @@ class LiveSessionSerializer(serializers.ModelSerializer):
 
 class LiveChatMessageSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField(read_only=True)
+    user_id = serializers.IntegerField(source='user.id', read_only=True)
 
     class Meta:
         model = LiveChatMessage
-        fields = ['id', 'session', 'user', 'text', 'created_at', 'is_deleted']
-        read_only_fields = ['user', 'is_deleted', 'created_at']
+        fields = ['id', 'session', 'user', 'user_id', 'text', 'created_at', 'is_deleted']
+        read_only_fields = ['user', 'user_id', 'is_deleted', 'created_at']
 
 
 class LiveReactionSerializer(serializers.ModelSerializer):
