@@ -18,6 +18,7 @@ import {
 } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import { useTheme } from '@/components/ThemeProvider';
+import { useLocale } from '@/components/LocaleProvider';
 import { apiFetch, mediaUrl } from '@/lib/api';
 
 type SearchTab = 'users' | 'posts' | 'ideas' | 'stories' | 'challenges' | 'reels' | 'bottles' | 'shop';
@@ -83,15 +84,15 @@ const PALETTES = {
   },
 };
 
-const TAB_META: Record<SearchTab, { label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>; color: string }> = {
-  users: { label: 'Creators', icon: UserIcon, color: 'from-vault to-bazaar' },
-  posts: { label: 'Posts', icon: DocumentTextIcon, color: 'from-lab to-bazaar' },
-  ideas: { label: 'Ideas', icon: LightBulbIcon, color: 'from-bazaar to-vault' },
-  stories: { label: 'Stories', icon: BookOpenIcon, color: 'from-story to-lab' },
-  challenges: { label: 'Challenges', icon: FireIcon, color: 'from-story to-shop' },
-  reels: { label: 'Signals', icon: PlayIcon, color: 'from-vault to-story' },
-  bottles: { label: 'Vault', icon: ArchiveBoxIcon, color: 'from-vault to-bazaar' },
-  shop: { label: 'Shop', icon: ShoppingCartIcon, color: 'from-bazaar to-shop' },
+const TAB_META: Record<SearchTab, { labelKey: string; icon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>; color: string }> = {
+  users: { labelKey: 'search.creators', icon: UserIcon, color: 'from-vault to-bazaar' },
+  posts: { labelKey: 'search.posts', icon: DocumentTextIcon, color: 'from-lab to-bazaar' },
+  ideas: { labelKey: 'search.ideas', icon: LightBulbIcon, color: 'from-bazaar to-vault' },
+  stories: { labelKey: 'search.stories', icon: BookOpenIcon, color: 'from-story to-lab' },
+  challenges: { labelKey: 'search.challenges', icon: FireIcon, color: 'from-story to-shop' },
+  reels: { labelKey: 'search.signals', icon: PlayIcon, color: 'from-vault to-story' },
+  bottles: { labelKey: 'search.vaultTab', icon: ArchiveBoxIcon, color: 'from-vault to-bazaar' },
+  shop: { labelKey: 'search.shopTab', icon: ShoppingCartIcon, color: 'from-bazaar to-shop' },
 };
 
 const SEARCH_TABS: SearchTab[] = ['users', 'posts', 'ideas', 'stories', 'challenges', 'reels', 'bottles', 'shop'];
@@ -99,7 +100,7 @@ const PAGINATED_CATEGORIES: SearchTab[] = SEARCH_TABS;
 const INITIAL_CATEGORY_CAP = 5;
 const LOAD_MORE_PAGE_SIZE = 12;
 
-function buildCards(results: SearchResults): ResultCard[] {
+function buildCards(results: SearchResults, t: (key: string, vars?: Record<string, string>) => string): ResultCard[] {
   const userCards: ResultCard[] = results.users.map((u) => ({
     id: `users-${u.id}`,
     href: `/profile/${u.id}`,
@@ -113,7 +114,7 @@ function buildCards(results: SearchResults): ResultCard[] {
   const postCards: ResultCard[] = results.posts.map((p) => ({
     id: `posts-${p.id}`,
     href: `/post/${p.id}`,
-    title: p.snippet || 'Untitled',
+    title: p.snippet || t('search.untitledPost'),
     subtitle: `@${p.author}`,
     description: '',
     meta: '',
@@ -148,8 +149,8 @@ function buildCards(results: SearchResults): ResultCard[] {
   }));
   const reelCards: ResultCard[] = results.reels.map((reel) => ({
     id: `reels-${reel.id}`,
-    href: `/reels?id=${reel.id}`,
-    title: reel.caption || 'Cosmic signal',
+    href: `/reels/${reel.id}`,
+    title: reel.caption || t('search.untitledReel'),
     subtitle: `@${reel.author}`,
     description: reel.tags?.length ? reel.tags.map((tag) => `#${tag}`).join(' ') : '',
     meta: '',
@@ -178,6 +179,7 @@ function buildCards(results: SearchResults): ResultCard[] {
 }
 
 function ResultCardView({ card, palette, compact }: { card: ResultCard; palette: (typeof PALETTES)['light']; compact: boolean }) {
+  const { t } = useLocale();
   const meta = TAB_META[card.tab];
   const Icon = meta.icon;
   return (
@@ -210,7 +212,7 @@ function ResultCardView({ card, palette, compact }: { card: ResultCard; palette:
             className="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full shrink-0"
             style={{ background: palette.accentSoft, color: palette.accentStrong }}
           >
-            {meta.label}
+            {t(meta.labelKey)}
           </span>
           {card.meta && <span className="text-xs shrink-0" style={{ color: palette.textMuted }}>{card.meta}</span>}
         </div>
@@ -233,6 +235,7 @@ function ResultCardView({ card, palette, compact }: { card: ResultCard; palette:
 }
 
 function SearchContent() {
+  const { t } = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { theme } = useTheme();
@@ -308,7 +311,7 @@ function SearchContent() {
     }
   }
 
-  const cards = useMemo(() => buildCards(results), [results]);
+  const cards = useMemo(() => buildCards(results, t), [results, t]);
   const filteredCards = useMemo(() => cards.filter((card) => card.tab === activeTab), [activeTab, cards]);
 
   const totalResults = useMemo(
@@ -331,10 +334,18 @@ function SearchContent() {
       <div className="space-y-8">
         <div className="border-b pb-6 pt-2" style={{ borderColor: palette.border }}>
           <h1 className="text-[2rem] font-semibold tracking-[-0.03em]" style={{ color: palette.text }}>
-            Search
+            {t('search.pageTitle')}
           </h1>
           <p className="mt-2 text-sm" style={{ color: palette.textMuted }}>
-            {query ? `${totalResults} result${totalResults === 1 ? '' : 's'} for “${query}”` : 'Search for creators, ideas, stories, and more across Cosmory.'}
+            {query
+              ? t('search.resultsForQuery', {
+                  count:
+                    totalResults === 1
+                      ? t('search.resultCount', { count: String(totalResults) })
+                      : t('search.resultCountPlural', { count: String(totalResults) }),
+                  query,
+                })
+              : t('search.exploreCosmory')}
           </p>
         </div>
 
@@ -349,7 +360,7 @@ function SearchContent() {
             onKeyDown={(event) => {
               if (event.key === 'Enter') submitSearch();
             }}
-            placeholder="Search the cosmos…"
+            placeholder={t('search.searchPlaceholder')}
             className="w-full bg-transparent text-base outline-none placeholder:text-current"
             style={{ color: palette.textMuted }}
           />
@@ -376,7 +387,7 @@ function SearchContent() {
                     }}
                   >
                     <Icon className="h-4 w-4" />
-                    <span>{meta.label}</span>
+                    <span>{t(meta.labelKey)}</span>
                     <span className="text-xs opacity-70">{count}</span>
                   </button>
                 );
@@ -389,7 +400,7 @@ function SearchContent() {
                 onClick={() => setViewMode('grid')}
                 className="rounded-xl p-3 transition-colors"
                 style={{ background: viewMode === 'grid' ? palette.accent : 'transparent', color: viewMode === 'grid' ? '#FFFFFF' : palette.textMuted }}
-                aria-label="Grid view"
+                aria-label={t('search.gridView')}
               >
                 <Squares2X2Icon className="h-5 w-5" />
               </button>
@@ -398,7 +409,7 @@ function SearchContent() {
                 onClick={() => setViewMode('list')}
                 className="rounded-xl p-3 transition-colors"
                 style={{ background: viewMode === 'list' ? palette.accent : 'transparent', color: viewMode === 'list' ? '#FFFFFF' : palette.textMuted }}
-                aria-label="List view"
+                aria-label={t('search.listView')}
               >
                 <ViewColumnsIcon className="h-5 w-5" />
               </button>
@@ -411,7 +422,7 @@ function SearchContent() {
             className="rounded-[28px] border px-6 py-16 text-center text-sm"
             style={{ background: palette.card, borderColor: palette.border, color: palette.textMuted, boxShadow: palette.shadow }}
           >
-            Loading search results…
+            {t('search.loading')}
           </div>
         ) : !query ? (
           <div
@@ -420,10 +431,10 @@ function SearchContent() {
           >
             <MagnifyingGlassIcon className="h-8 w-8 mx-auto mb-3" style={{ color: palette.textMuted }} />
             <h2 className="text-xl font-semibold" style={{ color: palette.text }}>
-              Start typing to search
+              {t('search.startTyping')}
             </h2>
             <p className="mt-2 text-sm" style={{ color: palette.textMuted }}>
-              Creators, posts, ideas, stories, challenges, signals, the vault, and the shop — all in one place.
+              {t('search.startTypingHint')}
             </p>
           </div>
         ) : totalResults === 0 ? (
@@ -432,10 +443,10 @@ function SearchContent() {
             style={{ background: palette.card, borderColor: palette.border, boxShadow: palette.shadow }}
           >
             <h2 className="text-xl font-semibold" style={{ color: palette.text }}>
-              No results for “{query}”
+              {t('search.noResults', { query })}
             </h2>
             <p className="mt-3 text-sm" style={{ color: palette.textMuted }}>
-              Try a different keyword or check the spelling.
+              {t('search.noResultsHint')}
             </p>
           </div>
         ) : (
@@ -455,7 +466,7 @@ function SearchContent() {
                   className="rounded-full px-6 py-2.5 text-sm font-semibold transition-colors disabled:opacity-60"
                   style={{ background: palette.accentSoft, color: palette.accentStrong }}
                 >
-                  {loadingMore ? 'Loading…' : 'View more'}
+                  {loadingMore ? t('search.loadingMore') : t('search.viewMore')}
                 </button>
               </div>
             )}
@@ -466,9 +477,14 @@ function SearchContent() {
   );
 }
 
+function SearchFallback() {
+  const { t } = useLocale();
+  return <div className="min-h-screen flex items-center justify-center">{t('search.loadingMore')}</div>;
+}
+
 export default function SearchPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center">Loading…</div>}>
+    <Suspense fallback={<SearchFallback />}>
       <SearchContent />
     </Suspense>
   );

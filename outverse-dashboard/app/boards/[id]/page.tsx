@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Squares2X2Icon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
+import { useLocale } from '@/components/LocaleProvider';
 import { apiFetch } from '@/lib/api';
 import { mapPost, type ApiPost } from '@/utils/postMapper';
 
@@ -22,6 +23,7 @@ type BoardResponse = {
 };
 
 export default function BoardPage() {
+  const { t } = useLocale();
   const params = useParams();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   const [collection, setCollection] = useState<PublicCollection | null>(null);
@@ -42,11 +44,11 @@ export default function BoardPage() {
     } catch {
       setCollection(null);
       setItems([]);
-      setError('This board is not public or could not be loaded.');
+      setError(t('boards.notFoundOrPrivate'));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     void load();
@@ -72,30 +74,30 @@ export default function BoardPage() {
     <AppShell contentClassName="flex-1 min-w-0 w-full max-w-6xl mx-auto px-4 pb-16">
       <div className="pt-4">
         <Link href="/saved" className="text-sm font-semibold text-vault hover:underline">
-          Back to saved
+          {t('boards.backToSaved')}
         </Link>
 
         {loading ? (
-          <p className="py-16 text-center text-sm text-text-secondary">Loading board...</p>
+          <p className="py-16 text-center text-sm text-text-secondary">{t('boards.loading')}</p>
         ) : error || !collection ? (
-          <p className="py-16 text-center text-sm text-text-secondary">{error || 'Board not found.'}</p>
+          <p className="py-16 text-center text-sm text-text-secondary">{error || t('boards.notFound')}</p>
         ) : (
           <>
             <header className="my-6 rounded-[28px] border border-surface bg-surface/30 p-6">
               <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-vault">
                 <Squares2X2Icon className="h-4 w-4" />
-                Public board
+                {t('boards.publicBoard')}
               </p>
               <h1 className="text-3xl font-bold">{collection.name}</h1>
               {collection.description ? (
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary">{collection.description}</p>
               ) : null}
-              <p className="mt-3 text-xs text-text-secondary">{collection.item_count ?? pins.length} saved posts</p>
+              <p className="mt-3 text-xs text-text-secondary">{t('boards.savedPostsCount', { count: String(collection.item_count ?? pins.length) })}</p>
             </header>
 
             {pins.length === 0 ? (
               <p className="rounded-2xl border border-surface bg-surface/20 p-8 text-center text-sm text-text-secondary">
-                This board does not have public image posts yet.
+                {t('boards.emptyPublicBoard')}
               </p>
             ) : (
               <div className="columns-2 gap-3 sm:columns-3 lg:columns-4">
@@ -107,7 +109,7 @@ export default function BoardPage() {
                   >
                     <Image
                       src={pin.image}
-                      alt={pin.text || `Board image ${index + 1}`}
+                      alt={pin.text || t('boards.imageAltFallback', { n: String(index + 1) })}
                       width={520}
                       height={index % 3 === 0 ? 680 : 520}
                       sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
@@ -115,7 +117,7 @@ export default function BoardPage() {
                       unoptimized
                     />
                     <div className="p-3">
-                      <p className="line-clamp-2 text-sm font-medium">{pin.text || 'Untitled post'}</p>
+                      <p className="line-clamp-2 text-sm font-medium">{pin.text || t('boards.untitledPost')}</p>
                       <p className="mt-1 truncate text-xs text-text-secondary">{pin.author}</p>
                     </div>
                   </Link>

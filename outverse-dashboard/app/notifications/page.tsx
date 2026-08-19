@@ -28,6 +28,7 @@ interface AppNotification {
   reel: number | null;
   story: number | null;
   idea: number | null;
+  studio_session: number | null;
   text: string;
   is_read: boolean;
   created_at: string;
@@ -43,16 +44,16 @@ interface NotificationResponse {
 
 type FilterKey = 'all' | 'reaction' | 'comment' | 'chat_message' | 'story' | 'challenge_complete' | 'ideas';
 
-const FILTERS: Array<{ key: FilterKey; label: string; matches?: string[]; storyOnly?: boolean }> = [
-  { key: 'all', label: 'All' },
-  { key: 'reaction', label: 'Reactions', matches: ['reaction', 'follow', 'share'] },
-  { key: 'comment', label: 'Comments', matches: ['comment', 'mention'] },
-  { key: 'story', label: 'Stories', storyOnly: true },
-  { key: 'chat_message', label: 'Messages', matches: ['chat_message'] },
-  { key: 'challenge_complete', label: 'Challenges', matches: ['challenge_complete'] },
+const FILTERS: Array<{ key: FilterKey; labelKey: string; matches?: string[]; storyOnly?: boolean }> = [
+  { key: 'all', labelKey: 'notifications.filterAll' },
+  { key: 'reaction', labelKey: 'notifications.filterReactions', matches: ['reaction', 'follow', 'share'] },
+  { key: 'comment', labelKey: 'notifications.filterComments', matches: ['comment', 'mention'] },
+  { key: 'story', labelKey: 'notifications.filterStories', storyOnly: true },
+  { key: 'chat_message', labelKey: 'notifications.filterMessages', matches: ['chat_message'] },
+  { key: 'challenge_complete', labelKey: 'notifications.filterChallenges', matches: ['challenge_complete'] },
   {
     key: 'ideas',
-    label: 'Ideas',
+    labelKey: 'notifications.filterIdeas',
     matches: ['idea_pledge', 'idea_comment', 'idea_apply', 'idea_accepted', 'idea_rejected'],
   },
 ];
@@ -89,38 +90,45 @@ function getAchievementProgress(notification: AppNotification): { current: numbe
   return { current: Number(match[1]), goal };
 }
 
-function getNotificationTitle(notification: AppNotification) {
-  const actorName = notification.actor?.username || 'Cosmory';
+function getNotificationTitle(notification: AppNotification, t: (key: string, vars?: Record<string, string>) => string) {
+  const actorName = notification.actor?.username || t('notifications.defaultActor');
   const kind = notification.type || notification.verb;
 
   if (kind === 'challenge_complete') {
-    if (/invite/i.test(notification.text)) return 'Challenge Invite';
-    if (/completed|finished/i.test(notification.text)) return 'Challenge Completed';
-    if (/progress|halfway|leading/i.test(notification.text)) return 'Challenge Progress';
-    return 'Challenge Update';
+    if (/invite/i.test(notification.text)) return t('notifications.titleChallengeInvite');
+    if (/completed|finished/i.test(notification.text)) return t('notifications.titleChallengeCompleted');
+    if (/progress|halfway|leading/i.test(notification.text)) return t('notifications.titleChallengeProgress');
+    return t('notifications.titleChallengeUpdate');
   }
 
-  if (kind === 'reaction') return 'New Reaction';
-  if (kind === 'share') return 'Signal shared';
-  if (kind === 'comment') return 'New Comment';
-  if (kind === 'mention') return 'Mention';
-  if (kind === 'chat_message') return 'New Message';
-  if (kind === 'follow') return `${actorName} followed you`;
-  if (kind.startsWith('idea_')) return 'Idea Bazaar';
-  if (/achievement|completed \d+/i.test(notification.text)) return 'Achievement Unlocked';
+  if (kind === 'reaction') return t('notifications.titleNewReaction');
+  if (kind === 'share') return t('notifications.titleSignalShared');
+  if (kind === 'comment') return t('notifications.titleNewComment');
+  if (kind === 'mention') return t('notifications.titleMention');
+  if (kind === 'chat_message') return t('notifications.titleNewMessage');
+  if (kind === 'follow') return t('notifications.titleFollowed', { name: actorName });
+  if (kind.startsWith('idea_')) return t('notifications.titleIdeaBazaar');
+  if (kind === 'studio_invite') return t('notifications.titleStudioInvite');
+  if (kind === 'shop' || kind === 'tip' || kind === 'shop_purchase') {
+    if (/^tipped you/i.test(notification.text)) return t('notifications.titleTipReceived');
+    if (/^sold/i.test(notification.text)) return t('notifications.titleItemSold');
+    if (/^you unlocked/i.test(notification.text)) return t('notifications.titlePurchaseConfirmed');
+    return t('notifications.titleShopUpdate');
+  }
+  if (/achievement|completed \d+/i.test(notification.text)) return t('notifications.titleAchievementUnlocked');
   return actorName;
 }
 
-function getNotificationDescription(notification: AppNotification) {
-  const actorName = notification.actor?.username || 'Someone';
+function getNotificationDescription(notification: AppNotification, t: (key: string, vars?: Record<string, string>) => string) {
+  const actorName = notification.actor?.username || t('notifications.someoneActor');
   const kind = notification.type || notification.verb;
 
   if (kind === 'reaction') return `${actorName} ${notification.text}`;
-  if (kind === 'share') return `${actorName} ${notification.text || 'transmitted your signal'}`;
+  if (kind === 'share') return `${actorName} ${notification.text || t('notifications.descSignalTransmitted')}`;
   if (kind === 'comment') return `${actorName} ${notification.text}`;
   if (kind === 'mention') return `${actorName} ${notification.text}`;
   if (kind === 'chat_message') return `${actorName}: ${notification.text}`;
-  if (kind === 'follow') return `${actorName} started following you`;
+  if (kind === 'follow') return t('notifications.descFollowedYou', { name: actorName });
   if (kind.startsWith('idea_')) {
     return `${actorName} ${notification.text}`;
   }
@@ -167,6 +175,17 @@ function notificationHref(notification: AppNotification): string | null {
   if (notification.idea || kind.startsWith('idea_')) {
     return notification.idea ? `/bazaar/${notification.idea}` : '/bazaar';
   }
+  if (kind === 'studio_invite') {
+    return notification.studio_session ? `/studio?session=${notification.studio_session}` : '/studio';
+  }
+  if (kind === 'shop' || kind === 'tip' || kind === 'shop_purchase') {
+    return /^you unlocked/i.test(notification.text) ? '/shop/orders' : '/shop/dashboard';
+  }
+  if (kind.startsWith('forge_')) return '/forge';
+  if (getNotificationKind(notification) === 'achievement' || /achievement|completed \d+/i.test(notification.text)) {
+    return '/achievements';
+  }
+  if (kind === 'challenge_complete') return '/lab';
   if (kind === 'chat_message') return '/chat';
   if (kind === 'going_live') return '/live';
   if (kind.includes('video')) return '/videos';
@@ -203,10 +222,10 @@ export default function NotificationsPage() {
         setUnreadCount(data.unread_count || 0);
         setNextUrl(data.next || null);
       } else if (append) {
-        setActionError('Could not load more notifications.');
+        setActionError(t('notifications.loadMoreFailed'));
       }
     } catch {
-      if (append) setActionError('Could not load more notifications.');
+      if (append) setActionError(t('notifications.loadMoreFailed'));
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -236,13 +255,13 @@ export default function NotificationsPage() {
     const query = searchQuery.trim().toLowerCase();
     if (query) {
       rows = rows.filter((notification) =>
-        `${getNotificationTitle(notification)} ${getNotificationDescription(notification)}`
+        `${getNotificationTitle(notification, t)} ${getNotificationDescription(notification, t)}`
           .toLowerCase()
           .includes(query),
       );
     }
     return rows;
-  }, [activeFilter, notifications, searchQuery]);
+  }, [activeFilter, notifications, searchQuery, t]);
 
   const groupedNotifications = useMemo(() => {
     return filteredNotifications.reduce<Record<string, AppNotification[]>>((acc, notification) => {
@@ -295,10 +314,10 @@ export default function NotificationsPage() {
         );
         setUnreadCount(data.unread_count ?? 0);
       } else {
-        setActionError('Could not update notification.');
+        setActionError(t('notifications.updateFailed'));
       }
     } catch {
-      setActionError('Could not update notification.');
+      setActionError(t('notifications.updateFailed'));
     }
   }
 
@@ -309,10 +328,10 @@ export default function NotificationsPage() {
         setNotifications((prev) => prev.map((notification) => ({ ...notification, is_read: true })));
         setUnreadCount(0);
       } else {
-        setActionError('Could not mark all as read.');
+        setActionError(t('notifications.markAllFailed'));
       }
     } catch {
-      setActionError('Could not mark all as read.');
+      setActionError(t('notifications.markAllFailed'));
     }
   }
 
@@ -336,7 +355,7 @@ export default function NotificationsPage() {
             </h1>
             {unreadCount > 0 && (
               <span className="rounded-full bg-[#E9E1FA] px-3 py-1 text-sm font-medium text-[#5B21B6]">
-                {unreadCount} New
+                {unreadCount} {t('notifications.newBadge')}
               </span>
             )}
           </div>
@@ -351,7 +370,7 @@ export default function NotificationsPage() {
             <Link
               href="/profile"
               className="rounded-full p-2 transition hover:bg-[#E9E1FA]"
-              aria-label="Profile"
+              aria-label={t('notifications.profileLink')}
             >
               <BellIcon className="h-5 w-5" />
             </Link>
@@ -388,7 +407,7 @@ export default function NotificationsPage() {
                     isActive ? 'bg-white text-[#211B3D] shadow-sm' : 'text-[#79709E]'
                   }`}
                 >
-                  <span>{filter.label}</span>
+                  <span>{t(filter.labelKey)}</span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-sm ${
                       isActive ? 'bg-[#FFFFFF] text-[#211B3D]' : 'text-[#211B3D]'
@@ -448,10 +467,10 @@ export default function NotificationsPage() {
                               </span>
                               <span className="min-w-0 flex-1">
                                 <span className="block text-[1.05rem] font-semibold text-[#211B3D]">
-                                  {getNotificationTitle(notification)}
+                                  {getNotificationTitle(notification, t)}
                                 </span>
                                 <span className="mt-1 block max-w-2xl text-lg leading-8 text-[#79709E] sm:text-[1.05rem] sm:leading-7">
-                                  {getNotificationDescription(notification)}
+                                  {getNotificationDescription(notification, t)}
                                 </span>
                                 {achievementProgress && (
                                   <span className="mt-3 block max-w-xs">
@@ -484,7 +503,7 @@ export default function NotificationsPage() {
                                     className="inline-flex items-center gap-2 rounded-xl bg-[#7C3AED] px-5 py-3 text-base font-semibold text-white transition hover:bg-[#5B21B6]"
                                   >
                                     <CheckIcon className="h-5 w-5" />
-                                    Accept
+                                    {t('notifications.accept')}
                                   </button>
                                   <button
                                     type="button"
@@ -492,7 +511,7 @@ export default function NotificationsPage() {
                                     className="inline-flex items-center gap-2 rounded-xl bg-[#EDE4FB] px-5 py-3 text-base font-semibold text-[#5B21B6] transition hover:bg-[#DCC9FA]"
                                   >
                                     <XMarkIcon className="h-5 w-5" />
-                                    Decline
+                                    {t('notifications.decline')}
                                   </button>
                                 </>
                               ) : actionType === 'link' ? (
@@ -502,7 +521,7 @@ export default function NotificationsPage() {
                                   className="inline-flex items-center gap-2 rounded-xl bg-[#F5F1FE] px-5 py-3 text-base font-medium text-[#5B21B6] transition hover:bg-[#EDE4FB]"
                                 >
                                   <SparklesIcon className="h-5 w-5" />
-                                  View Badge
+                                  {t('notifications.viewBadge')}
                                 </button>
                               ) : actionType === 'details' ? (
                                 <button
@@ -511,7 +530,7 @@ export default function NotificationsPage() {
                                   className="inline-flex items-center gap-2 rounded-xl bg-[#F5F1FE] px-5 py-3 text-base font-medium text-[#211B3D] transition hover:bg-[#EDE4FB]"
                                 >
                                   <EyeIcon className="h-5 w-5" />
-                                  View Details
+                                  {t('notifications.viewDetails')}
                                 </button>
                               ) : (
                                 <button
@@ -520,7 +539,7 @@ export default function NotificationsPage() {
                                   className="inline-flex items-center gap-2 rounded-xl bg-[#F5F1FE] px-5 py-3 text-base font-medium text-[#211B3D] transition hover:bg-[#EDE4FB]"
                                 >
                                   <EyeIcon className="h-5 w-5" />
-                                  View
+                                  {t('notifications.view')}
                                 </button>
                               )}
                               {!isChallenge && actionType !== 'decision' && (
@@ -542,13 +561,13 @@ export default function NotificationsPage() {
                   disabled={loadingMore}
                   className="w-full rounded-2xl border border-[#E3D9F7] bg-white px-4 py-3 text-sm font-semibold text-[#5B21B6] transition hover:bg-[#F5F1FE] disabled:opacity-60"
                 >
-                  {loadingMore ? 'Loading…' : 'Load more'}
+                  {loadingMore ? t('notifications.loadingMore') : t('notifications.loadMore')}
                 </button>
               )}
 
               <div className="border-t border-[#E3D9F7] pt-6 text-center text-lg text-[#79709E]">
                 {filteredNotifications.length > 0
-                  ? "You're all caught up! Check back later for new notifications."
+                  ? t('notifications.allCaughtUp')
                   : t('notifications.empty')}
               </div>
             </div>

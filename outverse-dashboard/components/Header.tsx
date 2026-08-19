@@ -89,6 +89,12 @@ function notificationHref(n: AppNotification): string | null {
   if (n.story) return `/?story=${n.story}`;
   if (n.idea || kind.startsWith('idea_')) return n.idea ? `/bazaar/${n.idea}` : '/bazaar';
   if (kind === 'studio_invite') return n.studio_session ? `/studio?session=${n.studio_session}` : '/studio';
+  if (kind === 'shop' || kind === 'tip' || kind === 'shop_purchase') {
+    return /^you unlocked/i.test(n.text) ? '/shop/orders' : '/shop/dashboard';
+  }
+  if (kind.startsWith('forge_')) return '/forge';
+  if (kind === 'achievement' || kind === 'achievement_unlocked' || /achievement|completed \d+/i.test(n.text)) return '/achievements';
+  if (kind === 'challenge_complete') return '/lab';
   if (kind === 'chat_message') return '/chat';
   if (kind === 'going_live') return '/live';
   if (kind.includes('video')) return '/videos';
@@ -407,7 +413,7 @@ const Header = () => {
             <div className="relative hidden sm:block">
               <input
                 type="text"
-                placeholder="Search the cosmos…"
+                placeholder={t('search.searchPlaceholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowSearch(true)}
@@ -421,7 +427,7 @@ const Header = () => {
               {searchQuery && (
                 <button
                   type="button"
-                  aria-label="Clear search"
+                  aria-label={t('search.clearSearch')}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => setSearchQuery('')}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-secondary hover:text-text transition-colors"
@@ -437,12 +443,12 @@ const Header = () => {
                   className="absolute left-0 top-14 z-50 max-h-[28rem] w-80 overflow-y-auto rounded-[22px] border border-white/10 bg-background/95 shadow-2xl backdrop-blur-2xl"
                 >
                   {totalSearchResults === 0 ? (
-                    <div className="px-4 py-6 text-center text-text-secondary text-sm">No results found.</div>
+                    <div className="px-4 py-6 text-center text-text-secondary text-sm">{t('search.noResultsFound')}</div>
                   ) : (
                     <>
                       {searchResults.users.length > 0 && (
                         <div className="py-2">
-                          <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">Creators</div>
+                          <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">{t('search.creators')}</div>
                           {searchResults.users.slice(0, 3).map((u) => (
                             <button
                               key={`u-${u.id}`}
@@ -470,31 +476,31 @@ const Header = () => {
                       {[
                         {
                           key: 'posts',
-                          label: 'Posts',
+                          labelKey: 'search.posts',
                           icon: BookOpenIcon,
                           color: 'from-lab to-bazaar',
                           items: searchResults.posts.map((p) => ({
                             id: p.id,
-                            primary: p.snippet || 'Untitled',
+                            primary: p.snippet || t('search.untitledPost'),
                             secondary: `@${p.author}`,
                             path: `/post/${p.id}`,
                           })),
                         },
                         {
                           key: 'reels',
-                          label: 'Signals',
+                          labelKey: 'search.signals',
                           icon: PlayIcon,
                           color: 'from-vault to-story',
                           items: searchResults.reels.map((r) => ({
                             id: r.id,
-                            primary: r.caption || 'Cosmic signal',
+                            primary: r.caption || t('search.untitledReel'),
                             secondary: `@${r.author}`,
-                            path: `/reels?id=${r.id}`,
+                            path: `/reels/${r.id}`,
                           })),
                         },
                         {
                           key: 'ideas',
-                          label: 'Ideas',
+                          labelKey: 'search.ideas',
                           icon: LightBulbIcon,
                           color: 'from-bazaar to-vault',
                           items: searchResults.ideas.map((i) => ({
@@ -506,7 +512,7 @@ const Header = () => {
                         },
                         {
                           key: 'stories',
-                          label: 'Stories',
+                          labelKey: 'search.stories',
                           icon: BookOpenIcon,
                           color: 'from-story to-lab',
                           items: searchResults.stories.map((s) => ({
@@ -518,7 +524,7 @@ const Header = () => {
                         },
                         {
                           key: 'bottles',
-                          label: 'Vault',
+                          labelKey: 'search.vaultTab',
                           icon: ArchiveBoxIcon,
                           color: 'from-vault to-bazaar',
                           items: searchResults.bottles.map((b) => ({
@@ -530,7 +536,7 @@ const Header = () => {
                         },
                         {
                           key: 'shop',
-                          label: 'Shop',
+                          labelKey: 'search.shopTab',
                           icon: ShoppingCartIcon,
                           color: 'from-bazaar to-shop',
                           items: searchResults.shop.map((s) => ({
@@ -544,7 +550,7 @@ const Header = () => {
                         (section) =>
                           section.items.length > 0 && (
                             <div key={section.key} className="py-2 border-t border-surface">
-                              <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">{section.label}</div>
+                              <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wide text-text-secondary">{t(section.labelKey)}</div>
                               {section.items.slice(0, 3).map((item) => (
                                 <button
                                   key={`${section.key}-${item.id}`}
@@ -575,7 +581,7 @@ const Header = () => {
                           }}
                           className="text-sm font-semibold text-vault hover:underline"
                         >
-                          See all {totalSearchResults} results →
+                          {t('search.seeAllResults', { count: String(totalSearchResults) })}
                         </Link>
                       </div>
                     </>
@@ -635,9 +641,9 @@ const Header = () => {
                     >
                       <SparklesIcon className="h-5 w-5" strokeWidth={1.75} />
                     </motion.span>
-                    <span className="font-bold text-base text-white tracking-wide">Notifications</span>
+                    <span className="font-bold text-base text-white tracking-wide">{t('notifications.title')}</span>
                     {unreadCount > 0 && (
-                      <button onClick={handleMarkAllRead} className="ml-auto bg-gradient-to-tr from-pink-400 to-purple-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow hover:scale-105 transition" title="Mark all as read">
+                      <button onClick={handleMarkAllRead} className="ml-auto bg-gradient-to-tr from-pink-400 to-purple-500 text-white px-3 py-1 rounded-full text-xs font-semibold shadow hover:scale-105 transition" title={t('notifications.markAll')}>
                         Mark all as read
                       </button>
                     )}
@@ -651,7 +657,7 @@ const Header = () => {
                     {notifications.length === 0 ? (
                       <li className="p-8 text-center text-text-secondary flex flex-col items-center gap-2">
                         <SparklesIcon className="h-8 w-8 animate-bounce" strokeWidth={1.75} />
-                        <span>All is calm in the cosmos 🚀</span>
+                        <span>{t('notifications.empty')}</span>
                       </li>
                     ) : (
                       notifications.map((n, i) => (
@@ -669,7 +675,7 @@ const Header = () => {
                           </span>
                           <div className="flex-1 min-w-0">
                             <div className="text-sm text-text font-medium leading-snug">
-                              <span className="font-bold">{n.actor?.username || 'Someone'}</span> {n.text}
+                              <span className="font-bold">{n.actor?.username || t('notifications.someoneActor')}</span> {n.text}
                             </div>
                             <RelativeTime
                               date={n.created_at}
