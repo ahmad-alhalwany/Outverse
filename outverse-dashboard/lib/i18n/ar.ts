@@ -793,6 +793,7 @@ export const ar = {
     pinnedSlot: 'مرساة #{order}',
   },
   compose: {
+    deepenError: 'تعذّر توليد سؤال تأملي الآن.',
     audience: 'الجمهور',
     audiencePublic: 'الجميع',
     audienceFollowers: 'المتابِعون',
@@ -1740,6 +1741,8 @@ export const ar = {
     title: 'حديقة الأفكار',
     subtitle: 'شاهد أفكار البازار تنمو من بذرة إلى شجرة كلما زاد الدعم.',
     empty: 'لا توجد أفكار مزروعة بعد — زر البازار لبدء واحدة.',
+    loadError: 'تعذّر تحميل الحديقة. تحقق من اتصالك.',
+    retry: 'إعادة المحاولة',
     supporters: 'داعمون',
     stageSeed: 'بذرة',
     stageSprout: 'برعم',

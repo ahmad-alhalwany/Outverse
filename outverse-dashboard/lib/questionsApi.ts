@@ -155,7 +155,7 @@ export async function suggestQuestion(opts: {
   });
   if (!res.ok) {
     const data = await res.json().catch(() => null);
-    return { ok: false, error: data?.detail || 'Unable to submit.' };
+    return { ok: false, error: data?.detail };
   }
   const data = await res.json().catch(() => null);
   return { ok: true, status: data?.status };

@@ -37,12 +37,20 @@ export default function IdeaGardenPage() {
   const C = PALETTES[theme];
   const [ideas, setIdeas] = useState<BazaarIdea[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  function load() {
+    setLoading(true);
+    setError(false);
+    fetch(`${BASE}/?ordering=new`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error('load failed'))))
+      .then((data) => setIdeas(Array.isArray(data) ? data : data.results || []))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }
 
   useEffect(() => {
-    fetch(`${BASE}/?ordering=new`)
-      .then((res) => (res.ok ? res.json() : []))
-      .then((data) => setIdeas(Array.isArray(data) ? data : data.results || []))
-      .finally(() => setLoading(false));
+    load();
   }, []);
 
   return (
@@ -53,6 +61,18 @@ export default function IdeaGardenPage() {
 
         {loading ? (
           <div className="py-16 text-center" style={{ color: C.text2 }}>{t('common.loading')}</div>
+        ) : error ? (
+          <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
+            <p className="mb-3">{t('garden.loadError')}</p>
+            <button
+              type="button"
+              onClick={load}
+              className="rounded-full px-4 py-1.5 text-xs font-semibold text-white"
+              style={{ background: C.brown }}
+            >
+              {t('garden.retry')}
+            </button>
+          </div>
         ) : ideas.length === 0 ? (
           <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>{t('garden.empty')}</div>
         ) : (

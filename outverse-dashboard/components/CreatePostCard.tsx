@@ -96,7 +96,7 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
   const [buddyError, setBuddyError] = useState('');
 
   const user = useAuthUser();
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const avatar = user?.avatar ? mediaUrl(user.avatar) : null;
   const displayName = user?.first_name || user?.username || 'You';
   const visibleTags = useMemo(() => popularTags.slice(0, 6), []);
@@ -219,11 +219,11 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
     setBuddyError('');
     setBuddyPrompt(null);
     try {
-      const result = await deepenDraft({ text: trimmed, lang: 'en' });
+      const result = await deepenDraft({ text: trimmed, lang: locale });
       if ('prompt' in result) setBuddyPrompt(result.prompt);
-      else setBuddyError(result.error);
+      else setBuddyError(result.error || t('compose.deepenError'));
     } catch {
-      setBuddyError('Could not generate a reflection right now.');
+      setBuddyError(t('compose.deepenError'));
     } finally {
       setBuddyLoading(false);
     }

@@ -791,6 +791,7 @@ export const en = {
     pinnedSlot: 'Anchor #{order}',
   },
   compose: {
+    deepenError: 'Could not generate a reflection right now.',
     audience: 'Audience',
     audiencePublic: 'Everyone',
     audienceFollowers: 'Followers',
@@ -1738,6 +1739,8 @@ export const en = {
     title: 'Idea Garden',
     subtitle: 'Watch Bazaar ideas grow from seed to tree as they gain support.',
     empty: 'No ideas planted yet — visit the Bazaar to start one.',
+    loadError: 'Could not load the garden. Check your connection.',
+    retry: 'Retry',
     supporters: 'supporters',
     stageSeed: 'Seed',
     stageSprout: 'Sprout',
