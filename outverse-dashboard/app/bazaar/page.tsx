@@ -117,6 +117,13 @@ function BazaarContent() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [sortBy, setSortBy] = useState<SortKey>('newest');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [actionError, setActionError] = useState('');
+
+  useEffect(() => {
+    if (!actionError) return;
+    const handle = window.setTimeout(() => setActionError(''), 3200);
+    return () => window.clearTimeout(handle);
+  }, [actionError]);
 
   const load = useCallback(async (pageNum = 1, append = false) => {
     if (append) setLoadingMore(true);
@@ -218,6 +225,7 @@ function BazaarContent() {
         list.map((i) => (i.id === id ? { ...i, supporters: data.supporters, is_voted: data.voted } : i)),
       );
     } catch {
+      setActionError(t('bazaar.voteFailed'));
       load();
     }
   }
@@ -240,7 +248,7 @@ function BazaarContent() {
         <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
           <div className="max-w-xl">
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: C.brown }}>
-              Worlds · Bazaar
+              {t('bazaar.eyebrow')}
             </p>
             <h1 className="text-3xl md:text-4xl font-bold tracking-tight" style={{ color: C.text }}>{t('bazaar.title')}</h1>
             <p className="mt-2 text-sm md:text-base leading-relaxed" style={{ color: C.text2 }}>{t('bazaar.subtitle')}</p>
@@ -254,6 +262,12 @@ function BazaarContent() {
             <PlusIcon className="h-4 w-4" /> {t('bazaar.createIdea')}
           </button>
         </div>
+
+        {actionError && (
+          <div className="mb-4 rounded-xl px-4 py-2.5 text-sm" style={{ background: '#FEE2E2', color: '#B91C1C' }}>
+            {actionError}
+          </div>
+        )}
 
         <div className="relative max-w-md mb-4 hidden sm:block">
           <MagnifyingGlassIcon className="h-5 w-5 absolute left-3 top-1/2 -translate-y-1/2" style={{ color: C.text2 }} />
@@ -358,14 +372,14 @@ function BazaarContent() {
               <div className="text-center py-16" style={{ color: C.text2 }}>{t('bazaar.loading')}</div>
             ) : loadError ? (
               <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
-                <p className="font-semibold mb-2" style={{ color: C.text }}>Could not load ideas</p>
+                <p className="font-semibold mb-2" style={{ color: C.text }}>{t('bazaar.loadError')}</p>
                 <button
                   type="button"
                   onClick={() => void load(1, false)}
                   className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
                   style={{ background: C.brownDk }}
                 >
-                  Try again
+                  {t('bazaar.retry')}
                 </button>
               </div>
             ) : shown.length === 0 ? (
@@ -697,17 +711,19 @@ function IdeaCard({
               <div className="text-xs" style={{ color: C.text2 }}>
                 ${idea.funding_raised.toLocaleString()} {t('bazaar.raised')} · ${idea.funding_goal?.toLocaleString()} {t('bazaar.goal')}
               </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onPledge();
-                }}
-                className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-white"
-                style={{ background: C.brown }}
-              >
-                {t('bazaar.pledgeCta')}
-              </button>
+              {!idea.is_owner && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPledge();
+                  }}
+                  className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-white"
+                  style={{ background: C.brown }}
+                >
+                  {t('bazaar.pledgeCta')}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -825,10 +841,13 @@ function EditIdeaModal({ idea, onClose, onSaved }: { idea: BazaarIdea; onClose: 
           target_date: targetDate || null,
         },
       });
-      if (!res.ok) throw new Error('failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.detail || (Array.isArray(data?.title) ? data.title[0] : ''));
+      }
       onSaved();
-    } catch {
-      setError(t('bazaar.updateIdeaFailed'));
+    } catch (err) {
+      setError((err instanceof Error && err.message) || t('bazaar.updateIdeaFailed'));
     } finally {
       setSaving(false);
     }
@@ -837,19 +856,19 @@ function EditIdeaModal({ idea, onClose, onSaved }: { idea: BazaarIdea; onClose: 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[1000] flex items-center justify-center p-4" style={{ background: C.overlay, backdropFilter: 'blur(3px)' }} onClick={onClose}>
       <motion.form initial={{ opacity: 0, scale: 0.92, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.92, y: 20 }} onClick={(e) => e.stopPropagation()} onSubmit={submit} className="w-full max-w-lg rounded-2xl p-6 relative max-h-[90vh] overflow-y-auto" style={{ background: C.cream, boxShadow: C.modalShadow, border: `1px solid ${C.line}` }}>
-        <button type="button" onClick={onClose} className="absolute top-3 right-3 w-9 h-9 rounded-full text-xl flex items-center justify-center" style={{ background: C.card, color: C.text }} aria-label="Close">×</button>
+        <button type="button" onClick={onClose} className="absolute top-3 right-3 w-9 h-9 rounded-full text-xl flex items-center justify-center" style={{ background: C.card, color: C.text }} aria-label={t('common.close')}>×</button>
         <h2 className="text-lg font-semibold mb-4" style={{ color: C.text }}>{t('bazaar.editIdea')}</h2>
-        <label className="text-sm font-medium" style={{ color: C.text2 }}>Title</label>
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldTitle')}</label>
         <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} />
-        <label className="text-sm font-medium" style={{ color: C.text2 }}>Description</label>
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldDescription')}</label>
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none resize-none" style={field} />
-        <label className="text-sm font-medium" style={{ color: C.text2 }}>Category</label>
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldCategory')}</label>
         <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field}>
           {BAZAAR_CATEGORIES.filter((c) => c.key !== 'all').map((c) => (
             <option key={c.key} value={c.key}>{bazaarCategoryLabel(c.key, locale)}</option>
           ))}
         </select>
-        <label className="text-sm font-medium" style={{ color: C.text2 }}>Roles needed</label>
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldRolesNeeded')}</label>
         <input value={roles} onChange={(e) => setRoles(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} />
         <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.tagsLabel')}</label>
         <input value={tags} onChange={(e) => setTags(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder={t('bazaar.tagsHint')} />
@@ -875,10 +894,13 @@ function DeleteIdeaDialog({ idea, onClose, onDeleted }: { idea: BazaarIdea; onCl
     setError('');
     try {
       const res = await apiFetchJson(`ideas/${idea.id}/`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.detail || '');
+      }
       onDeleted();
-    } catch {
-      setError(t('bazaar.deleteIdeaFailed'));
+    } catch (err) {
+      setError((err instanceof Error && err.message) || t('bazaar.deleteIdeaFailed'));
     } finally {
       setDeleting(false);
     }
@@ -891,9 +913,9 @@ function DeleteIdeaDialog({ idea, onClose, onDeleted }: { idea: BazaarIdea; onCl
         <p className="text-sm mt-2" style={{ color: C.text2 }}>{t('bazaar.confirmDeleteIdea')}</p>
         {error && <div className="text-sm mt-3" style={{ color: '#c0392b' }}>{error}</div>}
         <div className="flex gap-3 mt-5">
-          <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 text-sm font-semibold" style={{ background: C.card2, color: C.text }}>{'Cancel'}</button>
+          <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 text-sm font-semibold" style={{ background: C.card2, color: C.text }}>{t('common.cancel')}</button>
           <button type="button" onClick={() => void confirmDelete()} disabled={deleting} className="flex-1 rounded-xl py-3 text-sm font-semibold text-white" style={{ background: C.brownDk }}>
-            {deleting ? 'Deleting…' : t('bazaar.deleteIdea')}
+            {deleting ? t('bazaar.deletingIdea') : t('bazaar.deleteIdea')}
           </button>
         </div>
       </motion.div>
@@ -940,7 +962,7 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim() || !description.trim()) {
-      setError('Title and description are required.');
+      setError(t('bazaar.requiredFields'));
       return;
     }
     setError('');
@@ -991,7 +1013,7 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
     } catch (err) {
       setError(err instanceof Error && err.message !== 'create failed'
         ? err.message
-        : 'Could not create the idea. Check the connection.');
+        : t('bazaar.createFailed'));
     } finally {
       setSaving(false);
     }
@@ -1017,14 +1039,14 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
         className="w-full max-w-lg rounded-2xl p-6 relative max-h-[90vh] overflow-y-auto"
         style={{ background: C.cream, boxShadow: C.modalShadow, border: `1px solid ${C.line}` }}
       >
-        <button type="button" onClick={onClose} className="absolute top-3 right-3 w-9 h-9 rounded-full text-xl flex items-center justify-center" style={{ background: C.card, color: C.text }} aria-label="Close">×</button>
-        <h2 className="text-lg font-semibold mb-4" style={{ color: C.text }}>💡 Share a New Idea</h2>
+        <button type="button" onClick={onClose} className="absolute top-3 right-3 w-9 h-9 rounded-full text-xl flex items-center justify-center" style={{ background: C.card, color: C.text }} aria-label={t('common.close')}>×</button>
+        <h2 className="text-lg font-semibold mb-4" style={{ color: C.text }}>{t('bazaar.createModalTitle')}</h2>
 
-        <label className="text-sm font-medium" style={{ color: C.text2 }}>Title</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder="A name for your idea" />
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldTitle')}</label>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder={t('bazaar.titlePlaceholder')} />
 
-        <label className="text-sm font-medium" style={{ color: C.text2 }}>Description</label>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-2 outline-none resize-none" style={field} placeholder="What is it about?" />
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldDescription')}</label>
+        <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-2 outline-none resize-none" style={field} placeholder={t('bazaar.descPlaceholder')} />
 
         <div className="flex justify-end mb-3">
           <button
@@ -1034,7 +1056,7 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
             className="inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-all"
             style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
           >
-            {coachBusy ? '✨ Coaching…' : '✨ Idea Coach'}
+            {coachBusy ? t('bazaar.coaching') : t('bazaar.ideaCoach')}
           </button>
         </div>
 
@@ -1042,16 +1064,16 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <div className="rounded-xl p-3 mb-3 text-xs space-y-2" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
             {coachResult.title && coachResult.title !== title && (
               <div>
-                <span className="font-semibold" style={{ color: C.text }}>Suggested title: </span>
+                <span className="font-semibold" style={{ color: C.text }}>{t('bazaar.suggestedTitle')} </span>
                 <button type="button" className="underline" style={{ color: C.brown }} onClick={() => setTitle(coachResult.title)}>
                   {coachResult.title}
                 </button>
-                <span style={{ color: C.text2 }}> (click to apply)</span>
+                <span style={{ color: C.text2 }}> {t('bazaar.clickToApply')}</span>
               </div>
             )}
             {coachResult.milestones.length > 0 && (
               <div>
-                <p className="font-semibold mb-1" style={{ color: C.text }}>Milestones applied ({coachResult.milestones.length}):</p>
+                <p className="font-semibold mb-1" style={{ color: C.text }}>{t('bazaar.milestonesApplied', { n: String(coachResult.milestones.length) })}</p>
                 <ul className="list-disc list-inside space-y-0.5" style={{ color: C.text2 }}>
                   {coachResult.milestones.map((m, i) => <li key={i}>{m}</li>)}
                 </ul>
@@ -1059,7 +1081,7 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
             )}
             {coachResult.constellation_questions.length > 0 && (
               <div>
-                <p className="font-semibold mb-1" style={{ color: C.text }}>Questions to explore:</p>
+                <p className="font-semibold mb-1" style={{ color: C.text }}>{t('bazaar.questionsToExplore')}</p>
                 <ul className="list-disc list-inside space-y-0.5" style={{ color: C.text2 }}>
                   {coachResult.constellation_questions.map((q, i) => <li key={i}>{q}</li>)}
                 </ul>
@@ -1070,7 +1092,7 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-sm font-medium" style={{ color: C.text2 }}>Category</label>
+            <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldCategory')}</label>
             <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field}>
               {BAZAAR_CATEGORIES.filter((c) => c.key !== 'all').map((c) => (
                 <option key={c.key} value={c.key}>{bazaarCategoryLabel(c.key, locale)}</option>
@@ -1078,13 +1100,13 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </select>
           </div>
           <div>
-            <label className="text-sm font-medium" style={{ color: C.text2 }}>Funding goal ($)</label>
-            <input value={goal} onChange={(e) => setGoal(e.target.value.replace(/\D/g, ''))} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} placeholder="optional" inputMode="numeric" />
+            <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldFundingGoal')}</label>
+            <input value={goal} onChange={(e) => setGoal(e.target.value.replace(/\D/g, ''))} className="w-full rounded-xl px-3 py-2.5 mt-1 outline-none" style={field} placeholder={t('common.optional')} inputMode="numeric" />
           </div>
         </div>
 
         <label className="text-sm font-medium mt-3 block" style={{ color: C.text2 }}>
-          Cover image <span className="font-normal opacity-70">(optional)</span>
+          {t('bazaar.fieldCoverImage')} <span className="font-normal opacity-70">{t('common.optional')}</span>
         </label>
         <div
           className="mt-1 mb-3 rounded-xl overflow-hidden"
@@ -1098,16 +1120,16 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
                 className="absolute top-2 right-2 rounded-lg px-2 py-1 text-xs font-semibold"
                 style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
               >
-                Remove
+                {t('bazaar.removeImage')}
               </button>
             </div>
           ) : (
             <label className="flex flex-col items-center justify-center gap-1 h-28 cursor-pointer px-4 text-center">
               <span className="text-sm font-semibold" style={{ color: C.brown }}>
-                Upload image
+                {t('bazaar.uploadImage')}
               </span>
               <span className="text-xs" style={{ color: C.text2 }}>
-                JPG, PNG, WebP or GIF · max 5MB
+                {t('bazaar.imageHint')}
               </span>
               <input
                 type="file"
@@ -1116,7 +1138,7 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
                   if (file && file.size > 5 * 1024 * 1024) {
-                    setError('Cover image must be 5MB or smaller.');
+                    setError(t('bazaar.imageTooLarge'));
                     e.target.value = '';
                     return;
                   }
@@ -1128,8 +1150,8 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
           )}
         </div>
 
-        <label className="text-sm font-medium" style={{ color: C.text2 }}>Roles needed (comma separated)</label>
-        <input value={roles} onChange={(e) => setRoles(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder="Writer, Designer, Developer" />
+        <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.fieldRolesNeeded')}</label>
+        <input value={roles} onChange={(e) => setRoles(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder={t('bazaar.rolesPlaceholder')} />
 
         <label className="text-sm font-medium" style={{ color: C.text2 }}>{t('bazaar.tagsLabel')}</label>
         <input value={tags} onChange={(e) => setTags(e.target.value)} className="w-full rounded-xl px-3 py-2.5 mt-1 mb-3 outline-none" style={field} placeholder={t('bazaar.tagsHint')} />
@@ -1140,7 +1162,7 @@ function CreateIdeaModal({ onClose, onCreated }: { onClose: () => void; onCreate
         {error && <div className="text-sm mt-3" style={{ color: '#c0392b' }}>{error}</div>}
 
         <button type="submit" disabled={saving} className="mt-5 w-full rounded-xl py-3 font-semibold text-white disabled:opacity-60" style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}>
-          {saving ? 'Planting…' : 'Plant the idea 🌱'}
+          {saving ? t('bazaar.planting') : t('bazaar.plantIdea')}
         </button>
       </motion.form>
     </motion.div>

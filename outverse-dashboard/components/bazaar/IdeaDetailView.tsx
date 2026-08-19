@@ -94,16 +94,16 @@ type Props = {
   crew?: IdeaCrew | null;
 };
 
-function formatDate(value?: string) {
-  if (!value) return 'Just now';
+function formatDate(value: string | undefined, justNow: string) {
+  if (!value) return justNow;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Just now';
+  if (Number.isNaN(date.getTime())) return justNow;
   return date.toLocaleString();
 }
 
-function displayName(user: BazaarIdea['owner']) {
+function displayName(user: BazaarIdea['owner'], anonymous: string) {
   const full = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-  return full || user.username || 'Anonymous';
+  return full || user.username || anonymous;
 }
 
 export default function IdeaDetailView({
@@ -171,7 +171,7 @@ export default function IdeaDetailView({
 
   async function submitComment() {
     if (!comment.trim()) {
-      setCommentError('Write a comment first.');
+      setCommentError(t('bazaar.writeCommentFirst'));
       return;
     }
     setCommentError('');
@@ -187,7 +187,7 @@ export default function IdeaDetailView({
       onCommentCreated(data);
       setComment('');
     } catch {
-      setCommentError('Could not post your comment.');
+      setCommentError(t('bazaar.postCommentFailed'));
     } finally {
       setCommenting(false);
     }
@@ -206,19 +206,19 @@ export default function IdeaDetailView({
       setEditingCommentId(null);
       setEditCommentText('');
     } catch {
-      setToast('Could not update your comment.');
+      setToast(t('bazaar.updateCommentFailed'));
       setTimeout(() => setToast(''), 2500);
     }
   }
 
   async function removeComment(commentId: number) {
-    if (!(await confirm('Delete this comment?', { danger: true, confirmLabel: 'Delete' }))) return;
+    if (!(await confirm(t('bazaar.confirmDeleteComment'), { danger: true, confirmLabel: t('common.delete') }))) return;
     try {
       const res = await apiFetchJson(`ideas/${idea.id}/comments/${commentId}/`, { method: 'DELETE' });
       if (!res.ok) throw new Error('failed');
       setLocalComments((current) => current.filter((c) => c.id !== commentId));
     } catch {
-      setToast('Could not delete your comment.');
+      setToast(t('bazaar.deleteCommentFailed'));
       setTimeout(() => setToast(''), 2500);
     }
   }
@@ -240,7 +240,7 @@ export default function IdeaDetailView({
         });
       }
     } catch {
-      setToast('Could not respond to this applicant. Please try again.');
+      setToast(t('bazaar.respondApplicantFailed'));
       setTimeout(() => setToast(''), 2500);
     }
   }
@@ -256,7 +256,7 @@ export default function IdeaDetailView({
       const data = (await res.json()) as BazaarIdea;
       setMilestonesLocal(data.milestones || next);
     } catch {
-      setToast('Could not update milestones.');
+      setToast(t('bazaar.updateMilestonesFailed'));
       setTimeout(() => setToast(''), 2500);
     } finally {
       setMilestonesSaving(false);
@@ -285,7 +285,7 @@ export default function IdeaDetailView({
 
   async function submitApplication() {
     if (!applyRole.trim()) {
-      setApplyError('Choose a role first.');
+      setApplyError(t('bazaar.chooseRoleFirst'));
       return;
     }
     setApplyError('');
@@ -302,10 +302,10 @@ export default function IdeaDetailView({
       setApplyOpen(false);
       setApplyMessage('');
       onApplySuccess();
-      setToast('Application sent to the idea owner.');
+      setToast(t('bazaar.applicationSent'));
       setTimeout(() => setToast(''), 2500);
     } catch (error) {
-      setApplyError(error instanceof Error ? error.message : 'Could not send application.');
+      setApplyError(error instanceof Error && error.message !== 'failed' ? error.message : t('bazaar.applicationFailed'));
     } finally {
       setApplying(false);
     }
@@ -324,10 +324,10 @@ export default function IdeaDetailView({
       });
       if (!res.ok) throw new Error('failed');
       onReportSuccess();
-      setToast('Idea reported successfully.');
+      setToast(t('bazaar.reportSuccess'));
       setTimeout(() => setToast(''), 2500);
     } catch {
-      setToast('Could not report this idea. Please try again.');
+      setToast(t('bazaar.reportFailed'));
       setTimeout(() => setToast(''), 2500);
     } finally {
       setReporting(false);
@@ -626,7 +626,7 @@ export default function IdeaDetailView({
                 style={{ background: C.card2, color: C.brownDk, border: `1px solid ${C.line}` }}
               >
                 <UsersIcon className="h-5 w-5" />
-                Apply to Collaborate
+                {t('bazaar.applyToCollaborate')}
               </button>
             ) : (
               <button
@@ -648,7 +648,7 @@ export default function IdeaDetailView({
               style={{ background: C.card2, color: C.brownDk, border: `1px solid ${C.line}` }}
             >
               <FlagIcon className="h-5 w-5" />
-              {reporting ? 'Reporting…' : 'Report idea'}
+              {reporting ? t('bazaar.reporting') : t('bazaar.reportIdea')}
             </button>
           ) : null}
           <p className="text-center text-xs mt-2" style={{ color: C.text2 }}>
@@ -664,19 +664,19 @@ export default function IdeaDetailView({
         >
           <div className="flex items-center justify-between gap-3 mb-3">
             <h2 className="text-lg font-semibold" style={{ color: C.text }}>
-              Collaboration applicants
+              {t('bazaar.applicantsTitle')}
             </h2>
             <span className="text-xs" style={{ color: C.text2 }}>
-              {idea.collaboration_request_count ?? applicantsLocal.length} total
+              {t('bazaar.applicantsTotal', { n: String(idea.collaboration_request_count ?? applicantsLocal.length) })}
             </span>
           </div>
           {applicantsLoading ? (
             <p className="text-sm" style={{ color: C.text2 }}>
-              Loading applicants…
+              {t('bazaar.loadingApplicants')}
             </p>
           ) : applicantsLocal.length === 0 ? (
             <div className="rounded-xl p-4 text-sm" style={{ background: C.card2, color: C.text2 }}>
-              No collaboration requests yet.
+              {t('bazaar.noApplicants')}
             </div>
           ) : (
             <div className="space-y-3">
@@ -698,7 +698,7 @@ export default function IdeaDetailView({
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-semibold text-sm" style={{ color: C.text }}>
-                          {displayName(applicant.user)}
+                          {displayName(applicant.user, t('bazaar.anonymousOwner'))}
                         </span>
                         <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: C.white, color: C.brownDk }}>
                           {applicant.role}
@@ -713,7 +713,7 @@ export default function IdeaDetailView({
                         </p>
                       ) : null}
                       <p className="mt-2 text-xs" style={{ color: C.text2 }}>
-                        {formatDate(applicant.created_at)}
+                        {formatDate(applicant.created_at, t('bazaar.justNow'))}
                       </p>
                       {canManage && applicant.status === 'pending' ? (
                         <div className="mt-3 flex gap-2">
@@ -723,7 +723,7 @@ export default function IdeaDetailView({
                             className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
                             style={{ background: C.brownDk }}
                           >
-                            Accept
+                            {t('bazaar.accept')}
                           </button>
                           <button
                             type="button"
@@ -731,7 +731,7 @@ export default function IdeaDetailView({
                             className="rounded-lg px-3 py-1.5 text-xs font-semibold"
                             style={{ background: C.card2, color: C.text }}
                           >
-                            Reject
+                            {t('bazaar.reject')}
                           </button>
                         </div>
                       ) : null}
@@ -750,10 +750,10 @@ export default function IdeaDetailView({
       >
         <div className="flex items-center justify-between gap-3 mb-3">
           <h2 className="text-lg font-semibold" style={{ color: C.text }}>
-            Discussion
+            {t('bazaar.discussionTitle')}
           </h2>
           <span className="text-xs" style={{ color: C.text2 }}>
-            {localComments.length} comments
+            {t('bazaar.commentsCount', { n: String(localComments.length) })}
           </span>
         </div>
         <div className="rounded-xl p-4 mb-4" style={{ background: C.card2 }}>
@@ -761,7 +761,7 @@ export default function IdeaDetailView({
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             rows={3}
-            placeholder="Share your thoughts about this idea…"
+            placeholder={t('bazaar.commentPlaceholder')}
             className="w-full rounded-xl px-3 py-2.5 outline-none resize-none text-sm"
             style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
           />
@@ -778,17 +778,17 @@ export default function IdeaDetailView({
               className="rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
               style={{ background: C.brownDk }}
             >
-              {commenting ? 'Posting…' : me ? 'Post comment' : 'Sign in to comment'}
+              {commenting ? t('bazaar.postingComment') : me ? t('bazaar.postComment') : t('bazaar.signInToComment')}
             </button>
           </div>
         </div>
         {commentsLoading ? (
           <p className="text-sm" style={{ color: C.text2 }}>
-            Loading comments…
+            {t('common.loading')}
           </p>
         ) : localComments.length === 0 ? (
           <div className="rounded-xl p-4 text-sm" style={{ background: C.card2, color: C.text2 }}>
-            No comments yet. Start the discussion.
+            {t('bazaar.noCommentsYet')}
           </div>
         ) : (
           <div className="space-y-3">
@@ -810,10 +810,10 @@ export default function IdeaDetailView({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-sm" style={{ color: C.text }}>
-                        {displayName(item.user)}
+                        {displayName(item.user, t('bazaar.anonymousOwner'))}
                       </span>
                       <span className="text-xs" style={{ color: C.text2 }}>
-                        {formatDate(item.created_at)}
+                        {formatDate(item.created_at, t('bazaar.justNow'))}
                       </span>
                       {me?.id === item.user.id ? (
                         <>
@@ -826,7 +826,7 @@ export default function IdeaDetailView({
                             className="text-xs font-semibold"
                             style={{ color: C.brown }}
                           >
-                            Edit
+                            {t('common.edit')}
                           </button>
                           <button
                             type="button"
@@ -834,7 +834,7 @@ export default function IdeaDetailView({
                             className="text-xs font-semibold"
                             style={{ color: '#c0392b' }}
                           >
-                            Delete
+                            {t('common.delete')}
                           </button>
                         </>
                       ) : null}
@@ -849,8 +849,8 @@ export default function IdeaDetailView({
                           style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
                         />
                         <div className="flex gap-2">
-                          <button type="button" onClick={() => void updateComment(item.id)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{ background: C.brownDk }}>Save</button>
-                          <button type="button" onClick={() => setEditingCommentId(null)} className="rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: C.white, color: C.text }}>Cancel</button>
+                          <button type="button" onClick={() => void updateComment(item.id)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{ background: C.brownDk }}>{t('common.save')}</button>
+                          <button type="button" onClick={() => setEditingCommentId(null)} className="rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ background: C.white, color: C.text }}>{t('common.cancel')}</button>
                         </div>
                       </div>
                     ) : (
@@ -878,10 +878,10 @@ export default function IdeaDetailView({
             onClick={(event) => event.stopPropagation()}
           >
             <h2 className="text-lg font-semibold mb-4" style={{ color: C.text }}>
-              Apply to Collaborate
+              {t('bazaar.applyToCollaborate')}
             </h2>
             <label className="text-sm font-medium" style={{ color: C.text2 }}>
-              Role
+              {t('bazaar.fieldRole')}
             </label>
             <select
               value={applyRole}
@@ -896,7 +896,7 @@ export default function IdeaDetailView({
               ))}
             </select>
             <label className="mt-4 block text-sm font-medium" style={{ color: C.text2 }}>
-              Message
+              {t('bazaar.fieldMessage')}
             </label>
             <textarea
               value={applyMessage}
@@ -904,7 +904,7 @@ export default function IdeaDetailView({
               rows={4}
               className="mt-1 w-full rounded-xl px-3 py-2.5 outline-none resize-none"
               style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
-              placeholder="Tell the owner why you’re a good fit."
+              placeholder={t('bazaar.applyMessagePlaceholder')}
             />
             {applyError ? (
               <p className="mt-3 text-sm" style={{ color: '#c0392b' }}>
@@ -918,7 +918,7 @@ export default function IdeaDetailView({
                 className="flex-1 rounded-xl py-3 text-sm font-semibold"
                 style={{ background: C.card2, color: C.text }}
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 type="button"
@@ -927,7 +927,7 @@ export default function IdeaDetailView({
                 className="flex-1 rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-60"
                 style={{ background: C.brownDk }}
               >
-                {applying ? 'Sending…' : 'Send application'}
+                {applying ? t('bazaar.sendingApplication') : t('bazaar.sendApplication')}
               </button>
             </div>
           </div>

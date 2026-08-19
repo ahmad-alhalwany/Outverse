@@ -76,7 +76,6 @@ class IdeaUserSerializer(serializers.ModelSerializer):
 
 class IdeaSerializer(serializers.ModelSerializer):
     owner = IdeaUserSerializer(read_only=True)
-    owner_id = serializers.IntegerField(write_only=True, required=False)
     supporters = serializers.SerializerMethodField()
     collaborators_count = serializers.SerializerMethodField()
     collaborators = IdeaUserSerializer(many=True, read_only=True)
@@ -94,7 +93,7 @@ class IdeaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Idea
         fields = [
-            'id', 'title', 'description', 'owner', 'owner_id',
+            'id', 'title', 'description', 'owner',
             'category', 'cover_url', 'cover_image', 'status', 'roles_needed', 'tags',
             'target_date', 'milestones',
             'funding_goal', 'funding_raised', 'supporters',
@@ -103,7 +102,7 @@ class IdeaSerializer(serializers.ModelSerializer):
             'is_voted', 'is_saved', 'is_owner', 'collab_project_id', 'silent_unlocked',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'status', 'funding_raised']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)

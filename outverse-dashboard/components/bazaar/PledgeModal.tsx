@@ -64,7 +64,11 @@ export default function PledgeModal({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data.detail === 'Insufficient coins.' ? t('bazaar.insufficientCoins') : t('bazaar.pledgeFailed'));
+        setError(
+          data.detail === 'Insufficient coins.'
+            ? t('bazaar.insufficientCoins')
+            : data.detail || t('bazaar.pledgeFailed'),
+        );
         return;
       }
       onPledged(data.funding_raised);
@@ -111,7 +115,7 @@ export default function PledgeModal({
         </label>
         {error && <div className="text-sm mt-3" style={{ color: '#c0392b' }}>{error}</div>}
         <div className="flex gap-3 mt-5">
-          <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 text-sm font-semibold" style={{ background: C.card2, color: C.text }}>{'Cancel'}</button>
+          <button type="button" onClick={onClose} className="flex-1 rounded-xl py-3 text-sm font-semibold" style={{ background: C.card2, color: C.text }}>{t('common.cancel')}</button>
           <button type="button" onClick={() => void confirmPledge()} disabled={pledging} className="flex-1 rounded-xl py-3 text-sm font-semibold text-white" style={{ background: C.brown }}>
             {pledging ? t('bazaar.pledging') : t('bazaar.pledge')}
           </button>

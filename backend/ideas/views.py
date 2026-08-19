@@ -191,6 +191,8 @@ class IdeaViewSet(viewsets.ModelViewSet):
 
         with transaction.atomic():
             idea = Idea.objects.select_for_update().get(pk=pk)
+            if idea.owner_id == user.id:
+                return Response({"detail": "You cannot pledge to your own idea."}, status=status.HTTP_400_BAD_REQUEST)
             profile = Profile.objects.select_for_update().get_or_create(user=user)[0]
             if profile.points < amount:
                 return Response(
@@ -199,6 +201,9 @@ class IdeaViewSet(viewsets.ModelViewSet):
                 )
             profile.points = F("points") - amount
             profile.save(update_fields=["points"])
+            owner_profile = Profile.objects.select_for_update().get_or_create(user_id=idea.owner_id)[0]
+            owner_profile.points = F("points") + amount
+            owner_profile.save(update_fields=["points"])
             pledge = IdeaPledge.objects.create(
                 idea=idea,
                 user=user,

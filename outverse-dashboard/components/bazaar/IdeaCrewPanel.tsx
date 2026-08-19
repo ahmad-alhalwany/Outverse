@@ -64,7 +64,7 @@ export default function IdeaCrewPanel({ crew }: { crew: IdeaCrew }) {
                 className="rounded-full px-3 py-1 text-xs font-medium"
                 style={{ background: 'rgba(255,255,255,0.06)', color: C.text }}
               >
-                {m.username || m.first_name || 'Member'}
+                {m.username || m.first_name || t('bazaar.member')}
                 {m.role ? ` · ${m.role}` : ''}
               </Link>
             ))}
