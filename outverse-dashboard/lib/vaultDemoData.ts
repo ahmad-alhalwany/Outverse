@@ -173,7 +173,7 @@ export function demoPlaceLabels(): Record<number, string> {
 }
 
 export function shouldUseVaultDemo(apiEmpty: boolean): boolean {
-  if (process.env.NEXT_PUBLIC_VAULT_DEMO === 'true') return true;
+  if (process.env.NEXT_PUBLIC_ENABLE_VAULT_DEMO === 'true') return true;
   return apiEmpty;
 }
 

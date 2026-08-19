@@ -168,7 +168,7 @@ export interface AdminBottle {
   location_lng?: number | null;
   created_at: string;
   is_opened?: boolean;
-  caught_by?: number | null;
+  is_caught?: boolean;
 }
 
 export interface AdminStory {

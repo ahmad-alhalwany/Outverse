@@ -5,11 +5,11 @@ from django.db.models import Max, Min
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework.response import Response
 from outverse.throttles import AnonReadThrottle, ContentPostCreateThrottle, ThrottleMixin
 
-from outverse.auth_utils import require_user, user_from_request
+from outverse.auth_utils import require_user
 
 from .models import MessageBottle
 from .serializers import (
@@ -28,6 +28,22 @@ def _bottle_is_drifting(bottle):
     )
 
 
+def _hidden_from_map_sender_ids():
+    """Senders whose bottle_privacy keeps them off the public map/recent feed."""
+    from preferences.models import UserPreferences
+
+    return UserPreferences.objects.filter(
+        bottle_privacy__in=['catch_only', 'private'],
+    ).values_list('user_id', flat=True)
+
+
+def _hidden_from_catch_sender_ids():
+    """Senders whose bottle_privacy keeps them fully out of the catch pool."""
+    from preferences.models import UserPreferences
+
+    return UserPreferences.objects.filter(bottle_privacy='private').values_list('user_id', flat=True)
+
+
 def active_drifting_bottles():
     return MessageBottle.objects.select_related('sender').filter(
         location_lat__isnull=False,
@@ -35,7 +51,7 @@ def active_drifting_bottles():
         expiry_time__gt=timezone.now(),
         caught_by__isnull=True,
         is_opened=False,
-    )
+    ).exclude(sender_id__in=_hidden_from_map_sender_ids())
 
 
 def _viewer_context(request):
@@ -121,10 +137,14 @@ class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('throw', 'catch', 'create', 'polish_tone'):
             return [IsAuthenticated()]
-        if self.action in ('my_bottles', 'caught'):
+        if self.action in ('my_bottles', 'caught', 'dashboard'):
             return [IsAuthenticated()]
         if self.action == 'destroy':
             return [IsAuthenticated()]
+        if self.action == 'list':
+            # No real feature lists every bottle unauthenticated — the default
+            # ModelViewSet list would otherwise leak every message ever thrown.
+            return [IsAdminUser()]
         return [AllowAny()]
 
     def retrieve(self, request, *args, **kwargs):
@@ -193,7 +213,7 @@ class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
             is_opened=False,
             caught_by__isnull=True,
             expiry_time__gt=timezone.now(),
-        ).exclude(sender_id=user.id)
+        ).exclude(sender_id=user.id).exclude(sender_id__in=_hidden_from_catch_sender_ids())
 
         bottle_id = request.data.get('bottle_id') or request.query_params.get('bottle_id')
         if bottle_id:
@@ -281,12 +301,10 @@ class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def dashboard(self, request):
-        viewer = user_from_request(request)
-        user_id = request.query_params.get('user') or request.query_params.get('user_id')
-        if not user_id and viewer:
-            user_id = viewer.id
-        if not user_id:
-            return Response({'error': 'user query param or auth required.'}, status=400)
+        user, err = require_user(request)
+        if err:
+            return err
+        user_id = user.id
 
         thrown_qs = MessageBottle.objects.filter(sender_id=user_id)
         caught = MessageBottle.objects.filter(caught_by_id=user_id).count()

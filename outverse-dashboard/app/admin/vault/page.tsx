@@ -19,8 +19,8 @@ export default function AdminVaultPage() {
     load();
   }, [load]);
 
-  const drifting = bottles.filter((b) => !b.is_opened && !b.caught_by).length;
-  const caught = bottles.filter((b) => b.caught_by).length;
+  const drifting = bottles.filter((b) => !b.is_opened && !b.is_caught).length;
+  const caught = bottles.filter((b) => b.is_caught).length;
 
   return (
     <AdminShell title="Vault (Bottles)" subtitle="Drifting messages across the cosmic sea">
@@ -62,7 +62,7 @@ export default function AdminVaultPage() {
                     {b.message}
                   </td>
                   <td>
-                    {b.caught_by ? (
+                    {b.is_caught ? (
                       <span className="admin-badge admin-badge--approved">Caught</span>
                     ) : b.is_opened ? (
                       <span className="admin-badge admin-badge--pending">Opened</span>

@@ -34,7 +34,7 @@ const PALETTES = {
 };
 
 export default function VaultWorldPage() {
-  const { t } = useLocale();
+  const { t, locale } = useLocale();
   const { theme } = useTheme();
   const C = PALETTES[theme === 'dark' ? 'dark' : 'light'];
   const [streak, setStreak] = useState(0);
@@ -44,7 +44,7 @@ export default function VaultWorldPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const ritual = await fetchDailyRitual({ lang: 'en' });
+        const ritual = await fetchDailyRitual({ lang: locale });
         if (ritual) setStreak(ritual.streak || 0);
       } catch { /* ignore */ }
       try {
@@ -60,7 +60,7 @@ export default function VaultWorldPage() {
         }
       } catch { /* ignore */ }
     })();
-  }, []);
+  }, [locale]);
 
   const chambers = [
     {
@@ -149,7 +149,7 @@ export default function VaultWorldPage() {
                     className="mt-5 inline-flex text-sm font-semibold transition group-hover:translate-x-1"
                     style={{ color: C.accent }}
                   >
-                    Enter →
+                    {t('vault.enter')}
                   </span>
                 </Link>
               </motion.div>

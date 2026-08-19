@@ -4,10 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import WorldShell from '@/components/world/WorldShell';
 import { useTheme } from '@/components/ThemeProvider';
-import { apiUrl } from '@/lib/api';
+import { useLocale } from '@/components/LocaleProvider';
+import { apiFetch } from '@/lib/api';
 import { CheckBadgeIcon, ClockIcon } from '@heroicons/react/24/outline';
-
-const BASE = apiUrl('challenges');
 
 const PALETTES = {
   light: {
@@ -53,15 +52,16 @@ type Entry = {
   };
 };
 
-function formatDate(value?: string) {
-  if (!value) return 'Just now';
+function formatDate(value: string | undefined, justNow: string) {
+  if (!value) return justNow;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Just now';
+  if (Number.isNaN(date.getTime())) return justNow;
   return date.toLocaleString();
 }
 
 export default function LabHistoryPage() {
   const { theme } = useTheme();
+  const { t } = useLocale();
   const C = PALETTES[theme];
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,7 +72,7 @@ export default function LabHistoryPage() {
       setLoading(true);
       setError(false);
       try {
-        const res = await fetch(`${BASE}/user_entries/`, { credentials: 'include' });
+        const res = await apiFetch('challenges/user_entries/');
         if (!res.ok) throw new Error('failed');
         setEntries(await res.json());
       } catch {
@@ -89,10 +89,10 @@ export default function LabHistoryPage() {
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold" style={{ color: C.brown }}>
-            My Lab History
+            {t('lab.historyTitle')}
           </h1>
           <p className="text-sm" style={{ color: C.text2 }}>
-            Every challenge entry you&apos;ve submitted across the Weirdness Lab.
+            {t('lab.historySubtitle')}
           </p>
         </div>
         <Link
@@ -100,21 +100,21 @@ export default function LabHistoryPage() {
           className="rounded-xl px-4 py-2 text-sm font-semibold"
           style={{ background: C.white, color: C.brownDk, border: `1px solid ${C.line}` }}
         >
-          Back to Lab
+          {t('lab.backToLab')}
         </Link>
       </div>
 
       {loading ? (
         <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
-          Loading your entries…
+          {t('lab.loadingEntries')}
         </div>
       ) : error ? (
         <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
-          Could not load your lab history.
+          {t('lab.historyLoadError')}
         </div>
       ) : entries.length === 0 ? (
         <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
-          You haven&apos;t submitted any challenge entries yet.
+          {t('lab.noEntries')}
         </div>
       ) : (
         <div className="space-y-4">
@@ -127,7 +127,7 @@ export default function LabHistoryPage() {
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-lg font-semibold" style={{ color: C.text }}>
-                    {entry.challenge?.title || entry.challenge_title || 'Challenge'}
+                    {entry.challenge?.title || entry.challenge_title || t('lab.challengeFallback')}
                   </h2>
                   <p className="mt-2 text-sm whitespace-pre-wrap" style={{ color: C.text2 }}>
                     {entry.content}
@@ -141,11 +141,11 @@ export default function LabHistoryPage() {
                   }}
                 >
                   {entry.is_approved ? <CheckBadgeIcon className="h-4 w-4" /> : <ClockIcon className="h-4 w-4" />}
-                  {entry.is_approved ? 'Approved' : 'Pending review'}
+                  {entry.is_approved ? t('lab.approved') : t('lab.pendingReview')}
                 </span>
               </div>
               <div className="mt-4 flex flex-wrap items-center gap-4 text-xs" style={{ color: C.text2 }}>
-                <span>{formatDate(entry.submitted_at || entry.created_at)}</span>
+                <span>{formatDate(entry.submitted_at || entry.created_at, t('lab.justNow'))}</span>
                 {entry.challenge?.type ? <span>{entry.challenge.type}</span> : null}
               </div>
             </div>

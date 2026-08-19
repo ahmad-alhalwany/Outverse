@@ -22,7 +22,11 @@ class BottleThrowSerializer(serializers.ModelSerializer):
     """Used when a user throws a new bottle into the cosmos."""
 
     expires_at = serializers.DateTimeField(source='expiry_time', read_only=True)
-    caught_by = serializers.IntegerField(source='caught_by_id', read_only=True, allow_null=True)
+    # is_caught (not the raw catcher ID) — a sender looking up the raw catcher's
+    # user ID would undermine the same anonymity BottleCatchSerializer
+    # deliberately protects in the other direction via sender_anon_id. Callers
+    # (admin dashboard, my_bottles/caught status badges) only ever need the flag.
+    is_caught = serializers.SerializerMethodField()
     caught_at = serializers.DateTimeField(read_only=True, allow_null=True)
 
     class Meta:
@@ -30,9 +34,12 @@ class BottleThrowSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'message', 'emotion_type',
             'location_lat', 'location_lng', 'created_at', 'expires_at',
-            'is_opened', 'caught_by', 'caught_at',
+            'is_opened', 'is_caught', 'caught_at',
         ]
-        read_only_fields = ['id', 'created_at', 'expires_at', 'is_opened', 'caught_by', 'caught_at']
+        read_only_fields = ['id', 'created_at', 'expires_at', 'is_opened', 'is_caught', 'caught_at']
+
+    def get_is_caught(self, obj):
+        return obj.caught_by_id is not None
 
     def create(self, validated_data):
         request = self.context.get('request')

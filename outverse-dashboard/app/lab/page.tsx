@@ -12,6 +12,7 @@ import { relayQuestion } from '@/lib/differentiatorApi';
 import InspirationRelayList from '@/components/lab/InspirationRelayList';
 import type { RelayUser } from '@/lib/differentiatorApi';
 import { useTheme } from '@/components/ThemeProvider';
+import { useLocale } from '@/components/LocaleProvider';
 import {
   ClockIcon,
   UsersIcon,
@@ -23,8 +24,6 @@ import {
   PencilIcon,
   MusicalNoteIcon,
   SwatchIcon,
-  ShareIcon,
-  BookmarkIcon,
   InformationCircleIcon,
   PlusIcon,
 } from '@heroicons/react/24/outline';
@@ -67,39 +66,12 @@ const PALETTES = {
 };
 
 const CATEGORIES = [
-  { key: 'all', label: 'All', icon: InformationCircleIcon },
-  { key: 'writing', label: 'Writing', icon: PencilIcon },
-  { key: 'art', label: 'Art', icon: SwatchIcon },
-  { key: 'music', label: 'Music', icon: MusicalNoteIcon },
-  { key: 'experimental', label: 'Experimental', icon: FireIcon },
-  { key: 'practical', label: 'Practical', icon: TrophyIcon },
-] as const;
-
-const FRIENDS = [
-  {
-    name: 'Amy',
-    avatar:
-      'https://images.unsplash.com/photo-1544723795-3fb6469f5b39?auto=format&fit=crop&w=160&q=80',
-    active: true,
-  },
-  {
-    name: 'Tom',
-    avatar:
-      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=160&q=80',
-    active: false,
-  },
-  {
-    name: 'Sara',
-    avatar:
-      'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=160&q=80',
-    active: false,
-  },
-  {
-    name: 'Mike',
-    avatar:
-      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=160&q=80',
-    active: false,
-  },
+  { key: 'all', labelKey: 'lab.categoryAll', icon: InformationCircleIcon },
+  { key: 'writing', labelKey: 'lab.categoryWriting', icon: PencilIcon },
+  { key: 'art', labelKey: 'lab.categoryArt', icon: SwatchIcon },
+  { key: 'music', labelKey: 'lab.categoryMusic', icon: MusicalNoteIcon },
+  { key: 'experimental', labelKey: 'lab.categoryExperimental', icon: FireIcon },
+  { key: 'practical', labelKey: 'lab.categoryPractical', icon: TrophyIcon },
 ] as const;
 
 type Challenge = {
@@ -153,8 +125,9 @@ function useLabColors() {
   return PALETTES[theme];
 }
 
-function typeLabel(key: string) {
-  return CATEGORIES.find((c) => c.key === key)?.label || key;
+function typeLabel(key: string, t: (key: string) => string) {
+  const cat = CATEGORIES.find((c) => c.key === key);
+  return cat ? t(cat.labelKey) : key;
 }
 
 function useCountdown(target?: string) {
@@ -174,28 +147,21 @@ function useCountdown(target?: string) {
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
 
-function formatDate(value?: string) {
-  if (!value) return 'Just now';
+function formatDate(value: string | undefined, justNow: string) {
+  if (!value) return justNow;
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Just now';
+  if (Number.isNaN(date.getTime())) return justNow;
   return date.toLocaleString();
 }
 
-function displayName(user: ChallengeSubmission['user']) {
+function displayName(user: ChallengeSubmission['user'], anonymous: string) {
   const full = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-  return full || user.username || 'Anonymous';
-}
-
-function challengeMinutes(participants: number) {
-  return Math.max(8, Math.min(18, Math.round(participants / 28)));
-}
-
-function archiveScore(participants: number) {
-  return `${Math.max(76, Math.min(96, 72 + (participants % 25)))}%`;
+  return full || user.username || anonymous;
 }
 
 function WeirdnessLabContent() {
   const C = useLabColors();
+  const { t, locale } = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [daily, setDaily] = useState<Challenge | null>(null);
@@ -230,7 +196,7 @@ function WeirdnessLabContent() {
       return;
     }
     void (async () => {
-      const data = await fetchDailyRitual({ lang: 'en' });
+      const data = await fetchDailyRitual({ lang: locale });
       if (data) {
         setRitualStreak(data.streak);
         setRitualCompleted(data.ritual.completed);
@@ -240,7 +206,7 @@ function WeirdnessLabContent() {
         setRitualCompleted(false);
       }
     })();
-  }, []);
+  }, [locale]);
 
   const loadArchive = useCallback(
     async (page: number, append: boolean) => {
@@ -268,7 +234,7 @@ function WeirdnessLabContent() {
     try {
       // Ensure today's bright AI daily exists, then load stats + archive.
       const [dRes, sRes] = await Promise.all([
-        apiFetchJson('challenges/ensure-daily/', { method: 'POST', json: { lang: 'en' } }),
+        apiFetchJson('challenges/ensure-daily/', { method: 'POST', json: { lang: locale } }),
         apiFetch('challenges/stats/'),
       ]);
       let ok = true;
@@ -298,7 +264,7 @@ function WeirdnessLabContent() {
     } finally {
       setLoading(false);
     }
-  }, [loadArchive]);
+  }, [loadArchive, locale]);
 
   const filteredArchive = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -348,21 +314,21 @@ function WeirdnessLabContent() {
         if (res.ok) {
           const data = await res.json();
           if (data?.id) setViewChallenge(data);
-          else setLinkError('Could not find that challenge.');
+          else setLinkError(t('lab.challengeNotFound'));
         } else {
-          setLinkError('Could not load that challenge.');
+          setLinkError(t('lab.challengeLoadFailed'));
         }
       } catch {
-        setLinkError('Could not load that challenge. Check the connection.');
+        setLinkError(t('lab.challengeLoadFailedConnection'));
       }
     })();
-  }, [searchParams]);
+  }, [searchParams, t]);
 
   async function completeRitual() {
     if (!getToken() || completingRitual) return;
     setCompletingRitual(true);
     try {
-      const data = await completeDailyRitual({ lang: 'en' });
+      const data = await completeDailyRitual({ lang: locale });
       if (data) {
         setRitualCompleted(data.ritual.completed);
         setRitualStreak(data.streak);
@@ -378,7 +344,7 @@ function WeirdnessLabContent() {
 
   async function submit() {
     if (!daily || !response.trim()) {
-      setError('Write something first ✍️');
+      setError(t('lab.writeSomethingFirst'));
       return;
     }
     setError('');
@@ -390,14 +356,22 @@ function WeirdnessLabContent() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'failed');
+        const msg = data.error || 'failed';
+        // Already submitted — refresh state so participants stay accurate instead of erroring.
+        if (typeof msg === 'string' && /already submitted/i.test(msg)) {
+          setSubmitted(true);
+          setResponse('');
+          setTimeout(() => setSubmitted(false), 3500);
+          return;
+        }
+        throw new Error(msg);
       }
       setSubmitted(true);
       setResponse('');
       onChallengeSubmitted(daily.id, daily.participants + 1);
       setTimeout(() => setSubmitted(false), 3500);
-    } catch {
-      setError('Could not submit. Check the connection.');
+    } catch (e) {
+      setError(e instanceof Error && e.message !== 'failed' ? e.message : t('lab.couldNotSubmitConnection'));
     } finally {
       setSubmitting(false);
     }
@@ -421,25 +395,25 @@ function WeirdnessLabContent() {
         <div className="lab-topbar">
           <div>
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: C.brown }}>
-              Worlds · Lab
+              {t('lab.worldsLab')}
             </p>
-            <h1 className="lab-title">Daily Challenge</h1>
-            <p className="lab-subtitle">Let your creativity flow</p>
+            <h1 className="lab-title">{t('lab.dailyChallenge')}</h1>
+            <p className="lab-subtitle">{t('lab.letCreativityFlow')}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {ritualStreak !== null && (
               <div
                 className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold"
                 style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text }}
-                title="Daily ritual streak"
+                title={t('lab.ritualStreakTitle')}
               >
                 <FireIcon className="h-4 w-4 shrink-0" style={{ color: C.brown }} />
                 <span>
-                  {ritualStreak > 0 ? `${ritualStreak} day streak` : 'Start a streak today'}
+                  {ritualStreak > 0 ? t('lab.dayStreak', { count: String(ritualStreak) }) : t('lab.startStreakToday')}
                 </span>
                 {ritualCompleted && (
                   <span className="text-xs font-medium" style={{ color: C.successText }}>
-                    · Done today
+                    {t('lab.doneToday')}
                   </span>
                 )}
               </div>
@@ -452,11 +426,11 @@ function WeirdnessLabContent() {
                 className="inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold text-white"
                 style={{ background: C.brownDk }}
               >
-                {completingRitual ? 'Completing…' : 'Complete daily ritual'}
+                {completingRitual ? t('lab.completingRitual') : t('lab.completeDailyRitual')}
               </button>
             ) : null}
             <Link href="/lab/history" className="lab-history-link">
-              My Lab History
+              {t('lab.historyTitle')}
             </Link>
           </div>
         </div>
@@ -470,19 +444,19 @@ function WeirdnessLabContent() {
           >
             <span>{linkError}</span>
             <button type="button" onClick={() => setLinkError('')} className="font-semibold" style={{ color: C.brownDk }}>
-              Dismiss
+              {t('lab.dismiss')}
             </button>
           </div>
         )}
 
         {loading ? (
           <div className="rounded-[28px] p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
-            Loading today&apos;s challenge…
+            {t('lab.loadingTodaysChallenge')}
           </div>
         ) : loadError ? (
           <div className="rounded-[28px] p-10 text-center" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
             <p className="font-semibold mb-2" style={{ color: C.text }}>
-              Could not load the lab
+              {t('lab.couldNotLoadLab')}
             </p>
             <button
               type="button"
@@ -490,7 +464,7 @@ function WeirdnessLabContent() {
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white"
               style={{ background: C.brownDk }}
             >
-              Try again
+              {t('common.tryAgain')}
             </button>
           </div>
         ) : !daily ? (
@@ -498,7 +472,7 @@ function WeirdnessLabContent() {
             className="rounded-[28px] p-10 text-center"
             style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text2 }}
           >
-            No active daily challenge right now. Check the archive below. ✨
+            {t('lab.noActiveDailyChallenge')}
           </div>
         ) : (
           <>
@@ -506,26 +480,15 @@ function WeirdnessLabContent() {
               <div className="lab-daily-meta">
                 <div className="lab-countdown-pill">
                   <ClockIcon className="h-4 w-4" />
-                  <span>{countdown} remaining</span>
-                </div>
-                <div className="lab-action-icons">
-                  <button type="button" aria-label="Save challenge" className="lab-icon-btn">
-                    <BookmarkIcon className="h-4 w-4" />
-                  </button>
-                  <button type="button" aria-label="Share challenge" className="lab-icon-btn">
-                    <ShareIcon className="h-4 w-4" />
-                  </button>
-                  <button type="button" aria-label="Challenge info" className="lab-icon-btn">
-                    <InformationCircleIcon className="h-4 w-4" />
-                  </button>
+                  <span>{t('lab.remaining', { countdown })}</span>
                 </div>
               </div>
 
               <h2 className="lab-question">{daily.title}</h2>
               <p className="text-sm mt-2 mb-3 opacity-80" style={{ color: '#E9E1FA' }}>
                 {daily.is_ai_generated
-                  ? '✨ Crafted by Cosmory AI — bright ideas only, no darkness.'
-                  : '✨ Today’s bright Lab prompt.'}
+                  ? t('lab.aiCraftedBright')
+                  : t('lab.todaysBrightPrompt')}
               </p>
               {daily.description ? (
                 <p className="text-sm mb-4 opacity-75" style={{ color: '#E9E1FA' }}>
@@ -538,17 +501,14 @@ function WeirdnessLabContent() {
                 onChange={(e) => setResponse(e.target.value)}
                 rows={5}
                 maxLength={500}
-                placeholder="Start writing..."
+                placeholder={t('lab.startWriting')}
                 className="lab-response-box"
               />
 
               <div className="lab-daily-footer">
                 <div className="lab-daily-stats">
                   <span className="lab-inline-stat">
-                    <UsersIcon className="h-4 w-4" /> {daily.participants.toLocaleString()} people writing
-                  </span>
-                  <span className="lab-inline-stat">
-                    <ClockIcon className="h-4 w-4" /> avg. {challengeMinutes(daily.participants)} min
+                    <UsersIcon className="h-4 w-4" /> {daily.participants.toLocaleString()} {t('lab.peopleWriting')}
                   </span>
                 </div>
                 <div className="lab-submit-wrap">
@@ -561,12 +521,12 @@ function WeirdnessLabContent() {
                         className="text-sm font-medium"
                         style={{ color: C.successText }}
                       >
-                        Submitted! 🎉
+                        {t('lab.submitted')}
                       </motion.span>
                     )}
                   </AnimatePresence>
                   <button onClick={() => void submit()} disabled={submitting} className="lab-submit-btn">
-                    {submitting ? 'Submitting…' : 'Submit Challenge'}
+                    {submitting ? t('lab.submitting') : t('lab.submitChallenge')}
                   </button>
                 </div>
               </div>
@@ -578,7 +538,7 @@ function WeirdnessLabContent() {
             </motion.section>
 
             <div className="lab-category-row">
-              {CATEGORIES.filter((item) => item.key !== 'practical').map((item) => {
+              {CATEGORIES.map((item) => {
                 const Icon = item.icon;
                 return (
                   <button
@@ -587,34 +547,16 @@ function WeirdnessLabContent() {
                     className={`lab-category-pill ${category === item.key ? 'lab-category-pill--active' : ''}`}
                   >
                     <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
+                    <span>{t(item.labelKey)}</span>
                   </button>
                 );
               })}
             </div>
-
-            <section className="lab-section-head">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="lab-section-title">Challenge Friends</h3>
-                <span className="lab-see-all">See All</span>
-              </div>
-              <div className="lab-friends-row">
-                {FRIENDS.map((friend) => (
-                  <div key={friend.name} className="lab-friend">
-                    <div className="lab-friend-avatar-wrap">
-                      <div className="lab-friend-avatar" style={{ backgroundImage: `url(${friend.avatar})` }} />
-                      <span className={`lab-friend-status ${friend.active ? 'lab-friend-status--active' : ''}`} />
-                    </div>
-                    <span>{friend.name}</span>
-                  </div>
-                ))}
-              </div>
-            </section>
           </>
         )}
 
         <div className="lab-archive-head">
-          <h3 className="lab-section-title">Community Challenges</h3>
+          <h3 className="lab-section-title">{t('lab.communityChallenges')}</h3>
           {getToken() ? (
             <button
               type="button"
@@ -623,7 +565,7 @@ function WeirdnessLabContent() {
               style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
             >
               <PlusIcon className="h-4 w-4" />
-              Publish challenge
+              {t('lab.publishChallenge')}
             </button>
           ) : null}
         </div>
@@ -633,7 +575,7 @@ function WeirdnessLabContent() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search challenges..."
+            placeholder={t('lab.searchChallenges')}
             className="w-full rounded-full pl-10 pr-4 py-2.5 text-sm outline-none"
             style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
           />
@@ -644,7 +586,7 @@ function WeirdnessLabContent() {
             className="rounded-[28px] p-8 text-center mt-4"
             style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text2 }}
           >
-            No past challenges match your search yet.
+            {t('lab.noPastChallenges')}
           </div>
         ) : (
           <>
@@ -667,7 +609,7 @@ function WeirdnessLabContent() {
                   className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                   style={{ background: C.brownDk }}
                 >
-                  {archiveLoadingMore ? 'Loading…' : 'Load more challenges'}
+                  {archiveLoadingMore ? t('search.loadingMore') : t('lab.loadMoreChallenges')}
                 </button>
               </div>
             ) : null}
@@ -675,9 +617,9 @@ function WeirdnessLabContent() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6">
-          <StatCard icon={UsersIcon} value={stats?.participants ?? 0} label="Participants" />
-          <StatCard icon={FireIcon} value={`${stats?.success_rate ?? 0}%`} label="Success Rate" />
-          <StatCard icon={TrophyIcon} value={stats?.challenges ?? 0} label="Challenges" />
+          <StatCard icon={UsersIcon} value={stats?.participants ?? 0} label={t('lab.participants')} />
+          <StatCard icon={FireIcon} value={`${stats?.success_rate ?? 0}%`} label={t('lab.successRate')} />
+          <StatCard icon={TrophyIcon} value={stats?.challenges ?? 0} label={t('lab.challengesStat')} />
         </div>
       </div>
 
@@ -710,11 +652,12 @@ function WeirdnessLabContent() {
 
 export default function WeirdnessLabPage() {
   const C = useLabColors();
+  const { t } = useLocale();
   return (
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center" style={{ background: C.cream, color: C.text2 }}>
-          Loading…
+          {t('search.loadingMore')}
         </div>
       }
     >
@@ -735,6 +678,7 @@ function ChallengeViewModal({
   onSubmitted: (challengeId: number, participants: number) => void;
 }) {
   const C = useLabColors();
+  const { t } = useLocale();
   const me = getUser();
   const isOwner = Boolean(ch.is_owner || me?.is_staff || (me?.id && ch.created_by?.id === me.id));
   const [response, setResponse] = useState('');
@@ -773,9 +717,9 @@ function ChallengeViewModal({
         json: { is_approved: approve },
       });
       if (res.ok) await loadSubmissions();
-      else setError('Could not update submission.');
+      else setError(t('lab.couldNotUpdateSubmission'));
     } catch {
-      setError('Could not update submission.');
+      setError(t('lab.couldNotUpdateSubmission'));
     } finally {
       setModeratingId(null);
     }
@@ -783,7 +727,7 @@ function ChallengeViewModal({
 
   async function submitEntry() {
     if (!response.trim()) {
-      setError('Write something first ✍️');
+      setError(t('lab.writeSomethingFirst'));
       return;
     }
     setError('');
@@ -809,7 +753,7 @@ function ChallengeViewModal({
       await loadSubmissions();
       setTimeout(() => setSubmitted(false), 3000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not submit. Check the connection.');
+      setError(e instanceof Error && e.message !== 'Submit failed' ? e.message : t('lab.couldNotSubmitConnection'));
     } finally {
       setSubmitting(false);
     }
@@ -846,22 +790,22 @@ function ChallengeViewModal({
             onClick={onClose}
             className="absolute top-3 right-3 w-9 h-9 rounded-full text-lg flex items-center justify-center"
             style={{ background: C.card, color: C.text }}
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             ×
           </button>
           <div className="flex flex-wrap gap-2 pr-10">
             <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: C.card2, color: C.brown }}>
-              {typeLabel(ch.type)}
+              {typeLabel(ch.type, t)}
             </span>
             {isTodayDaily && (
               <span className="px-2.5 py-1 rounded-full text-xs font-semibold text-white" style={{ background: C.brown }}>
-                Today&apos;s daily
+                {t('lab.todaysDaily')}
               </span>
             )}
             {(ch.is_ai_generated || ch.is_daily) && (
               <span className="px-2.5 py-1 rounded-full text-xs font-semibold" style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee' }}>
-                AI · bright only
+                {t('lab.aiBrightOnly')}
               </span>
             )}
             {ch.difficulty && (
@@ -879,17 +823,17 @@ function ChallengeViewModal({
           <p className="text-xs mt-1" style={{ color: C.text2 }}>
             By{' '}
             {ch.is_daily || ch.is_ai_generated
-              ? 'Cosmory AI'
+              ? t('lab.byCosmoryAI')
               : ch.created_by
-                ? displayName(ch.created_by)
-                : 'Community'}
+                ? displayName(ch.created_by, t('lab.anonymous'))
+                : t('lab.byCommunity')}
           </p>
           <p className="text-sm mt-2 leading-relaxed" style={{ color: C.text2 }}>
-            {ch.description || 'No description for this challenge.'}
+            {ch.description || t('lab.noDescription')}
           </p>
           <p className="text-xs mt-3 flex items-center gap-1" style={{ color: C.text2 }}>
             <UsersIcon className="h-3.5 w-3.5" />
-            {ch.participants.toLocaleString()} participants
+            {ch.participants.toLocaleString()} {t('lab.participantsSuffix')}
           </p>
 
           <textarea
@@ -897,7 +841,7 @@ function ChallengeViewModal({
             onChange={(e) => setResponse(e.target.value)}
             rows={3}
             maxLength={1000}
-            placeholder="Share your creative response…"
+            placeholder={t('lab.shareResponse')}
             className="w-full rounded-xl px-3 py-2.5 mt-4 outline-none resize-none text-sm"
             style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
           />
@@ -910,8 +854,8 @@ function ChallengeViewModal({
             {submitted && (
               <span className="text-sm font-medium" style={{ color: C.successText }}>
                 {ch.is_daily || ch.is_ai_generated
-                  ? 'Submitted! 🎉'
-                  : 'Submitted — waiting for the author to approve.'}
+                  ? t('lab.submitted')
+                  : t('lab.submittedWaitingApproval')}
               </span>
             )}
             <button
@@ -922,46 +866,46 @@ function ChallengeViewModal({
               style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`, boxShadow: C.btnShadow }}
             >
               <PaperAirplaneIcon className="h-4 w-4" />
-              {submitting ? 'Submitting…' : 'Submit entry'}
+              {submitting ? t('lab.submitting') : t('lab.submitEntry')}
             </button>
           </div>
 
           <div className="mt-6 border-t pt-5" style={{ borderColor: C.line }}>
             <div className="flex items-center justify-between gap-3 mb-3">
               <h3 className="text-base font-semibold" style={{ color: C.text }}>
-                Community submissions
+                {t('lab.communitySubmissions')}
               </h3>
               <span className="text-xs" style={{ color: C.text2 }}>
-                {submissions.length} shown
+                {t('lab.shownCount', { count: String(submissions.length) })}
               </span>
             </div>
             <p className="text-xs mb-3" style={{ color: C.text2 }}>
               {isOwner && !ch.is_daily
-                ? 'You own this challenge — approve or hide entries below.'
-                : 'Community entries appear after the challenge author approves them.'}{' '}
+                ? t('lab.ownerModerationHint')
+                : t('lab.communityModerationHint')}{' '}
               <Link href="/lab/history" className="font-semibold underline" style={{ color: C.brownDk }}>
-                Lab history
+                {t('lab.labHistoryLink')}
               </Link>
             </p>
             {loadingSubmissions ? (
               <p className="text-sm" style={{ color: C.text2 }}>
-                Loading submissions…
+                {t('lab.loadingSubmissions')}
               </p>
             ) : submissionsError ? (
               <div className="rounded-2xl p-4 text-sm flex items-center justify-between gap-3" style={{ background: C.card2, color: C.text2 }}>
-                <span>Could not load submissions.</span>
+                <span>{t('lab.couldNotLoadSubmissions')}</span>
                 <button
                   type="button"
                   onClick={() => void loadSubmissions()}
                   className="font-semibold shrink-0"
                   style={{ color: C.brownDk }}
                 >
-                  Retry
+                  {t('lab.retry')}
                 </button>
               </div>
             ) : submissions.length === 0 ? (
               <div className="rounded-2xl p-4 text-sm" style={{ background: C.card2, color: C.text2 }}>
-                No community submissions yet.
+                {t('lab.noSubmissionsYet')}
               </div>
             ) : (
               <div className="space-y-3">
@@ -983,7 +927,7 @@ function ChallengeViewModal({
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-semibold text-sm" style={{ color: C.text }}>
-                            {displayName(submission.user)}
+                            {displayName(submission.user, t('lab.anonymous'))}
                           </span>
                           {submission.is_approved ? (
                             <span
@@ -991,14 +935,14 @@ function ChallengeViewModal({
                               style={{ background: C.successBg, color: C.successText }}
                             >
                               <CheckBadgeIcon className="h-3.5 w-3.5" />
-                              Approved
+                              {t('lab.approved')}
                             </span>
                           ) : (
                             <span
                               className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"
                               style={{ background: 'rgba(251, 191, 36, 0.18)', color: '#fbbf24' }}
                             >
-                              Pending review
+                              {t('lab.pendingReview')}
                             </span>
                           )}
                         </div>
@@ -1007,7 +951,7 @@ function ChallengeViewModal({
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <p className="text-xs" style={{ color: C.text2 }}>
-                            {formatDate(submission.submitted_at || submission.created_at)}
+                            {formatDate(submission.submitted_at || submission.created_at, t('lab.justNow'))}
                           </p>
                           {isOwner && !ch.is_daily ? (
                             <div className="ml-auto flex gap-2">
@@ -1019,7 +963,7 @@ function ChallengeViewModal({
                                   className="rounded-full px-3 py-1 text-[11px] font-bold text-white disabled:opacity-60"
                                   style={{ background: C.brown }}
                                 >
-                                  Approve
+                                  {t('lab.approve')}
                                 </button>
                               ) : (
                                 <button
@@ -1029,7 +973,7 @@ function ChallengeViewModal({
                                   className="rounded-full px-3 py-1 text-[11px] font-semibold disabled:opacity-60"
                                   style={{ background: C.card2, color: C.text2 }}
                                 >
-                                  Hide
+                                  {t('lab.hide')}
                                 </button>
                               )}
                             </div>
@@ -1056,6 +1000,7 @@ function CreateChallengeModal({
   onCreated: (challenge: Challenge) => void;
 }) {
   const C = useLabColors();
+  const { t } = useLocale();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState('writing');
@@ -1073,7 +1018,7 @@ function CreateChallengeModal({
 
   async function submit() {
     if (!title.trim()) {
-      setError('Add a title for your challenge.');
+      setError(t('lab.addTitlePrompt'));
       return;
     }
     setBusy(true);
@@ -1097,11 +1042,11 @@ function CreateChallengeModal({
             : typeof data.detail === 'string'
               ? data.detail
               : data.error;
-        throw new Error(fieldErr || 'Could not publish challenge.');
+        throw new Error(fieldErr || t('lab.couldNotPublish'));
       }
       onCreated((await res.json()) as Challenge);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not publish challenge.');
+      setError(e instanceof Error ? e.message : t('lab.couldNotPublish'));
     } finally {
       setBusy(false);
     }
@@ -1125,13 +1070,13 @@ function CreateChallengeModal({
         style={{ background: C.cream, border: `1px solid ${C.line}` }}
       >
         <h2 className="text-lg font-bold" style={{ color: C.text }}>
-          Publish a community challenge
+          {t('lab.publishCommunityChallenge')}
         </h2>
         <p className="text-sm mt-1 mb-4" style={{ color: C.text2 }}>
-          You moderate the entries. Keep it bright and creative.
+          {t('lab.moderateEntriesHint')}
         </p>
         <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
-          Title
+          {t('lab.titleLabel')}
         </label>
         <input
           value={title}
@@ -1139,10 +1084,10 @@ function CreateChallengeModal({
           maxLength={120}
           className="w-full rounded-xl px-3 py-2.5 text-sm outline-none mb-3"
           style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
-          placeholder="e.g. Invent a festival for kindness"
+          placeholder={t('lab.titlePlaceholder')}
         />
         <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
-          Description
+          {t('lab.descriptionLabel')}
         </label>
         <textarea
           value={description}
@@ -1151,10 +1096,10 @@ function CreateChallengeModal({
           maxLength={500}
           className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none mb-3"
           style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
-          placeholder="What should people create?"
+          placeholder={t('lab.descriptionPlaceholder')}
         />
         <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
-          Cover image <span className="font-normal opacity-70">(optional)</span>
+          {t('lab.coverImageLabel')} <span className="font-normal opacity-70">{t('lab.optional')}</span>
         </label>
         <div
           className="mb-3 rounded-xl overflow-hidden"
@@ -1168,16 +1113,16 @@ function CreateChallengeModal({
                 className="absolute top-2 right-2 rounded-lg px-2 py-1 text-xs font-semibold"
                 style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
               >
-                Remove
+                {t('lab.removeImage')}
               </button>
             </div>
           ) : (
             <label className="flex flex-col items-center justify-center gap-1 h-28 cursor-pointer px-4 text-center">
               <span className="text-sm font-semibold" style={{ color: C.brown }}>
-                Upload image
+                {t('lab.uploadImage')}
               </span>
               <span className="text-xs" style={{ color: C.text2 }}>
-                JPG, PNG, WebP or GIF · max 5MB
+                {t('lab.imageFormatHint')}
               </span>
               <input
                 type="file"
@@ -1186,7 +1131,7 @@ function CreateChallengeModal({
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
                   if (file && file.size > 5 * 1024 * 1024) {
-                    setError('Cover image must be 5MB or smaller.');
+                    setError(t('lab.imageTooLarge'));
                     e.target.value = '';
                     return;
                   }
@@ -1200,7 +1145,7 @@ function CreateChallengeModal({
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
-              Type
+              {t('lab.typeLabel')}
             </label>
             <select
               value={type}
@@ -1210,14 +1155,14 @@ function CreateChallengeModal({
             >
               {CATEGORIES.filter((c) => c.key !== 'all').map((c) => (
                 <option key={c.key} value={c.key}>
-                  {c.label}
+                  {t(c.labelKey)}
                 </option>
               ))}
             </select>
           </div>
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: C.text2 }}>
-              Difficulty
+              {t('lab.difficultyLabel')}
             </label>
             <select
               value={difficulty}
@@ -1225,9 +1170,9 @@ function CreateChallengeModal({
               className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
               style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
             >
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
+              <option value="easy">{t('lab.difficultyEasy')}</option>
+              <option value="medium">{t('lab.difficultyMedium')}</option>
+              <option value="hard">{t('lab.difficultyHard')}</option>
             </select>
           </div>
         </div>
@@ -1243,7 +1188,7 @@ function CreateChallengeModal({
             className="rounded-xl px-4 py-2 text-sm font-semibold"
             style={{ background: C.card2, color: C.text2 }}
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -1252,7 +1197,7 @@ function CreateChallengeModal({
             className="rounded-xl px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
             style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
           >
-            {busy ? 'Publishing…' : 'Publish'}
+            {busy ? t('lab.publishing') : t('lab.publish')}
           </button>
         </div>
       </motion.div>
@@ -1285,6 +1230,7 @@ function ArchiveCard({
   onOpen: () => void;
 }) {
   const C = useLabColors();
+  const { t } = useLocale();
   return (
     <motion.button
       type="button"
@@ -1303,8 +1249,10 @@ function ArchiveCard({
           {ch.title}
         </h4>
         <div className="mt-2 flex items-center justify-between gap-3 text-sm" style={{ color: C.text2 }}>
-          <span>{typeLabel(ch.type)}</span>
-          <span style={{ color: '#7C3AED', fontWeight: 700 }}>{isDaily ? 'Today' : archiveScore(ch.participants)}</span>
+          <span>{typeLabel(ch.type, t)}</span>
+          <span style={{ color: '#7C3AED', fontWeight: 700 }}>
+            {isDaily ? t('lab.today') : `${ch.participants.toLocaleString()} ${t('lab.participantsSuffix')}`}
+          </span>
         </div>
       </div>
     </motion.button>

@@ -34,6 +34,7 @@ import { getUser } from '@/lib/auth';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { apiUrl } from '@/lib/api';
 import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
+import { useLocale } from '@/components/LocaleProvider';
 import './vault.css';
 
 const BASE = apiUrl('bottles');
@@ -82,18 +83,18 @@ function useVaultColors() {
   return PALETTES[theme];
 }
 
-type Emotion = { key: string; label: string; emoji: string; color: string };
+type Emotion = { key: string; labelKey: string; emoji: string; color: string };
 
 const EMOTIONS: Emotion[] = [
-  { key: 'joy', label: 'Joy', emoji: '☀️', color: '#F2A93B' },
-  { key: 'hope', label: 'Hope', emoji: '🌅', color: '#3FB6A0' },
-  { key: 'calm', label: 'Calm', emoji: '🌊', color: '#4FA3D1' },
-  { key: 'love', label: 'Love', emoji: '💗', color: '#E86A9C' },
-  { key: 'sad', label: 'Sadness', emoji: '🌧️', color: '#6E7BD1' },
-  { key: 'lonely', label: 'Loneliness', emoji: '🌙', color: '#9385D6' },
-  { key: 'anxious', label: 'Anxiety', emoji: '🌪️', color: '#E08653' },
-  { key: 'nostalgic', label: 'Nostalgia', emoji: '📻', color: '#C49A5A' },
-  { key: 'mystery', label: 'Mystery', emoji: '✨', color: '#A86BB0' },
+  { key: 'joy', labelKey: 'bottles.emotionJoy', emoji: '☀️', color: '#F2A93B' },
+  { key: 'hope', labelKey: 'bottles.emotionHope', emoji: '🌅', color: '#3FB6A0' },
+  { key: 'calm', labelKey: 'bottles.emotionCalm', emoji: '🌊', color: '#4FA3D1' },
+  { key: 'love', labelKey: 'bottles.emotionLove', emoji: '💗', color: '#E86A9C' },
+  { key: 'sad', labelKey: 'bottles.emotionSad', emoji: '🌧️', color: '#6E7BD1' },
+  { key: 'lonely', labelKey: 'bottles.emotionLonely', emoji: '🌙', color: '#9385D6' },
+  { key: 'anxious', labelKey: 'bottles.emotionAnxious', emoji: '🌪️', color: '#E08653' },
+  { key: 'nostalgic', labelKey: 'bottles.emotionNostalgic', emoji: '📻', color: '#C49A5A' },
+  { key: 'mystery', labelKey: 'bottles.emotionMystery', emoji: '✨', color: '#A86BB0' },
 ];
 
 function emotionMeta(key: string | null | undefined): Emotion {
@@ -134,6 +135,7 @@ type PlaceLabelMap = Record<number, string>;
 
 function EmotionVaultContent() {
   const C = useVaultColors();
+  const { t } = useLocale();
   const { theme } = useTheme();
   const confirm = useConfirm();
   const router = useRouter();
@@ -208,11 +210,11 @@ function EmotionVaultContent() {
               lng: b.location_lng as number,
               color: em.color,
               emoji: em.emoji,
-              label: em.label,
+              label: t(em.labelKey),
               emotion: b.emotion_type,
               expiresAt: b.expires_at,
               isMine: b.is_mine,
-              message: b.message,
+              message: b.is_mine && !prefs.showOwnMessageOnMap ? null : b.message,
             };
           });
         setMarkers(gotMarkers);
@@ -417,11 +419,11 @@ function EmotionVaultContent() {
     btnShadow: C.btnShadow,
   };
 
-  const displayRecent = demoMode ? recent : recent;
+  const displayRecent = recent;
   const previewMessage = (b: ApiBottle) => b.message || null;
 
   const deleteBottle = async (id: number) => {
-    if (!(await confirm('Delete this bottle permanently?', { danger: true, confirmLabel: 'Delete' }))) return;
+    if (!(await confirm(t('bottles.confirmDeleteBottle'), { danger: true, confirmLabel: t('common.delete') }))) return;
     try {
       const res = await apiFetch(`bottles/${id}/`, { method: 'DELETE' });
       if (!res.ok) return;
@@ -439,8 +441,8 @@ function EmotionVaultContent() {
       <div className="vault-page__inner">
         <header className="vault-header">
           <div className="flex items-center gap-2 min-w-0">
-            <h1 className="vault-header__title">Emotion Vault</h1>
-            {demoMode && <span className="vault-demo-badge">Demo data</span>}
+            <h1 className="vault-header__title">{t('bottles.title')}</h1>
+            {demoMode && <span className="vault-demo-badge">{t('bottles.demoData')}</span>}
           </div>
           <div className="vault-header__search">
             <div className="vault-header__search-wrap">
@@ -450,12 +452,12 @@ function EmotionVaultContent() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearchSubmit()}
-                placeholder="Search location…"
+                placeholder={t('bottles.searchLocationPlaceholder')}
               />
             </div>
           </div>
           <div className="vault-header__actions">
-            <Link href="/settings" className="vault-icon-btn" aria-label="Settings">
+            <Link href="/settings" className="vault-icon-btn" aria-label={t('nav.settings')}>
               <Cog6ToothIcon className="h-5 w-5" />
             </Link>
             <Link href={authUser?.id ? `/profile/${authUser.id}` : '/login'} className="vault-avatar">
@@ -466,8 +468,8 @@ function EmotionVaultContent() {
 
         {loadError && (
           <div className="vault-error-banner">
-            <span>Could not load the vault. Showing your last known data.</span>
-            <button type="button" onClick={() => void loadData()}>Retry</button>
+            <span>{t('bottles.loadError')}</span>
+            <button type="button" onClick={() => void loadData()}>{t('bottles.retry')}</button>
           </div>
         )}
 
@@ -476,23 +478,23 @@ function EmotionVaultContent() {
           <div className="lg:col-span-3 order-2 lg:order-1 space-y-4" id="timeline">
             <div className="rounded-3xl p-4" style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}>
               <div className="flex items-center justify-between gap-2 mb-3">
-                <h2 className="text-sm font-bold" style={{ color: C.text }}>Vault Filters</h2>
+                <h2 className="text-sm font-bold" style={{ color: C.text }}>{t('bottles.filtersTitle')}</h2>
                 <div className="flex rounded-full p-1" style={{ background: C.card2 }}>
-                  <button type="button" onClick={() => setActiveTab('vault')} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: activeTab === 'vault' ? C.white : 'transparent', color: activeTab === 'vault' ? C.brown : C.text2 }}>My Vault</button>
-                  <button type="button" onClick={() => setActiveTab('catches')} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: activeTab === 'catches' ? C.white : 'transparent', color: activeTab === 'catches' ? C.brown : C.text2 }}>My Catches</button>
+                  <button type="button" onClick={() => setActiveTab('vault')} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: activeTab === 'vault' ? C.white : 'transparent', color: activeTab === 'vault' ? C.brown : C.text2 }}>{t('bottles.myVaultTab')}</button>
+                  <button type="button" onClick={() => setActiveTab('catches')} className="px-3 py-1.5 rounded-full text-xs font-semibold" style={{ background: activeTab === 'catches' ? C.white : 'transparent', color: activeTab === 'catches' ? C.brown : C.text2 }}>{t('bottles.myCatchesTab')}</button>
                 </div>
               </div>
               {activeTab === 'vault' && (
                 <label className="flex items-center gap-2 text-xs mb-2" style={{ color: C.text2 }}>
                   <input type="checkbox" checked={includeExpired} onChange={(e) => setIncludeExpired(e.target.checked)} />
-                  Include expired bottles
+                  {t('bottles.includeExpired')}
                 </label>
               )}
               <div className="space-y-3">
                 <select value={emotionFilter} onChange={(e) => setEmotionFilter(e.target.value)} className="w-full rounded-2xl px-3 py-2 text-sm outline-none" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text }}>
-                  <option value="all">All emotions</option>
+                  <option value="all">{t('bottles.allEmotions')}</option>
                   {EMOTIONS.map((emotion) => (
-                    <option key={emotion.key} value={emotion.key}>{emotion.label}</option>
+                    <option key={emotion.key} value={emotion.key}>{t(emotion.labelKey)}</option>
                   ))}
                 </select>
                 <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full rounded-2xl px-3 py-2 text-sm outline-none" style={{ background: C.card2, border: `1px solid ${C.line}`, color: C.text }} />
@@ -530,39 +532,41 @@ function EmotionVaultContent() {
 
             {markers.length > 0 && (
               <p className="text-xs mt-2 text-center" style={{ color: C.text2 }}>
-                🍶 {markers.length} drifting {markers.length === 1 ? 'bottle' : 'bottles'} · colored rings show how each area feels
+                {markers.length === 1
+                  ? t('bottles.driftingBottlesOne', { count: String(markers.length) })
+                  : t('bottles.driftingBottlesMany', { count: String(markers.length) })}
               </p>
             )}
 
             <div className="vault-stats-bar">
               <span className="flex items-center gap-2 flex-wrap">
-                Current Mood:
+                {t('bottles.currentMood')}
                 {currentMood ? (
                   <span
                     className="vault-mood-pill"
                     style={{ background: `${currentMood.color}20`, color: currentMood.color }}
                   >
-                    {currentMood.emoji} {currentMood.label}
+                    {currentMood.emoji} {t(currentMood.labelKey)}
                   </span>
                 ) : (
                   <span>—</span>
                 )}
               </span>
               <span>
-                <strong style={{ color: 'var(--vault-text)' }}>{thrown}</strong> bottles thrown ·{' '}
-                <strong style={{ color: 'var(--vault-text)' }}>{caught}</strong> bottles caught
+                <strong style={{ color: 'var(--vault-text)' }}>{thrown}</strong> {t('bottles.bottlesThrown')} ·{' '}
+                <strong style={{ color: 'var(--vault-text)' }}>{caught}</strong> {t('bottles.bottlesCaught')}
               </span>
             </div>
 
             <div className="mt-5 rounded-3xl p-4" style={{ background: C.white, border: `1px solid ${C.line}`, boxShadow: C.shadowSm }}>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold" style={{ color: C.text }}>{activeTab === 'vault' ? 'My Bottles' : 'My Catches'}</h2>
-                <span className="text-xs" style={{ color: C.text2 }}>{activeTab === 'vault' ? myActive.length : caughtBottles.length} entries</span>
+                <h2 className="text-base font-bold" style={{ color: C.text }}>{activeTab === 'vault' ? t('bottles.myBottlesTitle') : t('bottles.myCatchesTitle')}</h2>
+                <span className="text-xs" style={{ color: C.text2 }}>{t('bottles.entriesCount', { count: String(activeTab === 'vault' ? myActive.length : caughtBottles.length) })}</span>
               </div>
               <div className="space-y-3">
                 {(activeTab === 'vault' ? myActive : caughtBottles).length === 0 ? (
                   <p className="text-sm" style={{ color: C.text2 }}>
-                    {activeTab === 'vault' ? 'No bottles match these filters.' : 'No catches match these filters.'}
+                    {activeTab === 'vault' ? t('bottles.noBottlesMatch') : t('bottles.noCatchesMatch')}
                   </p>
                 ) : (
                   (activeTab === 'vault' ? myActive : caughtBottles).map((bottle) => {
@@ -572,15 +576,15 @@ function EmotionVaultContent() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <span className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-semibold" style={{ background: `${emotion.color}22`, color: emotion.color }}>
-                              {emotion.emoji} {emotion.label}
+                              {emotion.emoji} {t(emotion.labelKey)}
                             </span>
-                            <p className="mt-2 text-sm leading-relaxed" style={{ color: C.text }}>{bottle.message || 'Caught bottle'}</p>
+                            <p className="mt-2 text-sm leading-relaxed" style={{ color: C.text }}>{bottle.message || t('bottles.caughtBottleFallback')}</p>
                             <p className="mt-2 text-xs" style={{ color: C.text2 }}>
                               <RelativeTime date={activeTab === 'catches' && bottle.caught_at ? bottle.caught_at : bottle.created_at} />
                             </p>
                           </div>
                           {activeTab === 'vault' && (
-                            <button type="button" onClick={() => deleteBottle(bottle.id)} className="rounded-full p-2" style={{ background: C.white, color: C.brown, border: `1px solid ${C.line}` }} aria-label="Delete bottle">
+                            <button type="button" onClick={() => deleteBottle(bottle.id)} className="rounded-full p-2" style={{ background: C.white, color: C.brown, border: `1px solid ${C.line}` }} aria-label={t('bottles.deleteBottleLabel')}>
                               <TrashIcon className="h-4 w-4" />
                             </button>
                           )}
@@ -598,18 +602,18 @@ function EmotionVaultContent() {
             <div className="hidden lg:flex flex-col gap-2">
               <button type="button" onClick={() => setThrowOpen(true)} className="vault-btn-primary">
                 <PaperAirplaneIcon className="h-5 w-5" />
-                Throw a Bottle
+                {t('bottles.throwBottleBtn')}
               </button>
               <button type="button" onClick={() => setCatchOpen(true)} className="vault-btn-secondary">
                 <Squares2X2Icon className="h-5 w-5" />
-                Catch a Bottle
+                {t('bottles.catchBottleBtn')}
               </button>
             </div>
 
             {myActive.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold mb-2" style={{ color: C.text }}>
-                  Your active bottles ({myActive.length})
+                  {t('bottles.activeBottlesTitle', { count: String(myActive.length) })}
                 </h3>
                 <div className="space-y-2">
                   {myActive.map((b) => {
@@ -623,7 +627,7 @@ function EmotionVaultContent() {
                         style={{ background: C.card2, border: `1px solid ${C.line}` }}
                       >
                         <span className="text-xs font-medium" style={{ color: m.color }}>
-                          {m.emoji} {m.label}
+                          {m.emoji} {t(m.labelKey)}
                         </span>
                         {b.message && (
                           <p className="text-sm mt-1 line-clamp-2" style={{ color: C.text }}>
@@ -643,11 +647,11 @@ function EmotionVaultContent() {
             )}
 
             <h3 className="text-sm font-semibold pt-1" style={{ color: 'var(--vault-text)' }}>
-              Recent Bottles
+              {t('bottles.recentBottlesTitle')}
             </h3>
             {displayRecent.length === 0 && (
               <div className="vault-card text-sm" style={{ color: 'var(--vault-muted)' }}>
-                No drifting bottles right now — throw one with a location to appear on the map.
+                {t('bottles.noDriftingBottles')}
               </div>
             )}
             {displayRecent.map((b) => {
@@ -655,7 +659,7 @@ function EmotionVaultContent() {
               const place =
                 placeLabels[b.id] ??
                 (b as ApiBottle & { place?: string }).place ??
-                (b.location_lat != null ? 'On map' : null);
+                (b.location_lat != null ? t('bottles.onMap') : null);
               const msg = previewMessage(b);
               return (
                 <button
@@ -676,10 +680,10 @@ function EmotionVaultContent() {
                       className="px-2 py-0.5 rounded-full text-xs font-medium"
                       style={{ background: `${m.color}18`, color: m.color }}
                     >
-                      {m.emoji} {m.label}
+                      {m.emoji} {t(m.labelKey)}
                     </span>
                     <span className="flex items-center gap-2">
-                      <span className="text-xs" style={{ color: 'var(--vault-muted)' }}>Anonymous</span>
+                      <span className="text-xs" style={{ color: 'var(--vault-muted)' }}>{t('bottles.anonymous')}</span>
                       <RelativeTime date={b.created_at} className="text-xs" style={{ color: 'var(--vault-muted)' }} />
                     </span>
                   </div>
@@ -776,25 +780,26 @@ export default function EmotionVaultPage() {
 // ----------------------------- Sub-components -----------------------------
 
 function MoodTimeline({ timeline }: { timeline: TimelineDay[] }) {
+  const { t } = useLocale();
   return (
     <div className="vault-card">
-      <h3 className="vault-card__title">Your Mood Timeline</h3>
+      <h3 className="vault-card__title">{t('bottles.moodTimelineTitle')}</h3>
       <div className="vault-timeline-grid">
-        {timeline.map((t) => {
-          const has = !!t.emotion;
-          const m = emotionMeta(t.emotion);
+        {timeline.map((day) => {
+          const has = !!day.emotion;
+          const m = emotionMeta(day.emotion);
           return (
             <div
-              key={t.day}
-              title={has ? `Day ${t.day} · ${m.label}` : `Day ${t.day}`}
-              className={`vault-timeline-cell${t.day === 1 ? ' vault-timeline-cell--active' : ''}`}
+              key={day.day}
+              title={has ? t('bottles.dayLabel', { day: String(day.day), mood: t(m.labelKey) }) : t('bottles.dayLabelNoMood', { day: String(day.day) })}
+              className={`vault-timeline-cell${day.day === 1 ? ' vault-timeline-cell--active' : ''}`}
               style={
                 has
                   ? { background: `${m.color}14`, borderColor: `${m.color}35` }
                   : undefined
               }
             >
-              <span>{t.day}</span>
+              <span>{day.day}</span>
               <span className="vault-timeline-cell__emoji">{has ? m.emoji : '·'}</span>
             </div>
           );
@@ -805,30 +810,31 @@ function MoodTimeline({ timeline }: { timeline: TimelineDay[] }) {
 }
 
 function MonthlySummary({ insights, happyPct }: { insights: Insight[]; happyPct: number }) {
-  const rows =
-    insights.length > 0
-      ? moodSummaryRows(insights)
-      : moodSummaryRows(DEMO_DASHBOARD.insights);
+  const { t } = useLocale();
 
   return (
     <div className="vault-card">
-      <h3 className="vault-card__title">Mood Insights</h3>
-      {rows.map((row) => (
-        <div key={row.key}>
-          <div className="vault-summary-row">
-            <span>
-              {row.emoji} {row.label}
-            </span>
-            <span style={{ color: row.color, fontWeight: 600 }}>{row.pct}%</span>
+      <h3 className="vault-card__title">{t('bottles.moodInsights')}</h3>
+      {insights.length === 0 ? (
+        <p className="text-sm" style={{ color: 'var(--vault-muted)' }}>{t('bottles.moodInsightsEmpty')}</p>
+      ) : (
+        moodSummaryRows(insights).map((row) => (
+          <div key={row.key}>
+            <div className="vault-summary-row">
+              <span>
+                {row.emoji} {t(`bottles.mood${row.key.charAt(0).toUpperCase()}${row.key.slice(1)}`)}
+              </span>
+              <span style={{ color: row.color, fontWeight: 600 }}>{row.pct}%</span>
+            </div>
+            <div className="vault-summary-bar">
+              <div className="vault-summary-bar__fill" style={{ width: `${row.pct}%`, background: row.color }} />
+            </div>
           </div>
-          <div className="vault-summary-bar">
-            <div className="vault-summary-bar__fill" style={{ width: `${row.pct}%`, background: row.color }} />
-          </div>
-        </div>
-      ))}
+        ))
+      )}
       {happyPct > 0 && (
         <p className="text-xs mt-2" style={{ color: 'var(--vault-muted)' }}>
-          Positive mood days: <strong>{happyPct}%</strong>
+          {t('bottles.positiveMoodDays')} <strong>{happyPct}%</strong>
         </p>
       )}
     </div>
@@ -837,6 +843,7 @@ function MonthlySummary({ insights, happyPct }: { insights: Insight[]; happyPct:
 
 function ModalShell({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   const C = useVaultColors();
+  const { t } = useLocale();
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -858,7 +865,7 @@ function ModalShell({ children, onClose }: { children: ReactNode; onClose: () =>
           onClick={onClose}
           className="absolute top-3 right-3 w-9 h-9 rounded-full text-xl flex items-center justify-center"
           style={{ background: C.card, color: C.text }}
-          aria-label="Close"
+          aria-label={t('common.close')}
         >
           ×
         </button>
@@ -897,7 +904,8 @@ function ThrowBottleModal({
   onLocationChange: (loc: { lat: number; lng: number; label: string } | null) => void;
 }) {
   const C = useVaultColors();
-  const [message, setMessage] = useState(ideaId ? `A spark from Bazaar idea #${ideaId}…` : '');
+  const { t } = useLocale();
+  const [message, setMessage] = useState(ideaId ? t('bottles.ideaSparkPrefix', { id: ideaId }) : '');
   const [emotion, setEmotion] = useState('mystery');
   const [location, setLocation] = useState<{ lat: number; lng: number; label: string } | null>(
     initialLocation ?? null,
@@ -927,10 +935,10 @@ function ThrowBottleModal({
     const loc = await getLocation();
     setLocating(false);
     if (!loc) {
-      setError('Could not read GPS. Search a place or tap Pick on map.');
+      setError(t('bottles.gpsError'));
       return;
     }
-    const label = (await reverseGeocodeLabel(loc.lat, loc.lng)) || 'My location';
+    const label = (await reverseGeocodeLabel(loc.lat, loc.lng)) || t('bottles.myLocationFallback');
     applyLocation({ ...loc, label });
   }
 
@@ -942,7 +950,7 @@ function ThrowBottleModal({
     const hits = await searchLocationSuggestions(q, 5);
     setSearchingPlace(false);
     setSuggestions(hits);
-    if (!hits.length) setError('No places found. Try another search.');
+    if (!hits.length) setError(t('bottles.noPlacesFound'));
   }
 
   async function handlePolish() {
@@ -959,11 +967,11 @@ function ThrowBottleModal({
   async function handleThrow(e: React.FormEvent) {
     e.preventDefault();
     if (!message.trim()) {
-      setError('Write a message before sending it to the cosmos.');
+      setError(t('bottles.writeMessageFirst'));
       return;
     }
     if (!location) {
-      setError('Choose where this bottle appears — GPS, search, or pick on the map.');
+      setError(t('bottles.chooseLocationFirst'));
       return;
     }
     setError('');
@@ -983,7 +991,7 @@ function ThrowBottleModal({
       onThrown();
       setTimeout(onClose, 1600);
     } catch {
-      setError('The bottle slipped away. Check your connection and try again.');
+      setError(t('bottles.bottleSlippedAway'));
     } finally {
       setThrowing(false);
     }
@@ -996,12 +1004,12 @@ function ThrowBottleModal({
           <motion.div initial={{ y: 40, opacity: 0, scale: 0.6 }} animate={{ y: -30, opacity: 1, scale: 1 }} transition={{ duration: 1.2, type: 'spring' }} className="text-6xl">
             🍶
           </motion.div>
-          <p className="mt-4" style={{ color: C.text2 }}>Your bottle is drifting through the cosmos…</p>
+          <p className="mt-4" style={{ color: C.text2 }}>{t('bottles.bottleDrifting')}</p>
         </div>
       ) : (
         <form onSubmit={handleThrow}>
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: C.text }}>
-            <span>🚀</span> Throw a bottle
+            {t('bottles.throwTitle')}
           </h2>
           <div className="flex flex-wrap gap-2 mb-4">
             {EMOTIONS.map((em) => (
@@ -1018,14 +1026,14 @@ function ThrowBottleModal({
                 }}
               >
                 <span className="mr-1">{em.emoji}</span>
-                {em.label}
+                {t(em.labelKey)}
               </button>
             ))}
           </div>
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Whisper your message to the cosmos…"
+            placeholder={t('bottles.messagePlaceholder')}
             maxLength={500}
             rows={4}
             className="w-full rounded-xl p-3 outline-none resize-none"
@@ -1034,7 +1042,7 @@ function ThrowBottleModal({
 
           <div className="mt-3 rounded-xl p-3" style={{ background: C.card2, border: `1px solid ${C.line}` }}>
             <p className="text-xs font-semibold mb-2" style={{ color: C.text }}>
-              📍 Where should this bottle appear?
+              {t('bottles.whereAppear')}
             </p>
             <div className="flex flex-wrap gap-2 mb-2">
               <button
@@ -1044,7 +1052,7 @@ function ThrowBottleModal({
                 className="rounded-full px-3 py-1.5 text-xs font-semibold"
                 style={{ background: C.white, color: C.brown, border: `1px solid ${C.line}` }}
               >
-                {locating ? 'Locating…' : 'Use my GPS'}
+                {locating ? t('bottles.locating') : t('bottles.useMyGps')}
               </button>
               <button
                 type="button"
@@ -1052,7 +1060,7 @@ function ThrowBottleModal({
                 className="rounded-full px-3 py-1.5 text-xs font-semibold text-white"
                 style={{ background: C.brownDk }}
               >
-                Pick on map
+                {t('bottles.pickOnMap')}
               </button>
             </div>
             <div className="flex gap-2">
@@ -1060,7 +1068,7 @@ function ThrowBottleModal({
                 value={placeQuery}
                 onChange={(e) => setPlaceQuery(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), void runPlaceSearch())}
-                placeholder="Search city, street, landmark…"
+                placeholder={t('bottles.searchPlacePlaceholder')}
                 className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
                 style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
               />
@@ -1071,7 +1079,7 @@ function ThrowBottleModal({
                 className="rounded-xl px-3 py-2 text-xs font-semibold text-white"
                 style={{ background: C.brown }}
               >
-                {searchingPlace ? '…' : 'Find'}
+                {searchingPlace ? '…' : t('bottles.find')}
               </button>
             </div>
             {suggestions.length > 0 && (
@@ -1096,18 +1104,18 @@ function ThrowBottleModal({
             )}
             {location ? (
               <p className="text-xs mt-2 font-medium" style={{ color: C.brown }}>
-                Selected: {location.label}
+                {t('bottles.selectedLocation', { label: location.label })}
                 <button
                   type="button"
                   className="ml-2 underline opacity-80"
                   onClick={() => applyLocation(null)}
                 >
-                  Clear
+                  {t('bottles.clear')}
                 </button>
               </p>
             ) : (
               <p className="text-xs mt-2" style={{ color: C.text2 }}>
-                Required to show on the map for 24 hours.
+                {t('bottles.locationRequired')}
               </p>
             )}
           </div>
@@ -1121,7 +1129,7 @@ function ThrowBottleModal({
               className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
               style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})` }}
             >
-              {polishing ? '✨ Polishing…' : '✨ Polish tone'}
+              {polishing ? t('bottles.polishing') : t('bottles.polishTone')}
             </button>
           </div>
           {polishNote ? (
@@ -1134,7 +1142,7 @@ function ThrowBottleModal({
             className="mt-4 w-full rounded-xl py-3 font-semibold text-white transition-all disabled:opacity-60"
             style={{ background: `linear-gradient(90deg, ${C.brown}, ${C.brownDk})`, boxShadow: C.btnShadow }}
           >
-            {throwing ? 'Drifting away…' : 'Send to the cosmos'}
+            {throwing ? t('bottles.driftingAway') : t('bottles.sendToCosmos')}
           </button>
         </form>
       )}
@@ -1160,6 +1168,7 @@ function BottlePreviewModal({
   onCatch: () => void | Promise<void>;
 }) {
   const C = useVaultColors();
+  const { t } = useLocale();
   const m = bottle ? emotionMeta(bottle.emotion_type) : null;
   const [opening, setOpening] = useState(false);
 
@@ -1179,10 +1188,10 @@ function BottlePreviewModal({
         <div className="text-center py-6">
           <p className="text-4xl mb-3">🌊</p>
           <p className="font-semibold" style={{ color: C.text }}>
-            Bottle not found
+            {t('bottles.bottleNotFound')}
           </p>
           <p className="text-sm mt-2" style={{ color: C.text2 }}>
-            It may have expired or already been caught.
+            {t('bottles.bottleNotFoundHint')}
           </p>
         </div>
       ) : (
@@ -1192,11 +1201,11 @@ function BottlePreviewModal({
               className="px-2.5 py-1 rounded-full text-xs font-medium"
               style={{ background: `${m!.color}22`, color: m!.color }}
             >
-              {m!.emoji} {m!.label}
+              {m!.emoji} {t(m!.labelKey)}
             </span>
             {bottle.is_mine && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: C.card2, color: C.brown }}>
-                Yours
+                {t('bottles.yours')}
               </span>
             )}
           </div>
@@ -1206,7 +1215,7 @@ function BottlePreviewModal({
               {placeLabel}
             </p>
           )}
-          <p className="text-xs mt-2" style={{ color: C.text2 }}>From an anonymous traveler</p>
+          <p className="text-xs mt-2" style={{ color: C.text2 }}>{t('bottles.fromAnonymousTraveler')}</p>
           {bottle.message && (
             <p className="text-sm mt-4 leading-relaxed whitespace-pre-wrap" style={{ color: C.text }}>
               {bottle.message}
@@ -1214,7 +1223,7 @@ function BottlePreviewModal({
           )}
           {bottle.expires_at && (
             <p className="text-xs mt-3" style={{ color: C.text2 }}>
-              ⏳ Vanishes in {formatBottleTimeLeft(bottle.expires_at)}
+              {t('bottles.vanishesIn', { time: formatBottleTimeLeft(bottle.expires_at) })}
             </p>
           )}
           <p className="text-xs mt-2" style={{ color: C.text2 }}>
@@ -1228,7 +1237,7 @@ function BottlePreviewModal({
               style={{ background: C.white, color: C.text, border: `1px solid ${C.line}` }}
             >
               <LinkIcon className="h-4 w-4" />
-              {linkCopied ? 'Copied!' : 'Copy link'}
+              {linkCopied ? t('bottles.copied') : t('bottles.copyLink')}
             </button>
             {!bottle.is_mine && (
               <button
@@ -1238,7 +1247,7 @@ function BottlePreviewModal({
                 className="flex-1 min-w-[8rem] py-2 rounded-xl text-xs font-semibold text-white disabled:opacity-60"
                 style={{ background: C.brownDk }}
               >
-                {opening ? 'Opening…' : 'Open this bottle'}
+                {opening ? t('bottles.opening') : t('bottles.openThisBottle')}
               </button>
             )}
           </div>
@@ -1250,6 +1259,7 @@ function BottlePreviewModal({
 
 function CatchBottleModal({ onClose, onCaught }: { onClose: () => void; onCaught: () => void }) {
   const C = useVaultColors();
+  const { t } = useLocale();
   const [catching, setCatching] = useState(false);
   const [caught, setCaught] = useState<CaughtBottle | null>(null);
   const [error, setError] = useState('');
@@ -1261,7 +1271,7 @@ function CatchBottleModal({ onClose, onCaught }: { onClose: () => void; onCaught
     try {
       const res = await apiFetch('bottles/catch/', { method: 'POST' });
       if (res.status === 404) {
-        setError('The cosmic sea is empty for now. Try again later. 🌌');
+        setError(t('bottles.seaEmpty'));
         return;
       }
       if (!res.ok) throw new Error('catch failed');
@@ -1271,7 +1281,7 @@ function CatchBottleModal({ onClose, onCaught }: { onClose: () => void; onCaught
         onCaught();
       }, 900);
     } catch {
-      setError('Could not reach the void. Check your connection.');
+      setError(t('bottles.couldNotReachVoid'));
     } finally {
       setTimeout(() => setCatching(false), 900);
     }
@@ -1282,7 +1292,7 @@ function CatchBottleModal({ onClose, onCaught }: { onClose: () => void; onCaught
   return (
     <ModalShell onClose={onClose}>
       <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: C.text }}>
-        <span>🌊</span> Catch a bottle
+        {t('bottles.catchTitle')}
       </h2>
       <div className="min-h-[180px] flex items-center justify-center">
         <AnimatePresence mode="wait">
@@ -1291,7 +1301,7 @@ function CatchBottleModal({ onClose, onCaught }: { onClose: () => void; onCaught
               <motion.div animate={{ rotate: [0, -12, 12, 0], y: [0, -8, 0] }} transition={{ repeat: Infinity, duration: 1.6 }} className="text-6xl">
                 🍾
               </motion.div>
-              <p className="mt-3 text-sm" style={{ color: C.text2 }}>Reaching into the void…</p>
+              <p className="mt-3 text-sm" style={{ color: C.text2 }}>{t('bottles.reachingIntoVoid')}</p>
             </motion.div>
           ) : caught && m ? (
             <motion.div
@@ -1303,17 +1313,17 @@ function CatchBottleModal({ onClose, onCaught }: { onClose: () => void; onCaught
             >
               <div className="flex items-center justify-between mb-3">
                 <span className="px-3 py-1 rounded-full text-sm font-medium" style={{ background: `${m.color}22`, color: m.color }}>
-                  {m.emoji} {m.label}
+                  {m.emoji} {t(m.labelKey)}
                 </span>
                 <RelativeTime date={caught.created_at} className="text-xs block" style={{ color: C.text2 }} />
               </div>
               <p className="text-lg leading-relaxed whitespace-pre-line" style={{ color: C.text }}>{caught.message}</p>
-              <div className="text-xs mt-4" style={{ color: C.text2 }}>👤 From anonymous traveler #{caught.sender_anon_id}</div>
+              <div className="text-xs mt-4" style={{ color: C.text2 }}>{t('bottles.fromAnonymousTravelerId', { id: String(caught.sender_anon_id) })}</div>
             </motion.div>
           ) : (
             <motion.div key="idle" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center" style={{ color: C.text2 }}>
               <div className="text-6xl mb-3">🌌</div>
-              <p className="text-sm">Tap below to catch a drifting bottle.</p>
+              <p className="text-sm">{t('bottles.tapToCatch')}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -1325,7 +1335,7 @@ function CatchBottleModal({ onClose, onCaught }: { onClose: () => void; onCaught
         className="w-full rounded-xl py-3 font-semibold text-white transition-all disabled:opacity-60"
         style={{ background: `linear-gradient(90deg, ${C.brownDk}, ${C.brown})`, boxShadow: C.btnShadow }}
       >
-        {catching ? 'Searching…' : caught ? 'Catch another' : 'Catch a bottle'}
+        {catching ? t('bottles.searching') : caught ? t('bottles.catchAnother') : t('bottles.catchABottleBtn')}
       </button>
     </ModalShell>
   );
