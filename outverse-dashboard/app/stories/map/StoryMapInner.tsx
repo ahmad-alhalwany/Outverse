@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import type { StoryMapPin } from './page';
+import { useLocale } from '@/components/LocaleProvider';
 import 'leaflet/dist/leaflet.css';
 
 function storyIcon(hasThumbnail: boolean) {
@@ -37,6 +38,7 @@ function FitBounds({ pins }: { pins: StoryMapPin[] }) {
 }
 
 function StoryMarker({ pin }: { pin: StoryMapPin }) {
+  const { t } = useLocale();
   const icon = useMemo(() => storyIcon(!!pin.thumbnail), [pin.thumbnail]);
 
   return (
@@ -53,7 +55,7 @@ function StoryMarker({ pin }: { pin: StoryMapPin }) {
             <p className="mt-2 line-clamp-3 text-sm" style={{ color: '#e2e8f0' }}>{pin.text}</p>
           ) : null}
           <Link href={`/?story=${pin.id}`} className="story-map-popup-cta">
-            Open story
+            {t('storyMap.openStory')}
           </Link>
         </div>
       </Popup>
@@ -62,6 +64,7 @@ function StoryMarker({ pin }: { pin: StoryMapPin }) {
 }
 
 export default function StoryMapInner({ pins }: { pins: StoryMapPin[] }) {
+  const { t } = useLocale();
   const center: [number, number] = pins.length ? [pins[0].lat, pins[0].lng] : [25, 30];
 
   return (
@@ -85,7 +88,7 @@ export default function StoryMapInner({ pins }: { pins: StoryMapPin[] }) {
       </MapContainer>
       {pins.length === 0 && (
         <div className="story-map-empty">
-          No mapped stories yet. Stories with a location will appear here.
+          {t('storyMap.emptyMap')}
         </div>
       )}
     </div>

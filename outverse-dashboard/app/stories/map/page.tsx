@@ -6,13 +6,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeftIcon, MapPinIcon, PlusIcon, SparklesIcon } from '@heroicons/react/24/outline';
 import { apiFetch, mediaUrl } from '@/lib/api';
 import { formatRelativeTime } from '@/utils/dateFormatter';
+import { useLocale } from '@/components/LocaleProvider';
 import './story-map.css';
 
 const StoryMapInner = dynamic(() => import('./StoryMapInner'), {
   ssr: false,
   loading: () => (
     <div className="story-map-frame flex h-[560px] items-center justify-center text-sm text-violet-200">
-      Loading story map…
+      <div className="h-6 w-6 rounded-full border-2 border-violet-300 border-t-transparent animate-spin" />
     </div>
   ),
 });
@@ -37,7 +38,7 @@ function storyPinFromApi(row: Record<string, unknown>): StoryMapPin | null {
   const user = (row.user as Record<string, unknown>) || {};
   const media = (row.media as Record<string, unknown>) || {};
   const image = row.image || media.thumbnail;
-  const video = row.video;
+  const video = media.video || row.video;
 
   return {
     id: Number(row.id),
@@ -53,6 +54,7 @@ function storyPinFromApi(row: Record<string, unknown>): StoryMapPin | null {
 }
 
 export default function StoryMapPage() {
+  const { t } = useLocale();
   const [pins, setPins] = useState<StoryMapPin[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -62,17 +64,20 @@ export default function StoryMapPage() {
     setError('');
     try {
       const res = await apiFetch('stories/map/');
-      if (!res.ok) throw new Error('map failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.detail || 'map failed');
+      }
       const data = await res.json();
       const rows = Array.isArray(data) ? data : data?.results || [];
       setPins(rows.map(storyPinFromApi).filter((pin: StoryMapPin | null): pin is StoryMapPin => !!pin));
-    } catch {
-      setError('Could not load story map.');
+    } catch (err) {
+      setError(err instanceof Error && err.message !== 'map failed' ? err.message : t('storyMap.loadError'));
       setPins([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load();
@@ -88,34 +93,34 @@ export default function StoryMapPage() {
           <div>
             <Link href="/" className="story-map-back mb-3 inline-flex items-center gap-1 text-sm font-semibold">
               <ArrowLeftIcon className="h-4 w-4" />
-              Back to home
+              {t('storyMap.backToHome')}
             </Link>
             <div className="mb-2">
               <span className="story-map-kicker">
                 <SparklesIcon className="h-3.5 w-3.5" />
-                Live locations
+                {t('storyMap.liveLocations')}
               </span>
             </div>
             <h1 className="story-map-title flex items-center gap-2 text-3xl font-extrabold sm:text-4xl">
               <MapPinIcon className="h-8 w-8 shrink-0 text-cyan-300" />
-              Story Map
+              {t('storyMap.title')}
             </h1>
             <p className="story-map-subtitle mt-2 text-sm sm:text-base">
-              Every pin is a Cosmory story dropped somewhere on Earth. Tap a marker or a card to open it.
+              {t('storyMap.subtitle')}
             </p>
           </div>
           <div className="flex flex-col items-stretch gap-2 sm:items-end">
             <div className="story-map-stats">
               <div className="story-map-stat">
-                Pins<strong>{pins.length}</strong>
+                {t('storyMap.pinsStat')}<strong>{pins.length}</strong>
               </div>
               <div className="story-map-stat">
-                Places<strong>{cities}</strong>
+                {t('storyMap.placesStat')}<strong>{cities}</strong>
               </div>
             </div>
             <Link href="/?addStory=1" className="story-map-cta">
               <PlusIcon className="h-4 w-4" />
-              Add story with location
+              {t('storyMap.addStoryCta')}
             </Link>
           </div>
         </header>
@@ -128,7 +133,7 @@ export default function StoryMapPage() {
 
         {loading ? (
           <div className="story-map-frame flex h-[560px] items-center justify-center text-sm text-violet-200">
-            Loading story map…
+            {t('storyMap.loading')}
           </div>
         ) : (
           <StoryMapInner pins={pins} />
@@ -136,12 +141,14 @@ export default function StoryMapPage() {
 
         <section className="story-map-list">
           <div className="story-map-list-head">
-            <h2>Latest mapped stories</h2>
-            <span className="story-map-count">{pins.length} pins</span>
+            <h2>{t('storyMap.latestMapped')}</h2>
+            <span className="story-map-count">
+              {pins.length === 1 ? t('storyMap.pinsCountOne', { count: '1' }) : t('storyMap.pinsCountMany', { count: String(pins.length) })}
+            </span>
           </div>
           {latestPins.length === 0 ? (
             <p className="text-sm text-violet-200/90">
-              No located stories yet. From Home → Add story → Location → pick a city → Publish.
+              {t('storyMap.emptyList')}
             </p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

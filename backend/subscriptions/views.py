@@ -2,6 +2,7 @@ import os
 
 import stripe
 from django.conf import settings
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.exceptions import ValidationError
@@ -141,23 +142,46 @@ class CreatorTierViewSet(ThrottleMixin, viewsets.ModelViewSet):
             )
         serializer.save(creator=user)
 
+    def _check_reactivation_cap(self, request, tier):
+        wants_active = request.data.get('is_active')
+        if wants_active and not tier.is_active:
+            active_count = CreatorTier.objects.filter(creator=tier.creator, is_active=True).exclude(pk=tier.pk).count()
+            if active_count >= CreatorTier.MAX_TIERS_PER_CREATOR:
+                return Response(
+                    {'error': f'You can only have up to {CreatorTier.MAX_TIERS_PER_CREATOR} active tiers.'},
+                    status=400,
+                )
+        return None
+
     def update(self, request, *args, **kwargs):
         tier = self.get_object()
         if tier.creator_id != request.user.id:
             return Response({'error': 'Forbidden.'}, status=403)
+        cap_error = self._check_reactivation_cap(request, tier)
+        if cap_error:
+            return cap_error
         return super().update(request, *args, **kwargs)
 
     def partial_update(self, request, *args, **kwargs):
         tier = self.get_object()
         if tier.creator_id != request.user.id:
             return Response({'error': 'Forbidden.'}, status=403)
+        cap_error = self._check_reactivation_cap(request, tier)
+        if cap_error:
+            return cap_error
         return super().partial_update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         tier = self.get_object()
         if tier.creator_id != request.user.id:
             return Response({'error': 'Forbidden.'}, status=403)
-        return super().destroy(request, *args, **kwargs)
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {'error': 'This tier has subscribers and cannot be deleted. Deactivate it instead.'},
+                status=400,
+            )
 
 
 class CreatorSubscriptionCheckoutView(APIView):

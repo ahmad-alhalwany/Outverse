@@ -239,7 +239,7 @@ class StoryViewSet(viewsets.ModelViewSet):
         qs = self.get_queryset().filter(
             location_lat__isnull=False,
             location_lng__isnull=False,
-        )
+        ).exclude(unlock_at__gt=timezone.now())
         bbox = (
             request.query_params.get('min_lat'),
             request.query_params.get('max_lat'),
@@ -269,6 +269,9 @@ class StoryViewSet(viewsets.ModelViewSet):
             thumbnail = None
             if story.image:
                 thumbnail = request.build_absolute_uri(story.image.url)
+            video_url = None
+            if story.video:
+                video_url = request.build_absolute_uri(story.video.url)
             rows.append({
                 'id': story.id,
                 'user': {
@@ -279,8 +282,10 @@ class StoryViewSet(viewsets.ModelViewSet):
                 'location_name': story.location_name,
                 'location_lat': story.location_lat,
                 'location_lng': story.location_lng,
+                'text': story.text,
                 'media': {
                     'thumbnail': thumbnail,
+                    'video': video_url,
                 },
                 'created_at': story.created_at,
             })

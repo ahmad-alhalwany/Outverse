@@ -92,6 +92,15 @@ export default function HomeStoriesRail({ onRefresh }: { onRefresh?: () => void 
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
   }, [showStory, searchParams, pathname, router]);
 
+  useEffect(() => {
+    if (searchParams.get('addStory') !== '1') return;
+    setShowAdd(true);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('addStory');
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [searchParams, pathname, router]);
+
   const openRing = (ring: StoryRing) => {
     if (ring.items.length > 0) setShowStory(ring.items[0]);
   };

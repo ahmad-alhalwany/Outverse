@@ -70,9 +70,15 @@ export default function CollabHubPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [loadError, setLoadError] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [inviting, setInviting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(false);
     try {
       const res = await apiFetch('collab/projects/');
       if (res.ok) {
@@ -85,7 +91,11 @@ export default function CollabHubPage() {
           ? rows.find((p) => p.id === preferredId)
           : null;
         setSelected((prev) => preferred || rows.find((p) => p.id === prev?.id) || rows[0] || null);
+      } else {
+        setLoadError(true);
       }
+    } catch {
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -97,6 +107,7 @@ export default function CollabHubPage() {
 
   async function createProject() {
     if (!title.trim()) return;
+    setActionError('');
     const res = await apiFetchJson('collab/projects/', {
       method: 'POST',
       json: { title: title.trim(), description: description.trim() },
@@ -106,25 +117,50 @@ export default function CollabHubPage() {
       setTitle('');
       setDescription('');
       void load();
+    } else {
+      setActionError(t('collab.createError'));
     }
   }
 
   async function addTask(taskTitle: string) {
     if (!selected || !taskTitle.trim()) return;
+    setActionError('');
     const res = await apiFetchJson(`collab/projects/${selected.id}/tasks/`, {
       method: 'POST',
       json: { title: taskTitle.trim() },
     });
     if (res.ok) void load();
+    else setActionError(t('collab.taskError'));
   }
 
   async function moveTask(taskId: number, status: string) {
     if (!selected) return;
+    setActionError('');
     const res = await apiFetchJson(`collab/projects/${selected.id}/update-task/`, {
       method: 'POST',
       json: { task_id: taskId, status },
     });
     if (res.ok) void load();
+    else setActionError(t('collab.moveError'));
+  }
+
+  async function inviteMember() {
+    if (!selected || !inviteUsername.trim()) return;
+    setInviting(true);
+    setActionError('');
+    const res = await apiFetchJson(`collab/projects/${selected.id}/members/`, {
+      method: 'POST',
+      json: { username: inviteUsername.trim() },
+    });
+    setInviting(false);
+    if (res.ok) {
+      setInviteUsername('');
+      setInviteOpen(false);
+      void load();
+    } else {
+      const data = await res.json().catch(() => null);
+      setActionError(data?.error || t('collab.inviteError'));
+    }
   }
 
   if (!me) {
@@ -156,8 +192,26 @@ export default function CollabHubPage() {
           </button>
         </div>
 
+        {actionError && (
+          <div className="mb-4 rounded-xl px-4 py-2.5 text-sm" style={{ background: '#FEE2E2', color: '#B91C1C' }}>
+            {actionError}
+          </div>
+        )}
+
         {loading ? (
           <div className="py-16 text-center" style={{ color: C.text2 }}>{t('common.loading')}</div>
+        ) : loadError ? (
+          <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
+            <p className="mb-3">{t('collab.loadError')}</p>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="rounded-full px-4 py-1.5 text-xs font-semibold text-white"
+              style={{ background: C.brownDk }}
+            >
+              {t('collab.retry')}
+            </button>
+          </div>
         ) : projects.length === 0 ? (
           <div className="rounded-2xl p-10 text-center" style={{ background: C.card2, color: C.text2 }}>
             {t('collab.empty')}
@@ -203,7 +257,19 @@ export default function CollabHubPage() {
                 </div>
 
                 <div className="mb-6">
-                  <h2 className="text-lg font-semibold mb-3" style={{ color: C.text }}>{t('collab.teamMembers')}</h2>
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="text-lg font-semibold" style={{ color: C.text }}>{t('collab.teamMembers')}</h2>
+                    {selected.owner.id === me.id && (
+                      <button
+                        type="button"
+                        onClick={() => setInviteOpen(true)}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-full"
+                        style={{ background: C.card2, color: C.brownDk }}
+                      >
+                        + {t('collab.inviteMember')}
+                      </button>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-3">
                     {selected.members.map((member) => (
                       <div key={member.id} className="flex items-center gap-2 rounded-xl px-3 py-2" style={{ background: C.white, border: `1px solid ${C.line}` }}>
@@ -253,7 +319,7 @@ export default function CollabHubPage() {
                                     className="text-[10px] px-2 py-1 rounded-full font-semibold"
                                     style={{ background: C.card2, color: C.brownDk }}
                                   >
-                                    → {t(STATUS_LABEL_KEY[s])}
+                                    <span className="inline-block rtl:rotate-180">→</span> {t(STATUS_LABEL_KEY[s])}
                                   </button>
                                 ))}
                               </div>
@@ -295,6 +361,35 @@ export default function CollabHubPage() {
               </button>
               <button type="button" onClick={() => void createProject()} className="flex-1 rounded-xl py-3 text-sm font-semibold text-white" style={{ background: C.brownDk }}>
                 {t('collab.create')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {inviteOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4" style={{ background: C.overlay }} onClick={() => setInviteOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl p-6" style={{ background: C.cream, border: `1px solid ${C.line}` }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold mb-4" style={{ color: C.text }}>{t('collab.inviteMember')}</h2>
+            <input
+              value={inviteUsername}
+              onChange={(e) => setInviteUsername(e.target.value)}
+              placeholder={t('collab.inviteUsernamePlaceholder')}
+              className="w-full rounded-xl px-4 py-3 mb-4 outline-none"
+              style={{ background: C.white, border: `1px solid ${C.line}`, color: C.text }}
+            />
+            <div className="flex gap-3">
+              <button type="button" onClick={() => setInviteOpen(false)} className="flex-1 rounded-xl py-3 text-sm font-semibold" style={{ background: C.card2, color: C.text }}>
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => void inviteMember()}
+                disabled={inviting || !inviteUsername.trim()}
+                className="flex-1 rounded-xl py-3 text-sm font-semibold text-white disabled:opacity-60"
+                style={{ background: C.brownDk }}
+              >
+                {inviting ? t('collab.inviting') : t('collab.invite')}
               </button>
             </div>
           </div>

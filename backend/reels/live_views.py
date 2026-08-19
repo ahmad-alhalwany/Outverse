@@ -174,7 +174,7 @@ class LiveSessionViewSet(viewsets.ModelViewSet):
     # ----- list filtering -----
     def get_queryset(self):
         qs = super().get_queryset()
-        if self.action == 'list':
+        if self.action in ('list', 'retrieve'):
             user = self.request.user
             if user.is_authenticated:
                 # Public sessions, plus the requester's own (so hosts can

@@ -1,5 +1,5 @@
 from django.db.models import Q
-from rest_framework import status, viewsets
+from rest_framework import exceptions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -42,6 +42,18 @@ class ProjectViewSet(ThrottleMixin, viewsets.ModelViewSet):
         project = serializer.save(owner=self.request.user)
         ProjectMember.objects.create(project=project, user=self.request.user, role='Owner')
 
+    def perform_update(self, serializer):
+        project = self.get_object()
+        if not self._is_owner(project, self.request.user):
+            raise exceptions.PermissionDenied('Only the project owner can update this project.')
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        project = self.get_object()
+        if not self._is_owner(project, request.user):
+            return Response({'error': 'Only the project owner can delete this project.'}, status=status.HTTP_403_FORBIDDEN)
+        return super().destroy(request, *args, **kwargs)
+
     def _is_owner(self, project, user):
         return project.owner_id == user.id
 
@@ -81,10 +93,13 @@ class ProjectViewSet(ThrottleMixin, viewsets.ModelViewSet):
         title = (request.data.get('title') or '').strip()
         if not title:
             return Response({'error': 'A task title is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        assignee_id = request.data.get('assignee_id') or None
+        if assignee_id is not None and not project.members.filter(user_id=assignee_id).exists():
+            return Response({'error': 'Assignee must be a project member.'}, status=status.HTTP_400_BAD_REQUEST)
         task = ProjectTask.objects.create(
             project=project,
             title=title,
-            assignee_id=request.data.get('assignee_id') or None,
+            assignee_id=assignee_id,
         )
         return Response(ProjectTaskSerializer(task).data, status=status.HTTP_201_CREATED)
 

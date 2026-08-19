@@ -62,7 +62,7 @@ export async function createCreatorTier(
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    const error = Array.isArray(data) ? data[0] : data?.name?.[0] || data?.price_usd_cents?.[0] || 'Could not create tier.';
+    const error = Array.isArray(data) ? data[0] : data?.name?.[0] || data?.price_usd_cents?.[0] || data?.error;
     return { ok: false, error };
   }
   return { ok: true, tier: data };
@@ -71,14 +71,18 @@ export async function createCreatorTier(
 export async function updateCreatorTier(
   id: number,
   patch: Partial<Pick<CreatorTier, 'name' | 'description' | 'price_usd_cents' | 'is_active'>>,
-): Promise<boolean> {
+): Promise<{ ok: boolean; error?: string }> {
   const res = await apiFetchJson(`subscriptions/creator-tiers/${id}/`, { method: 'PATCH', json: patch });
-  return res.ok;
+  if (res.ok) return { ok: true };
+  const data = await res.json().catch(() => null);
+  return { ok: false, error: data?.error };
 }
 
-export async function deleteCreatorTier(id: number): Promise<boolean> {
-  const res = await apiFetch(`subscriptions/creator-tiers/${id}/`, { method: 'DELETE' });
-  return res.ok;
+export async function deleteCreatorTier(id: number): Promise<{ ok: boolean; error?: string }> {
+  const res = await apiFetchJson(`subscriptions/creator-tiers/${id}/`, { method: 'DELETE' });
+  if (res.ok) return { ok: true };
+  const data = await res.json().catch(() => null);
+  return { ok: false, error: data?.error };
 }
 
 export async function startCreatorSubscriptionCheckout(
@@ -89,7 +93,7 @@ export async function startCreatorSubscriptionCheckout(
     json: { tier_id: tierId },
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) return { ok: false, error: data.error || 'Could not start checkout.' };
+  if (!res.ok) return { ok: false, error: data.error };
   return { ok: true, checkoutUrl: data.checkout_url };
 }
 
