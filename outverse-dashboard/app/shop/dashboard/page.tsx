@@ -124,7 +124,7 @@ export default function CreatorDashboardPage() {
         <p className="text-sm mb-6" style={{ color: C.text2 }}>
           {t('creatorDashboard.subtitle')}{' '}
           <Link href="/analytics" className="underline" style={{ color: C.brown }}>
-            View full analytics
+            {t('creatorDashboard.viewFullAnalytics')}
           </Link>
         </p>
 
@@ -143,7 +143,7 @@ export default function CreatorDashboardPage() {
 
             {data?.sales_by_day && data.sales_by_day.length > 0 && (
               <section className="mb-8 rounded-2xl p-4" style={{ background: C.white, border: `1px solid ${C.line}` }}>
-                <h2 className="text-sm font-semibold mb-3" style={{ color: C.text }}>Sales (28 days)</h2>
+                <h2 className="text-sm font-semibold mb-3" style={{ color: C.text }}>{t('creatorDashboard.salesLast28Days')}</h2>
                 <div className="flex items-end gap-1 h-24">
                   {data.sales_by_day.map((row) => {
                     const max = Math.max(1, ...data.sales_by_day!.map((d) => d.revenue));
@@ -244,7 +244,11 @@ export default function CreatorDashboardPage() {
                         </div>
                       ) : (
                         <span className="px-2.5 py-1 rounded-full text-xs font-semibold shrink-0" style={{ background: C.successBg, color: C.successText }}>
-                          {order.status}
+                          {order.status === 'completed'
+                            ? t('shop.txStatusCompleted')
+                            : order.status === 'failed'
+                              ? t('shop.txStatusFailed')
+                              : t('shop.txStatusPending')}
                         </span>
                       )}
                     </div>

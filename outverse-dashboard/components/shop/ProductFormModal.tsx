@@ -91,7 +91,7 @@ export default function ProductFormModal({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim() || !description.trim() || !price) {
-      setError('Name, description, and price are required.');
+      setError(t('creatorDashboard.requiredFields'));
       return;
     }
     setError('');
@@ -158,7 +158,7 @@ export default function ProductFormModal({
           onClick={onClose}
           className="absolute top-3 right-3 w-9 h-9 rounded-full text-xl flex items-center justify-center"
           style={{ background: C.card, color: C.text }}
-          aria-label="Close"
+          aria-label={t('creatorDashboard.close')}
         >
           ×
         </button>
@@ -266,13 +266,13 @@ export default function ProductFormModal({
                 className="absolute top-2 right-2 rounded-lg px-2 py-1 text-xs font-semibold"
                 style={{ background: 'rgba(0,0,0,0.55)', color: '#fff' }}
               >
-                Remove
+                {t('creatorDashboard.removeImage')}
               </button>
             </div>
           ) : (
             <label className="flex flex-col items-center justify-center gap-1 h-28 cursor-pointer px-4 text-center">
-              <span className="text-sm font-semibold" style={{ color: C.brown }}>Upload image</span>
-              <span className="text-xs" style={{ color: C.text2 }}>JPG, PNG, WebP or GIF · max 5MB</span>
+              <span className="text-sm font-semibold" style={{ color: C.brown }}>{t('creatorDashboard.uploadImage')}</span>
+              <span className="text-xs" style={{ color: C.text2 }}>{t('creatorDashboard.imageHint')}</span>
               <input
                 type="file"
                 accept="image/jpeg,image/png,image/webp,image/gif"
@@ -280,7 +280,7 @@ export default function ProductFormModal({
                 onChange={(e) => {
                   const file = e.target.files?.[0] ?? null;
                   if (file && file.size > 5 * 1024 * 1024) {
-                    setError('Cover image must be 5MB or smaller.');
+                    setError(t('creatorDashboard.imageTooLarge'));
                     e.target.value = '';
                     return;
                   }

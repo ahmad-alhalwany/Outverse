@@ -43,6 +43,11 @@ class ShopItemSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['rating', 'sales_count', 'created_at']
 
+    def validate_price(self, value):
+        if value < 1:
+            raise serializers.ValidationError('Price must be at least 1 coin.')
+        return value
+
     def get_cover(self, obj):
         if obj.cover_url:
             return obj.cover_url
@@ -74,10 +79,19 @@ class ShopItemSerializer(serializers.ModelSerializer):
             return True
         return False
 
+    def _download_url_visible(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if user and user.is_authenticated and (user.is_staff or obj.creator_id == user.id):
+            return True
+        return self._viewer_unlocked_via_purchase(obj)
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if data.get('content_locked'):
             data['description'] = ''
+            data['download_url'] = ''
+        elif not self._download_url_visible(instance):
             data['download_url'] = ''
         return data
 

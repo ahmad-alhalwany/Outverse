@@ -330,6 +330,9 @@ export const en = {
     downloadAccess: 'Download / Access',
     shippingAddress: 'Shipping address',
     shippingAddressRequired: 'A shipping address is required for physical items.',
+    txStatusPending: 'Pending',
+    txStatusCompleted: 'Completed',
+    txStatusFailed: 'Failed',
   },
 
   sellerApplication: {
@@ -1698,6 +1701,14 @@ export const en = {
     saving: 'Saving…',
     cancel: 'Cancel',
     saveFailed: 'Could not save product.',
+    close: 'Close',
+    requiredFields: 'Name, description, and price are required.',
+    removeImage: 'Remove',
+    uploadImage: 'Upload image',
+    imageHint: 'JPG, PNG, WebP or GIF · max 5MB',
+    imageTooLarge: 'Cover image must be 5MB or smaller.',
+    viewFullAnalytics: 'View full analytics',
+    salesLast28Days: 'Sales (28 days)',
   },
   analytics: {
     title: 'Analytics Dashboard',

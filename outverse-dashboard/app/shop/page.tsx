@@ -17,10 +17,6 @@ import {
 } from '@heroicons/react/24/outline';
 import { StarIcon } from '@heroicons/react/24/solid';
 
-import { apiUrl } from '@/lib/api';
-
-const BASE = apiUrl('shop/items');
-
 const PALETTES = {
   light: {
     cream: '#F3F0FC',
@@ -135,8 +131,8 @@ function ShopContent() {
     setLoadError(false);
     try {
       const [iRes, fRes, wRes] = await Promise.all([
-        fetch(`${BASE}/?ordering=${sort}&category=${category}&type=${type}`),
-        fetch(`${BASE}/featured/`),
+        apiFetch(`shop/items/?ordering=${sort}&category=${category}&type=${type}`),
+        apiFetch('shop/items/featured/'),
         apiFetch('shop/items/wallet/'),
       ]);
       if (iRes.ok) {

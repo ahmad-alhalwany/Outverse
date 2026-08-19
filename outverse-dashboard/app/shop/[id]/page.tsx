@@ -7,10 +7,7 @@ import ProductDetailView from '@/components/shop/ProductDetailView';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 import { apiFetch, apiFetchJson } from '@/lib/api';
-import { apiUrl } from '@/lib/api';
 import type { ShopItem } from '@/lib/shopTypes';
-
-const BASE = apiUrl('shop/items');
 
 const PALETTES = {
   light: {
@@ -48,7 +45,7 @@ export default function ShopProductPage() {
     setNotFound(false);
     try {
       const [pRes, wRes] = await Promise.all([
-        fetch(`${BASE}/${id}/`),
+        apiFetch(`shop/items/${id}/`),
         apiFetch('shop/items/wallet/'),
       ]);
       if (pRes.ok) {

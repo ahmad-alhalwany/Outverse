@@ -332,6 +332,9 @@ export const ar = {
     downloadAccess: 'تنزيل / وصول',
     shippingAddress: 'عنوان الشحن',
     shippingAddressRequired: 'عنوان الشحن مطلوب للمنتجات المادية.',
+    txStatusPending: 'قيد الانتظار',
+    txStatusCompleted: 'مكتمل',
+    txStatusFailed: 'فشل',
   },
 
   sellerApplication: {
@@ -1700,6 +1703,14 @@ export const ar = {
     saving: 'جارٍ الحفظ…',
     cancel: 'إلغاء',
     saveFailed: 'تعذر حفظ المنتج.',
+    close: 'إغلاق',
+    requiredFields: 'الاسم والوصف والسعر مطلوبة.',
+    removeImage: 'إزالة',
+    uploadImage: 'رفع صورة',
+    imageHint: 'JPG أو PNG أو WebP أو GIF · بحد أقصى 5 ميجابايت',
+    imageTooLarge: 'يجب ألا تتجاوز صورة الغلاف 5 ميجابايت.',
+    viewFullAnalytics: 'عرض التحليلات الكاملة',
+    salesLast28Days: 'المبيعات (28 يومًا)',
   },
   analytics: {
     title: 'لوحة التحليلات',

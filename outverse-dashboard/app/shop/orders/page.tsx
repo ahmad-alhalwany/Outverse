@@ -168,7 +168,11 @@ export default function ShopOrdersPage() {
                             className="px-2.5 py-1 rounded-full"
                             style={{ background: C.successBg, color: C.successText }}
                           >
-                            {tx.status}
+                            {tx.status === 'completed'
+                              ? t('shop.txStatusCompleted')
+                              : tx.status === 'failed'
+                                ? t('shop.txStatusFailed')
+                                : t('shop.txStatusPending')}
                           </span>
                           {tx.item.type === 'physical' && tx.fulfillment_status !== 'not_applicable' && (
                             <span

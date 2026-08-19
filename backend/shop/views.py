@@ -160,6 +160,11 @@ class ShopItemViewSet(viewsets.ModelViewSet):
         shipping_address = (request.data.get('shipping_address') or '').strip()
         with transaction.atomic():
             item = ShopItem.objects.select_for_update().get(pk=pk)
+            if item.creator_id == user.id:
+                return Response(
+                    {'error': 'You cannot buy your own product.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             if item.stock is not None and item.stock <= 0:
                 return Response(
                     {'error': 'This item is out of stock.'},
@@ -189,6 +194,10 @@ class ShopItemViewSet(viewsets.ModelViewSet):
                 )
             profile.points = F('points') - item.price
             profile.save(update_fields=['points'])
+            if item.creator_id:
+                seller_profile = Profile.objects.select_for_update().get_or_create(user_id=item.creator_id)[0]
+                seller_profile.points = F('points') + item.price
+                seller_profile.save(update_fields=['points'])
             transaction_obj = Transaction.objects.create(
                 user_id=user.id,
                 seller_id=item.creator_id,
