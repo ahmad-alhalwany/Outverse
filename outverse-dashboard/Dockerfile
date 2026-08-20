@@ -2,7 +2,11 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev || npm install --omit=dev
+# next.config.js requires @next/bundle-analyzer unconditionally at build time
+# (it's a devDependency, only the analysis itself is gated on ANALYZE=true) —
+# the standalone runtime image below never copies node_modules from here, so
+# there's no cost to installing dev deps at this stage.
+RUN npm ci || npm install
 
 FROM node:20-alpine AS builder
 WORKDIR /app
