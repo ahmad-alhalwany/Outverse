@@ -2232,10 +2232,15 @@ class OrbitListViewSet(viewsets.ModelViewSet):
             if not viewer:
                 return OrbitList.objects.none()
             following = self.request.query_params.get('following')
+            discover = self.request.query_params.get('discover')
             if following in ('1', 'true', 'yes'):
                 return qs.filter(
                     followers__user=viewer, is_private=False,
                 ).distinct()
+            if discover in ('1', 'true', 'yes'):
+                return qs.filter(is_private=False).exclude(owner=viewer).annotate(
+                    _follower_count=Count('followers', distinct=True),
+                ).order_by('-_follower_count', '-created_at')
             return qs.filter(owner=viewer)
         return qs
 

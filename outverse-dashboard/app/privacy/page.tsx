@@ -47,9 +47,7 @@ export default function PrivacyPage() {
             <div>
               <p>{t('legal.privacyRights')}</p>
               <p className="text-sm" style={{ marginTop: 8, opacity: 0.85 }}>
-                GDPR (EU/EEA): access, rectification, erasure, portability, restriction, objection,
-                and withdrawal of consent. CCPA (California): know, delete, correct, opt-out of sale
-                or sharing, and non-discrimination.
+                {t('legal.privacyRightsDetail')}
               </p>
             </div>
           ),

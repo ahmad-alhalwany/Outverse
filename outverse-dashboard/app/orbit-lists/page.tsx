@@ -15,13 +15,15 @@ import {
   fetchOrbitListFeed,
   fetchOrbitLists,
   removeOrbitListMember,
+  toggleFollowOrbitList,
   type OrbitList,
 } from '@/lib/postsApi';
 
 export default function OrbitListsPage() {
   const me = useAuthUser();
   const { t } = useLocale();
-  const [tab, setTab] = useState<'mine' | 'following'>('mine');
+  const [tab, setTab] = useState<'mine' | 'following' | 'discover'>('mine');
+  const [followingId, setFollowingId] = useState<number | null>(null);
   const [lists, setLists] = useState<OrbitList[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
@@ -38,15 +40,15 @@ export default function OrbitListsPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await fetchOrbitLists(tab === 'following');
+      const data = await fetchOrbitLists(tab);
       setLists(data);
     } catch {
       setLists([]);
-      setError('Could not load Orbit Lists.');
+      setError(t('signal.loadListsFailed'));
     } finally {
       setLoading(false);
     }
-  }, [tab]);
+  }, [tab, t]);
 
   useEffect(() => {
     void loadLists();
@@ -124,6 +126,25 @@ export default function OrbitListsPage() {
     }
   };
 
+  const handleToggleFollow = async (listId: number) => {
+    if (followingId) return;
+    setFollowingId(listId);
+    setError('');
+    const { following, error: err } = await toggleFollowOrbitList(listId);
+    if (following === null) {
+      setError(err || t('signal.followListFailed'));
+    } else if (tab === 'discover') {
+      setLists((prev) => prev.map((l) => (l.id === listId ? { ...l, is_following: following } : l)));
+    } else {
+      setLists((prev) => prev.filter((l) => l.id !== listId));
+      if (activeId === listId) {
+        setActiveId(null);
+        setFeedPosts([]);
+      }
+    }
+    setFollowingId(null);
+  };
+
   const handleDelete = async (listId: number) => {
     setError('');
     const { ok, error: err } = await deleteOrbitList(listId);
@@ -141,10 +162,10 @@ export default function OrbitListsPage() {
   if (!me) {
     return (
       <AppShell maxWidth="max-w-3xl" contentClassName="px-4 py-10">
-        <p className="text-center text-text-secondary">Sign in to manage Orbit Lists.</p>
+        <p className="text-center text-text-secondary">{t('signal.signInToManage')}</p>
         <div className="mt-4 text-center">
           <Link href="/login" className="font-semibold text-lab">
-            Log in
+            {t('signal.logIn')}
           </Link>
         </div>
       </AppShell>
@@ -216,6 +237,15 @@ export default function OrbitListsPage() {
         >
           {t('signal.followingLists')}
         </button>
+        <button
+          type="button"
+          onClick={() => setTab('discover')}
+          className={`rounded-full px-3.5 py-1.5 text-sm font-medium ${
+            tab === 'discover' ? 'bg-lab text-white' : 'bg-surface text-text-secondary'
+          }`}
+        >
+          {t('signal.discoverLists')}
+        </button>
       </div>
 
       {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
@@ -225,7 +255,9 @@ export default function OrbitListsPage() {
           {loading ? (
             <p className="text-sm text-text-secondary">{t('common.loading')}</p>
           ) : lists.length === 0 ? (
-            <p className="text-sm text-text-secondary">{t('signal.emptyLists')}</p>
+            <p className="text-sm text-text-secondary">
+              {tab === 'discover' ? t('signal.noDiscoverLists') : t('signal.emptyLists')}
+            </p>
           ) : (
             lists.map((list) => (
               <div
@@ -242,7 +274,8 @@ export default function OrbitListsPage() {
                   <p className="font-semibold">{list.title}</p>
                   <p className="text-xs text-text-secondary">
                     {list.member_count} {t('signal.members')}
-                    {list.is_private ? ' · private' : ''}
+                    {list.is_private ? ` · ${t('signal.privateList')}` : ''}
+                    {tab === 'discover' && list.owner?.username ? ` · @${list.owner.username}` : ''}
                   </p>
                 </button>
                 {tab === 'mine' && (
@@ -252,6 +285,28 @@ export default function OrbitListsPage() {
                     className="mt-2 inline-flex items-center gap-1 text-xs text-red-500"
                   >
                     <TrashIcon className="h-3.5 w-3.5" /> {t('signal.deleteList')}
+                  </button>
+                )}
+                {tab === 'following' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleFollow(list.id)}
+                    disabled={followingId === list.id}
+                    className="mt-2 inline-flex items-center gap-1 text-xs text-red-500 disabled:opacity-50"
+                  >
+                    {t('signal.unfollowList')}
+                  </button>
+                )}
+                {tab === 'discover' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleToggleFollow(list.id)}
+                    disabled={followingId === list.id}
+                    className={`mt-2 inline-flex items-center gap-1 text-xs font-semibold disabled:opacity-50 ${
+                      list.is_following ? 'text-text-secondary' : 'text-lab'
+                    }`}
+                  >
+                    {list.is_following ? t('signal.unfollowList') : t('signal.followList')}
                   </button>
                 )}
               </div>

@@ -216,15 +216,26 @@ export type OrbitList = {
   updated_at?: string;
 };
 
-export async function fetchOrbitLists(following = false): Promise<OrbitList[]> {
+export async function fetchOrbitLists(mode: 'mine' | 'following' | 'discover' = 'mine'): Promise<OrbitList[]> {
   try {
-    const q = following ? '?following=1' : '';
+    const q = mode === 'mine' ? '' : `?${mode}=1`;
     const res = await apiFetch(`orbit-lists/${q}`);
     if (!res.ok) return [];
     const data = await res.json();
     return Array.isArray(data) ? data : data?.results || [];
   } catch {
     return [];
+  }
+}
+
+export async function toggleFollowOrbitList(listId: number): Promise<{ following: boolean | null; error?: string }> {
+  try {
+    const res = await apiFetchJson(`orbit-lists/${listId}/follow/`, { method: 'POST' });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) return { following: null, error: data?.error || data?.detail };
+    return { following: Boolean(data?.following) };
+  } catch {
+    return { following: null };
   }
 }
 
