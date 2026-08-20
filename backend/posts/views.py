@@ -135,7 +135,16 @@ def _subscriber_gate_q(viewer):
     )
 
 
+def _exclude_shadow_banned(qs, viewer):
+    """Shadow-banned authors' content is invisible to everyone except
+    themselves — that's the point of the mechanic (they aren't told)."""
+    if viewer:
+        return qs.exclude(Q(user__is_shadow_banned=True) & ~Q(user_id=viewer.id))
+    return qs.exclude(user__is_shadow_banned=True)
+
+
 def _apply_feed_social_filters(qs, viewer):
+    qs = _exclude_shadow_banned(qs, viewer)
     if not viewer:
         return qs
     hidden_authors = feed_hidden_author_ids(viewer.id)

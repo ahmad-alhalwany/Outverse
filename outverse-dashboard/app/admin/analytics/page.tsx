@@ -21,15 +21,29 @@ const Tooltip = dynamic(() => import('recharts').then((m) => m.Tooltip), { ssr: 
 
 export default function AdminAnalyticsPage() {
   const [data, setData] = useState<AdminDashboardData | null>(null);
+  const [error, setError] = useState('');
   const [range, setRange] = useState<'weekly' | 'monthly'>('weekly');
 
+  const load = () => {
+    setError('');
+    fetchAdminDashboard()
+      .then(setData)
+      .catch((e: Error) => setError(e.message === 'STAFF_REQUIRED' ? 'Staff token required.' : e.message || 'Failed to load analytics'));
+  };
+
   useEffect(() => {
-    fetchAdminDashboard().then(setData).catch(() => setData(null));
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <AdminShell title="Analytics Dashboard" subtitle="Weekly performance across the verse">
-      {!data ? (
+      {error ? (
+        <div className="admin-alert admin-alert--error">
+          {error}
+          <button type="button" className="admin-btn admin-btn--ghost" style={{ marginLeft: 12 }} onClick={load}>Retry</button>
+        </div>
+      ) : !data ? (
         <p style={{ color: 'var(--admin-muted)' }}>Loading…</p>
       ) : (
         <>

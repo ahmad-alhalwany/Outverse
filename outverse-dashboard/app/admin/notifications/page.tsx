@@ -3,8 +3,10 @@
 import { useMemo, useState } from 'react';
 import AdminShell from '@/components/admin/AdminShell';
 import { broadcastNotification } from '@/lib/adminApi';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 export default function AdminNotificationsPage() {
+  const confirm = useConfirm();
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [userIds, setUserIds] = useState('');
@@ -18,6 +20,8 @@ export default function AdminNotificationsPage() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    const targetNote = parsedUserIds.length ? `${parsedUserIds.length} user(s)` : 'ALL users platform-wide';
+    if (!(await confirm(`Send this broadcast to ${targetNote}? This cannot be undone.`, { danger: true, confirmLabel: 'Send' }))) return;
     setSending(true);
     setStatus('');
     const res = await broadcastNotification({
@@ -32,7 +36,8 @@ export default function AdminNotificationsPage() {
       setMessage('');
       setUserIds('');
     } else {
-      setStatus('Broadcast failed.');
+      const data = await res.json().catch(() => null);
+      setStatus(data?.detail || data?.error || 'Broadcast failed.');
     }
     setSending(false);
   };

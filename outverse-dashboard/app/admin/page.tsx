@@ -46,10 +46,18 @@ export default function AdminDashboardPage() {
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  const load = () => {
     fetchAdminDashboard()
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        setError('');
+      })
       .catch((e: Error) => setError(e.message === 'STAFF_REQUIRED' ? 'Staff token required.' : e.message));
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -60,7 +68,7 @@ export default function AdminDashboardPage() {
         <button
           type="button"
           className="admin-btn admin-btn--ghost"
-          onClick={() => fetchAdminDashboard().then(setData).catch(() => {})}
+          onClick={load}
         >
           ↻ Refresh
         </button>

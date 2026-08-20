@@ -48,7 +48,8 @@ export default function AdminAchievementsPage() {
       setMsg(`Achievements saved for @${selected.user.username}`);
       load();
     } else {
-      setMsg('Save failed');
+      const data = await res.json().catch(() => null);
+      setMsg(data?.detail || data?.error || 'Save failed');
     }
   };
 

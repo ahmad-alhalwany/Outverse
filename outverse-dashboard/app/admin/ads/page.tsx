@@ -8,6 +8,7 @@ import {
   rejectAdCreative,
   type AdminAdCreative,
 } from '@/lib/adminApi';
+import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 
 const FORMAT_LABEL: Record<string, string> = {
   image: 'Image',
@@ -21,6 +22,7 @@ const STATUS_FILTERS = ['pending_review', 'approved', 'rejected', 'draft'] as co
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 export default function AdminAdsPage() {
+  const confirm = useConfirm();
   const [creatives, setCreatives] = useState<AdminAdCreative[]>([]);
   const [filter, setFilter] = useState<StatusFilter>('pending_review');
   const [error, setError] = useState('');
@@ -43,13 +45,20 @@ export default function AdminAdsPage() {
   }, [load, filter]);
 
   const act = async (id: number, action: 'approve' | 'reject') => {
+    if (!(await confirm(
+      action === 'approve' ? 'Approve this ad creative?' : 'Reject this ad creative?',
+      { danger: action === 'reject', confirmLabel: action === 'approve' ? 'Approve' : 'Reject' },
+    ))) return;
     setBusy(id);
     setError('');
     try {
       const fn = action === 'approve' ? approveAdCreative : rejectAdCreative;
       const res = await fn(id);
       if (res.ok) load(filter);
-      else setError('Action failed');
+      else {
+        const data = await res.json().catch(() => null);
+        setError(data?.detail || data?.error || 'Action failed');
+      }
     } catch {
       setError('Action failed');
     } finally {

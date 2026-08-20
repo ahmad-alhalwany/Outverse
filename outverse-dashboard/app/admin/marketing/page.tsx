@@ -54,7 +54,8 @@ export default function AdminMarketingPage() {
         setForm(EMPTY);
         load();
       } else {
-        setMsg('Save failed.');
+        const data = await res.json().catch(() => null);
+        setMsg(data?.detail || data?.error || 'Save failed.');
       }
     } catch {
       setMsg('Save failed.');
@@ -86,7 +87,8 @@ export default function AdminMarketingPage() {
         setMsg('Campaign sent.');
         load();
       } else {
-        setMsg('Send failed.');
+        const data = await res.json().catch(() => null);
+        setMsg(data?.detail || data?.error || 'Send failed.');
       }
     } finally {
       setSendingId(null);
@@ -97,7 +99,10 @@ export default function AdminMarketingPage() {
     if (!(await confirm('Delete this draft?', { danger: true, confirmLabel: 'Delete' }))) return;
     const res = await deleteMarketingCampaign(id);
     if (res.ok) load();
-    else setMsg('Failed to delete campaign.');
+    else {
+      const data = await res.json().catch(() => null);
+      setMsg(data?.detail || data?.error || 'Failed to delete campaign.');
+    }
   };
 
   const startEdit = (c: MarketingCampaign) => {

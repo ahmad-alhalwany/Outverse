@@ -639,6 +639,13 @@ class ReelViewSet(viewsets.ModelViewSet):
         qs = qs.order_by('-created_at')
         if self.action != 'list':
             return qs
+        if not staff_full_access:
+            # Shadow-banned authors' signals are invisible to everyone except
+            # themselves — that's the point of the mechanic (they aren't told).
+            if viewer:
+                qs = qs.exclude(Q(user__is_shadow_banned=True) & ~Q(user_id=viewer.id))
+            else:
+                qs = qs.exclude(user__is_shadow_banned=True)
         mood = self.request.query_params.get('mood')
         tag = self.request.query_params.get('tag')
         filter_style = self.request.query_params.get('filter')

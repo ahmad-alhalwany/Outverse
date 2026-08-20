@@ -33,6 +33,9 @@ export default function AdminPostsPage() {
       setMessage('Post deleted.');
       loadPosts();
       if (selectedPostId === post.id) loadComments(null);
+    } else {
+      const data = await res.json().catch(() => null);
+      setMessage(data?.detail || data?.error || 'Delete failed.');
     }
   };
 
@@ -43,6 +46,9 @@ export default function AdminPostsPage() {
       setMessage('Comment deleted.');
       loadComments(selectedPostId);
       loadPosts();
+    } else {
+      const data = await res.json().catch(() => null);
+      setMessage(data?.detail || data?.error || 'Delete failed.');
     }
   };
 

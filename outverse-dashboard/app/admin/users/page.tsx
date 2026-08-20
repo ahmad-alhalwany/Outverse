@@ -62,8 +62,8 @@ export default function AdminUsersPage() {
     if (result.ok) {
       setMsg(
         result.is_shadow_banned
-          ? `@${profile.user.username} is flagged as shadow-banned (not yet enforced by any feed — flag only).`
-          : `Shadow-ban flag lifted for @${profile.user.username}.`,
+          ? `@${profile.user.username} is now shadow-banned — their posts and signals are hidden from everyone else's feeds and profile view, but they aren't notified.`
+          : `Shadow-ban lifted for @${profile.user.username}.`,
       );
     } else {
       setMsg(result.error || 'Shadow-ban toggle failed.');

@@ -17,11 +17,24 @@ export default function AdminHealthPage() {
 
   useEffect(() => {
     apiFetch('health/system/')
-      .then((res) => {
-        if (!res.ok) throw new Error('Health check failed');
-        return res.json();
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok && !data) throw new Error('Health check failed');
+        return data;
       })
-      .then((data) => setServices(Array.isArray(data.services) ? data.services : []))
+      .then((data) => {
+        // Backend returns {checks: [{name, status, detail?}]}, not {services}.
+        const checks = Array.isArray(data?.checks) ? data.checks : [];
+        const now = new Date().toLocaleTimeString();
+        setServices(
+          checks.map((c: { name: string; status: string; detail?: string }) => ({
+            name: c.name,
+            status: c.status === 'ok' ? 'healthy' : c.status,
+            color: c.status === 'ok' ? '#22c55e' : '#ef4444',
+            lastCheck: now,
+          })),
+        );
+      })
       .catch((e: Error) => setError(e.message));
   }, []);
 

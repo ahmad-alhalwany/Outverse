@@ -39,7 +39,8 @@ export default function AdminBazaarPage() {
       load();
     } else {
       const data = await res.json().catch(() => null);
-      setMsg(data?.detail || Object.values(data || {})[0] || 'Save failed.');
+      const fieldError = data ? Object.values(data)[0] : null;
+      setMsg(data?.detail || (Array.isArray(fieldError) ? fieldError[0] : fieldError) || 'Save failed.');
     }
   };
 

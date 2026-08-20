@@ -68,7 +68,9 @@ export default function AdminShopPage() {
       setForm(EMPTY);
       load();
     } else {
-      setMsg('Save failed.');
+      const data = await res.json().catch(() => null);
+      const fieldError = data ? Object.values(data)[0] : null;
+      setMsg(data?.detail || (Array.isArray(fieldError) ? fieldError[0] : fieldError) || 'Save failed.');
     }
   };
 
@@ -78,6 +80,9 @@ export default function AdminShopPage() {
     if (res.ok) {
       setMsg('Product removed.');
       load();
+    } else {
+      const data = await res.json().catch(() => null);
+      setMsg(data?.detail || data?.error || 'Delete failed.');
     }
   };
 
