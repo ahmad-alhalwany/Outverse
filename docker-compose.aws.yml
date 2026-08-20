@@ -61,6 +61,19 @@ services:
       AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
       AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME:-us-east-1}
       AWS_S3_CUSTOM_DOMAIN: ${AWS_S3_CUSTOM_DOMAIN:-}
+      # Outgoing mail — verification / password-reset emails are sent from the
+      # backend process itself, not just the cron sidecar.
+      DJANGO_EMAIL_BACKEND: ${DJANGO_EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
+      DJANGO_DEFAULT_FROM_EMAIL: ${DJANGO_DEFAULT_FROM_EMAIL:-no-reply@outverse.local}
+      GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}
+      NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
+      NVIDIA_MODEL: ${NVIDIA_MODEL:-}
+      NVIDIA_API_BASE: ${NVIDIA_API_BASE:-}
     volumes:
       - backend_media:/app/media
       - backend_static:/app/staticfiles
