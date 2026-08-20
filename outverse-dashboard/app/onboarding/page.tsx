@@ -20,6 +20,14 @@ import { useAuthUser } from '@/lib/hooks/useAuthUser';
 
 const WORLDS_FALLBACK = ['The Lab', 'The Bazaar', 'The Vault'];
 
+// Backend (users/views.py WORLD_OPTIONS) returns these names in English only —
+// map the known ones to translated labels; anything else falls back to the raw string.
+const WORLD_LABEL_KEYS: Record<string, string> = {
+  'The Lab': 'onboarding.worldLabLabel',
+  'The Bazaar': 'onboarding.worldBazaarLabel',
+  'The Vault': 'onboarding.worldVaultLabel',
+};
+
 // Real interest tags grouped by question category. These map cleanly to
 // backend personalization in questions/interests.py — selecting any of
 // them makes the Inspiration Engine bias prompts toward that category.
@@ -184,7 +192,10 @@ export default function OnboardingPage() {
       body: JSON.stringify({ following_id: id }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return;
+    if (!res.ok) {
+      setError(data.error || t('onboarding.saveFailed'));
+      return;
+    }
     setSuggestions((current) =>
       current.map((item) =>
         item.id === id
@@ -198,10 +209,15 @@ export default function OnboardingPage() {
     setAvatarFile(event.target.files?.[0] ?? null);
   }
 
+  const worldLabel = (raw: string | undefined, fallbackKey: string) =>
+    raw ? (WORLD_LABEL_KEYS[raw] ? t(WORLD_LABEL_KEYS[raw]) : raw) : t(fallbackKey);
+
+  // `value` is the raw backend string (what gets stored/sent as an interest tag);
+  // `label` is only for display, so Arabic users see translated cards.
   const worldCards = [
-    { label: worlds[0] ?? t('onboarding.worldLabLabel'), icon: FlaskConical, subtitle: t('onboarding.worldLabSubtitle'), tone: COLORS.accent },
-    { label: worlds[1] ?? t('onboarding.worldBazaarLabel'), icon: ShoppingBag, subtitle: t('onboarding.worldBazaarSubtitle'), tone: '#0EA5E9' },
-    { label: worlds[2] ?? t('onboarding.worldVaultLabel'), icon: Vault, subtitle: t('onboarding.worldVaultSubtitle'), tone: COLORS.olive },
+    { value: worlds[0] ?? WORLDS_FALLBACK[0], label: worldLabel(worlds[0], 'onboarding.worldLabLabel'), icon: FlaskConical, subtitle: t('onboarding.worldLabSubtitle'), tone: COLORS.accent },
+    { value: worlds[1] ?? WORLDS_FALLBACK[1], label: worldLabel(worlds[1], 'onboarding.worldBazaarLabel'), icon: ShoppingBag, subtitle: t('onboarding.worldBazaarSubtitle'), tone: '#0EA5E9' },
+    { value: worlds[2] ?? WORLDS_FALLBACK[2], label: worldLabel(worlds[2], 'onboarding.worldVaultLabel'), icon: Vault, subtitle: t('onboarding.worldVaultSubtitle'), tone: COLORS.olive },
   ];
 
   return (
@@ -298,15 +314,15 @@ export default function OnboardingPage() {
           <h2 className="text-center text-4xl font-bold tracking-[-0.04em] md:text-5xl" style={{ color: COLORS.text }}>{t('onboarding.discoverUniverse')}</h2>
           <div className="mt-8 rounded-[28px] px-6 py-10 md:px-10" style={{ background: '#F5F3F3' }}>
             <div className="grid gap-8 md:grid-cols-3">
-              {worldCards.map(({ label, icon: Icon, subtitle, tone }) => (
+              {worldCards.map(({ value, label, icon: Icon, subtitle, tone }) => (
                 <button
-                  key={label}
+                  key={value}
                   type="button"
-                  onClick={() => setSelectedWorlds((current) => current.includes(label) ? current.filter((item) => item !== label) : [...current, label])}
+                  onClick={() => setSelectedWorlds((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])}
                   className="flex flex-col items-center rounded-[24px] px-6 py-8 text-center transition"
                   style={{
-                    background: selectedWorlds.includes(label) ? '#FFFFFF' : 'transparent',
-                    boxShadow: selectedWorlds.includes(label) ? '0 12px 30px rgba(33, 27, 61, 0.10)' : 'none',
+                    background: selectedWorlds.includes(value) ? '#FFFFFF' : 'transparent',
+                    boxShadow: selectedWorlds.includes(value) ? '0 12px 30px rgba(33, 27, 61, 0.10)' : 'none',
                   }}
                 >
                   <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: '#FFFFFF' }}>
@@ -451,7 +467,7 @@ export default function OnboardingPage() {
             className="text-sm font-medium underline"
             style={{ color: COLORS.muted }}
           >
-            Skip for now
+            {t('onboarding.skipForNow')}
           </button>
           <div className="h-4 w-56 overflow-hidden rounded-full" style={{ background: '#EFE9E6' }}>
             <div className="h-full rounded-full" style={{ width: `${((step + 1) / 3) * 100}%`, background: COLORS.text }} />

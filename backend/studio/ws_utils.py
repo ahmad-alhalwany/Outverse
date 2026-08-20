@@ -1,4 +1,4 @@
-from django.db.models import Max, Min
+from django.db.models import Max, Min, Q
 
 from .models import CanvasMedia, CanvasShape, CanvasStroke, CanvasText, DrawSession, SessionParticipant
 
@@ -97,6 +97,13 @@ def session_exists(session_id):
 
 def is_host(user_id, session_id):
     return DrawSession.objects.filter(pk=session_id, host_id=user_id).exists()
+
+
+def can_access(user_id, session_id):
+    """Host or someone the host has invited — sessions are never public."""
+    return DrawSession.objects.filter(pk=session_id).filter(
+        Q(host_id=user_id) | Q(invites__to_user_id=user_id)
+    ).exists()
 
 
 def join_session(session_id, user_id):

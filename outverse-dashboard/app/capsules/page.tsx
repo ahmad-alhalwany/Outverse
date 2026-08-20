@@ -137,10 +137,10 @@ export default function CapsulesPage() {
       openAt = addDays(new Date(), DURATIONS.find((d) => d.id === duration)!.days);
     }
     setSealing(true);
-    const created = await createCapsule({ text: text.trim(), openAt, voiceFile });
+    const { capsule: created, error } = await createCapsule({ text: text.trim(), openAt, voiceFile });
     setSealing(false);
     if (!created) {
-      setFormError(t('capsules.error'));
+      setFormError(error || t('capsules.error'));
       return;
     }
     setSuccess(t('capsules.sealed'));
@@ -153,12 +153,14 @@ export default function CapsulesPage() {
 
   async function handleOpen(capsule: TimeCapsule) {
     setOpeningId(capsule.id);
-    const opened = await openCapsule(capsule.id);
+    const { capsule: opened, error } = await openCapsule(capsule.id);
     setOpeningId(null);
     if (opened) {
       setRevealed(opened);
       setCapsules((prev) => prev.map((c) => (c.id === opened.id ? opened : c)));
       setStats((prev) => (prev ? { ...prev, ready: Math.max(0, prev.ready - 1), opened: prev.opened + 1 } : prev));
+    } else if (error) {
+      setFormError(error);
     }
   }
 
@@ -241,7 +243,7 @@ export default function CapsulesPage() {
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 transition-all"
                 style={{ background: palette.accent }}
               >
-                {polishing ? '✨ Polishing…' : '✨ Polish tone'}
+                {polishing ? t('capsules.polishing') : t('capsules.polishTone')}
               </button>
             </div>
 
@@ -316,7 +318,7 @@ export default function CapsulesPage() {
                   }}
                 >
                   <MicrophoneIcon className="h-4 w-4" />
-                  {voiceFile ? voiceFile.name : 'Upload .mp3 / .m4a'}
+                  {voiceFile ? voiceFile.name : t('capsules.uploadVoice')}
                 </button>
                 {voiceFile && (
                   <button
@@ -324,7 +326,7 @@ export default function CapsulesPage() {
                     onClick={() => setVoiceFile(null)}
                     className="rounded-full p-1.5"
                     style={{ color: palette.muted }}
-                    aria-label="remove voice"
+                    aria-label={t('capsules.removeVoice')}
                   >
                     <XMarkIcon className="h-4 w-4" />
                   </button>
@@ -366,7 +368,7 @@ export default function CapsulesPage() {
 
           <section>
             <h2 className="text-xl font-bold mb-4" style={{ color: palette.text }}>
-              {loading ? '...' : `${capsules.length} ${locale === 'ar' ? 'كبسولة' : 'capsules'}`}
+              {loading ? '...' : t('capsules.count', { count: capsules.length })}
             </h2>
             {!loading && capsules.length === 0 ? (
               <div
@@ -567,7 +569,7 @@ function RevealModal({
           onClick={onClose}
           className="absolute top-4 right-4 rounded-full p-1.5"
           style={{ color: palette.muted }}
-          aria-label="close"
+          aria-label={t('capsules.close')}
         >
           <XMarkIcon className="h-5 w-5" />
         </button>

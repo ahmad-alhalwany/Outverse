@@ -1,6 +1,7 @@
+from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from notifications.utils import create_notification
@@ -17,6 +18,9 @@ from .ws_utils import delete_media, next_z_index, reorder_layer, update_media_tr
 
 
 class DrawSessionViewSet(viewsets.ModelViewSet):
+    """Every session is private to its host and whoever they've invited — never public."""
+
+    permission_classes = [IsAuthenticated]
     queryset = DrawSession.objects.select_related('host').filter(is_live=True)
 
     def get_serializer_class(self):
@@ -24,16 +28,12 @@ class DrawSessionViewSet(viewsets.ModelViewSet):
             return DrawSessionDetailSerializer
         return DrawSessionListSerializer
 
-    def get_permissions(self):
-        if self.action in (
-            'create', 'update', 'partial_update', 'destroy',
-            'add_media', 'add_stroke', 'invite', 'media_item', 'reorder_media',
-        ):
-            return [IsAuthenticated()]
-        return [AllowAny()]
-
     def get_queryset(self):
         qs = super().get_queryset()
+        user = self.request.user
+        if not user.is_authenticated:
+            return qs.none()
+        qs = qs.filter(Q(host=user) | Q(invites__to_user=user)).distinct()
         if self.action == 'retrieve':
             qs = qs.prefetch_related(
                 'strokes__user', 'media__user', 'shapes__user', 'texts__user', 'participants__user',

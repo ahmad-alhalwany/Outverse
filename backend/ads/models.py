@@ -14,6 +14,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 
 
@@ -54,8 +55,14 @@ class AdCampaign(models.Model):
     bid_strategy = models.CharField(max_length=10, choices=BID_STRATEGY_CHOICES, default='cpm')
 
     # Budget
-    daily_budget = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
-    lifetime_budget = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
+    daily_budget = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    lifetime_budget = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
     spent = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
 
     # Schedule

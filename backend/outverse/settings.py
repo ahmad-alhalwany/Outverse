@@ -121,6 +121,16 @@ else:
         },
     }
 
+if _redis_url:
+    # Shared across workers/instances — required for rate_limit_response() to actually
+    # limit anything once there's more than one Gunicorn worker or ECS/EC2 task.
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': _redis_url,
+        },
+    }
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',

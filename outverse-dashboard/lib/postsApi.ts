@@ -258,36 +258,44 @@ export async function fetchOrbitList(id: number): Promise<OrbitList | null> {
 export async function addOrbitListMember(
   listId: number,
   userId: number,
-): Promise<OrbitList | null> {
+): Promise<{ list: OrbitList | null; error?: string }> {
   try {
     const res = await apiFetchJson(`orbit-lists/${listId}/members/`, {
       method: 'POST',
       json: { user_id: userId },
     });
-    if (!res.ok) return null;
-    return (await res.json()) as OrbitList;
+    const data = await res.json().catch(() => null);
+    if (!res.ok) return { list: null, error: data?.error || data?.detail };
+    return { list: data as OrbitList };
   } catch {
-    return null;
+    return { list: null };
   }
 }
 
-export async function removeOrbitListMember(listId: number, userId: number): Promise<boolean> {
+export async function removeOrbitListMember(
+  listId: number,
+  userId: number,
+): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await apiFetch(`orbit-lists/${listId}/members/${userId}/`, {
       method: 'DELETE',
     });
-    return res.ok || res.status === 204;
+    if (res.ok || res.status === 204) return { ok: true };
+    const data = await res.json().catch(() => null);
+    return { ok: false, error: data?.error || data?.detail };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
-export async function deleteOrbitList(listId: number): Promise<boolean> {
+export async function deleteOrbitList(listId: number): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await apiFetch(`orbit-lists/${listId}/`, { method: 'DELETE' });
-    return res.ok || res.status === 204;
+    if (res.ok || res.status === 204) return { ok: true };
+    const data = await res.json().catch(() => null);
+    return { ok: false, error: data?.error || data?.detail };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 

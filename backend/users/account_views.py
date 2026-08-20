@@ -202,6 +202,9 @@ class TwoFactorLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        limited = rate_limit_response(request, 'login_2fa', limit=10, window=300)
+        if limited:
+            return limited
         pending_token = (request.data.get('pending_token') or '').strip()
         code = (request.data.get('code') or '').strip()
         token = UserToken.objects.filter(

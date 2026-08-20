@@ -28,6 +28,7 @@ from .views import (
     UserSocialListView,
     UserSocialView,
     UsernameAvailabilityView,
+    ResendVerificationEmailView,
     VerifyEmailView,
     YearInView,
 )
@@ -55,6 +56,7 @@ urlpatterns = [
     path('auth/google/', GoogleAuthView.as_view(), name='auth-google'),
     path('auth/apple/', AppleAuthView.as_view(), name='auth-apple'),
     path('verify-email/', VerifyEmailView.as_view(), name='verify-email'),
+    path('verify-email/resend/', ResendVerificationEmailView.as_view(), name='verify-email-resend'),
     path('forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
     path('reset-password/', ResetPasswordView.as_view(), name='reset-password'),
     path('check-username/', UsernameAvailabilityView.as_view(), name='check-username'),

@@ -436,7 +436,7 @@ export default function AdsManagerPage() {
                           className="rounded-lg px-3 py-1.5 text-xs font-semibold text-white"
                           style={{ background: 'var(--c-focus)' }}
                         >
-                          Activate
+                          {t('ads.activate')}
                         </button>
                       ) : c.status === 'paused' ? (
                         <button

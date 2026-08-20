@@ -146,6 +146,12 @@ export default function MuseumPage() {
         it.id === item.id ? { ...it, is_liked: data.liked, likes_count: data.likes_count } : it;
       setItems((prev) => prev.map(sync));
       setActive((prev) => (prev && prev.id === item.id ? sync(prev) : prev));
+    } else {
+      // Roll back the optimistic update — the like never actually persisted.
+      const revert = (it: FailedIdea): FailedIdea =>
+        it.id === item.id ? { ...it, is_liked: item.is_liked, likes_count: item.likes_count } : it;
+      setItems((prev) => prev.map(revert));
+      setActive((prev) => (prev && prev.id === item.id ? revert(prev) : prev));
     }
   }
 

@@ -71,13 +71,6 @@ class StoryCollaboratorSerializer(serializers.ModelSerializer):
 
 class StorySerializer(serializers.ModelSerializer):
     owner = NarrativeUserSerializer(read_only=True)
-    owner_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(),
-        source='owner',
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
     genre_display = serializers.CharField(
         source='get_genre_display', read_only=True
     )
@@ -104,14 +97,14 @@ class StorySerializer(serializers.ModelSerializer):
             'genre_display', 'status', 'visibility', 'studio_mode', 'require_approval',
             'tone', 'pov', 'content_rules', 'outline', 'characters', 'world_notes',
             'writing_goal', 'max_segments', 'target_words',
-            'is_featured', 'owner', 'owner_id',
+            'is_featured', 'owner',
             'segment_count', 'approved_segment_count', 'pending_segment_count',
             'contributors_count', 'word_count', 'can_contribute', 'can_edit_bible',
             'can_approve', 'can_revise', 'is_owner', 'is_studio_member',
             'can_request_join', 'my_collab_status', 'my_role', 'is_saved',
             'created_at', 'updated_at',
         ]
-        read_only_fields = ['status', 'created_at', 'updated_at']
+        read_only_fields = ['status', 'is_featured', 'created_at', 'updated_at']
 
     def _viewer(self):
         request = self.context.get('request')
@@ -177,11 +170,8 @@ class StorySerializer(serializers.ModelSerializer):
         return StorySave.objects.filter(user=viewer, story=obj).exists()
 
     def create(self, validated_data):
-        owner = validated_data.pop('owner', None)
         request = self.context.get('request')
-        viewer = user_from_request(request) if request else None
-        if not owner and viewer:
-            owner = viewer
+        owner = user_from_request(request) if request else None
         if not owner:
             raise serializers.ValidationError(
                 {'owner': 'Authentication required to create a story.'}
@@ -199,7 +189,6 @@ class StorySerializer(serializers.ModelSerializer):
         return Story.objects.create(owner=owner, **validated_data)
 
     def update(self, instance, validated_data):
-        validated_data.pop('owner', None)
         viewer = self._viewer()
         # Non-owners with editor role may only touch bible-ish fields via this serializer
         # when using the dedicated bible action; general PATCH stays owner-only in views.

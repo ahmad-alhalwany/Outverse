@@ -7,6 +7,7 @@ from .ws_utils import (
     add_shape,
     add_stroke,
     add_text,
+    can_access,
     clear_session,
     delete_shape,
     delete_text,
@@ -37,6 +38,10 @@ class StudioConsumer(AsyncJsonWebsocketConsumer):
         exists = await database_sync_to_async(session_exists)(self.session_id)
         if not exists:
             await self.close(code=4004)
+            return
+        allowed = await database_sync_to_async(can_access)(self.user_id, self.session_id)
+        if not allowed:
+            await self.close(code=4003)
             return
         self.group_name = f'studio_{self.session_id}'
         await self.channel_layer.group_add(self.group_name, self.channel_name)

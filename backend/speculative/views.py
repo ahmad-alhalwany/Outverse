@@ -70,6 +70,18 @@ class FailedIdeaViewSet(ThrottleMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+    def update(self, request, *args, **kwargs):
+        idea = self.get_object()
+        if idea.user_id != request.user.id and not request.user.is_staff:
+            return Response({'error': 'Not allowed.'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        idea = self.get_object()
+        if idea.user_id != request.user.id and not request.user.is_staff:
+            return Response({'error': 'Not allowed.'}, status=403)
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], url_path='like')
     def like(self, request, pk=None):
         idea = self.get_object()
@@ -126,6 +138,18 @@ class FutureMemoryViewSet(ThrottleMixin, viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        memory = self.get_object()
+        if memory.user_id != request.user.id and not request.user.is_staff:
+            return Response({'error': 'Not allowed.'}, status=403)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        memory = self.get_object()
+        if memory.user_id != request.user.id and not request.user.is_staff:
+            return Response({'error': 'Not allowed.'}, status=403)
+        return super().destroy(request, *args, **kwargs)
 
 
 class CharacterViewSet(ThrottleMixin, viewsets.ModelViewSet):
@@ -281,7 +305,11 @@ class CharacterViewSet(ThrottleMixin, viewsets.ModelViewSet):
         if err:
             return err
         with transaction.atomic():
-            character = Character.objects.select_for_update().get(pk=pk)
+            character = Character.objects.select_for_update().filter(
+                Q(is_public=True) | Q(creator_id=user.id)
+            ).filter(pk=pk).first()
+            if not character:
+                return Response({'error': 'Character not found.'}, status=status.HTTP_404_NOT_FOUND)
             if CharacterOwnership.objects.filter(character=character, user_id=user.id).exists():
                 return Response({'error': 'You already own this character.'}, status=status.HTTP_400_BAD_REQUEST)
             profile = Profile.objects.select_for_update().get_or_create(user=user)[0]

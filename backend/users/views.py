@@ -261,6 +261,21 @@ class VerifyEmailView(APIView):
         return Response({'verified': True})
 
 
+class ResendVerificationEmailView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        limited = rate_limit_response(request, 'resend_verification', limit=5, window=3600)
+        if limited:
+            return limited
+        email = (request.data.get('email') or '').strip()
+        user = User.objects.filter(email__iexact=email).first() if email else None
+        if user and not user.is_verified and user.email:
+            token = _issue_token(user, UserToken.EMAIL_VERIFICATION)
+            _send_verification_email(user, token)
+        return Response({'message': 'If that account needs verifying, a new link has been sent.'})
+
+
 class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
 

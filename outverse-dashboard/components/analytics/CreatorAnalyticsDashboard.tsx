@@ -38,22 +38,22 @@ type Palette = {
   barBg: string;
 };
 
-const CHANNEL_LABELS: Record<string, string> = {
-  copy: 'Copy link',
-  native: 'Native',
-  twitter: 'X / Twitter',
-  whatsapp: 'WhatsApp',
-  facebook: 'Facebook',
-  telegram: 'Telegram',
-  linkedin: 'LinkedIn',
-  reddit: 'Reddit',
-  bluesky: 'Bluesky',
-  email: 'Email',
-  dm: 'Direct message',
-  story: 'Story',
-  embed: 'Embed',
-  card: 'Share card',
-  unknown: 'Other',
+const CHANNEL_KEYS: Record<string, string> = {
+  copy: 'analytics.channelCopy',
+  native: 'analytics.channelNative',
+  twitter: 'analytics.channelTwitter',
+  whatsapp: 'analytics.channelWhatsapp',
+  facebook: 'analytics.channelFacebook',
+  telegram: 'analytics.channelTelegram',
+  linkedin: 'analytics.channelLinkedin',
+  reddit: 'analytics.channelReddit',
+  bluesky: 'analytics.channelBluesky',
+  email: 'analytics.channelEmail',
+  dm: 'analytics.channelDm',
+  story: 'analytics.channelStory',
+  embed: 'analytics.channelEmbed',
+  card: 'analytics.channelCard',
+  unknown: 'analytics.channelOther',
 };
 
 const REACTION_COLORS: Record<string, string> = {
@@ -106,10 +106,10 @@ export default function CreatorAnalyticsDashboard({ colors: C }: Props) {
         .slice(0, 8)
         .map(([channel, count]) => ({
           channel,
-          label: CHANNEL_LABELS[channel] ?? channel,
+          label: CHANNEL_KEYS[channel] ? t(CHANNEL_KEYS[channel]) : channel,
           count,
         })),
-    [data?.shares_by_channel],
+    [data?.shares_by_channel, t],
   );
 
   const reactionChartData = useMemo(

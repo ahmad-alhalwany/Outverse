@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { PlusIcon, QueueListIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import { apiFetch, apiFetchJson } from '@/lib/api';
+import { useLocale } from '@/components/LocaleProvider';
 
 type PlaylistVideo = {
   id: number;
@@ -34,6 +35,7 @@ function listFromResponse(data: unknown): Playlist[] {
 }
 
 export default function PlaylistsPage() {
+  const { t } = useLocale();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [loading, setLoading] = useState(true);
   const [title, setTitle] = useState('');
@@ -73,16 +75,20 @@ export default function PlaylistsPage() {
         method: 'POST',
         json: { title: title.trim(), description: description.trim(), is_public: isPublic },
       });
-      if (!res.ok) throw new Error('failed');
-      const created = (await res.json()) as Playlist;
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const fieldError = data ? Object.values(data)[0] : null;
+        throw new Error(data?.detail || (Array.isArray(fieldError) ? fieldError[0] : fieldError) || t('playlists.createFailed'));
+      }
+      const created = data as Playlist;
       setTitle('');
       setDescription('');
       setIsPublic(true);
       await load();
       setActiveId(created.id);
-      setMessage('Playlist created.');
-    } catch {
-      setMessage('Could not create playlist.');
+      setMessage(t('playlists.created'));
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : t('playlists.createFailed'));
     } finally {
       setBusy(false);
     }
@@ -99,12 +105,13 @@ export default function PlaylistsPage() {
         method: 'POST',
         json: { video_id: parsed },
       });
-      if (!res.ok) throw new Error('failed');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || data?.error || t('playlists.addVideoFailed'));
       setVideoId('');
-      setMessage('Video added.');
+      setMessage(t('playlists.videoAdded'));
       await load();
-    } catch {
-      setMessage('Could not add that video.');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : t('playlists.addVideoFailed'));
     } finally {
       setBusy(false);
     }
@@ -119,34 +126,34 @@ export default function PlaylistsPage() {
           <div>
             <h1 className="flex items-center gap-2 text-2xl font-bold">
               <QueueListIcon className="h-7 w-7 text-vault" />
-              Video Playlists
+              {t('playlists.title')}
             </h1>
-            <p className="mt-1 text-sm text-text-secondary">Bundle your creator videos into watchable collections.</p>
+            <p className="mt-1 text-sm text-text-secondary">{t('playlists.subtitle')}</p>
           </div>
           <Link href="/videos" className="rounded-full border border-surface px-4 py-2 text-sm font-semibold text-text-secondary hover:text-vault">
-            Videos
+            {t('playlists.videosLink')}
           </Link>
         </header>
 
         <form onSubmit={createPlaylist} className="rounded-2xl border border-surface bg-surface/30 p-4 space-y-3">
-          <h2 className="text-sm font-semibold text-text-secondary">Create playlist</h2>
+          <h2 className="text-sm font-semibold text-text-secondary">{t('playlists.create')}</h2>
           <input
             value={title}
             onChange={(event) => setTitle(event.target.value)}
-            placeholder="Playlist title"
+            placeholder={t('playlists.titlePlaceholder')}
             className="w-full rounded-xl border border-surface bg-background px-3 py-2 text-sm"
           />
           <textarea
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            placeholder="Description"
+            placeholder={t('playlists.descriptionPlaceholder')}
             rows={2}
             className="w-full rounded-xl border border-surface bg-background px-3 py-2 text-sm"
           />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <label className="flex items-center gap-2 text-sm text-text-secondary">
               <input type="checkbox" checked={isPublic} onChange={(event) => setIsPublic(event.target.checked)} />
-              Public
+              {t('playlists.public')}
             </label>
             <button
               type="submit"
@@ -154,7 +161,7 @@ export default function PlaylistsPage() {
               className="inline-flex items-center gap-1.5 rounded-xl bg-vault px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               <PlusIcon className="h-4 w-4" />
-              Create
+              {t('playlists.create')}
             </button>
           </div>
         </form>
@@ -164,10 +171,10 @@ export default function PlaylistsPage() {
         <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
           <aside className="space-y-2">
             {loading ? (
-              <p className="text-sm text-text-secondary">Loading playlists...</p>
+              <p className="text-sm text-text-secondary">{t('playlists.loading')}</p>
             ) : playlists.length === 0 ? (
               <p className="rounded-2xl border border-surface bg-surface/20 p-4 text-sm text-text-secondary">
-                No playlists yet.
+                {t('playlists.empty')}
               </p>
             ) : (
               playlists.map((playlist) => (
@@ -181,7 +188,7 @@ export default function PlaylistsPage() {
                 >
                   <p className="font-semibold">{playlist.title}</p>
                   <p className="text-xs text-text-secondary">
-                    {playlist.items?.length ?? 0} videos - {playlist.is_public ? 'public' : 'private'}
+                    {t('playlists.videoCount', { count: playlist.items?.length ?? 0 })} - {playlist.is_public ? t('playlists.public') : t('playlists.private')}
                   </p>
                 </button>
               ))
@@ -197,7 +204,7 @@ export default function PlaylistsPage() {
                   <input
                     value={videoId}
                     onChange={(event) => setVideoId(event.target.value)}
-                    placeholder="Video ID"
+                    placeholder={t('playlists.videoIdPlaceholder')}
                     className="w-32 rounded-xl border border-surface bg-background px-3 py-2 text-sm"
                   />
                   <button
@@ -206,12 +213,12 @@ export default function PlaylistsPage() {
                     disabled={busy || !videoId.trim()}
                     className="rounded-xl bg-vault px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                   >
-                    Add video
+                    {t('playlists.addVideo')}
                   </button>
                 </div>
                 <ul className="mt-4 space-y-2">
                   {(active.items || []).length === 0 ? (
-                    <li className="text-sm text-text-secondary">No videos in this playlist.</li>
+                    <li className="text-sm text-text-secondary">{t('playlists.noVideos')}</li>
                   ) : (
                     active.items?.map((item) => (
                       <li key={item.id} className="rounded-xl border border-surface bg-background/70 px-3 py-2">
@@ -220,7 +227,7 @@ export default function PlaylistsPage() {
                             {item.video.title}
                           </Link>
                         ) : (
-                          <span className="text-sm text-text-secondary">Video unavailable</span>
+                          <span className="text-sm text-text-secondary">{t('playlists.videoUnavailable')}</span>
                         )}
                       </li>
                     ))
@@ -228,7 +235,7 @@ export default function PlaylistsPage() {
                 </ul>
               </>
             ) : (
-              <p className="text-sm text-text-secondary">Select or create a playlist.</p>
+              <p className="text-sm text-text-secondary">{t('playlists.selectOrCreate')}</p>
             )}
           </section>
         </div>

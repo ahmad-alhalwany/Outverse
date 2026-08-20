@@ -23,6 +23,7 @@ class ResourceViewSet(ThrottleMixin, viewsets.ModelViewSet):
         'perform_destroy': 'content.draft_write',
         'list': 'anon.read',
         'retrieve': 'anon.read',
+        'download': 'anon.read',
     }
 
     def get_permissions(self):
@@ -48,7 +49,7 @@ class ResourceViewSet(ThrottleMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def download(self, request, pk=None):
-        resource = Resource.objects.get(pk=pk)
+        resource = self.get_object()
         if not resource.file_url:
             return Response({'error': 'This resource has no file available yet.'}, status=400)
         Resource.objects.filter(pk=pk).update(download_count=F('download_count') + 1)

@@ -16,11 +16,11 @@ import type { BazaarIdea } from '@/lib/bazaarTypes';
 import { useLocale } from '@/components/LocaleProvider';
 
 const COLLECTIONS = [
-  { key: 'all', label: 'All' },
-  { key: 'post', label: 'Posts' },
-  { key: 'reel', label: 'Reels' },
-  { key: 'idea', label: 'Ideas' },
-  { key: 'story', label: 'Stories' },
+  { key: 'all', labelKey: 'saved.tabAll' },
+  { key: 'post', labelKey: 'saved.tabPosts' },
+  { key: 'reel', labelKey: 'saved.tabReels' },
+  { key: 'idea', labelKey: 'saved.tabIdeas' },
+  { key: 'story', labelKey: 'saved.tabStories' },
 ] as const;
 
 type SavedItem = {
@@ -115,7 +115,7 @@ export default function SavedPostsPage() {
       setActionError('');
       handleUnsave(`idea_${ideaId}`);
     } else {
-      setActionError('Could not remove this idea. Try again.');
+      setActionError(t('saved.unsaveIdeaFailed'));
     }
   }
 
@@ -127,7 +127,7 @@ export default function SavedPostsPage() {
       setFolders((prev) => prev.map((item) => (item.id === folder.id ? updated : item)));
       setActionError('');
     } else {
-      setActionError('Could not update board visibility.');
+      setActionError(t('saved.toggleVisibilityFailed'));
     }
     setUpdatingFolderId(null);
   }
@@ -139,10 +139,10 @@ export default function SavedPostsPage() {
           <div>
             <h1 className="text-2xl font-bold text-text flex items-center gap-2">
               <BookmarkIcon className="h-7 w-7 text-vault" />
-              Saved collections
+              {t('saved.header')}
             </h1>
             <p className="text-sm text-text-secondary mt-1">
-              Posts, reels, ideas, and stories you bookmarked across Cosmory.
+              {t('saved.subtitle')}
             </p>
           </div>
           <button
@@ -152,7 +152,7 @@ export default function SavedPostsPage() {
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm text-text-secondary hover:text-text hover:bg-surface border border-surface transition disabled:opacity-50"
           >
             <ArrowPathIcon className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            {t('saved.refresh')}
           </button>
         </div>
 
@@ -169,7 +169,7 @@ export default function SavedPostsPage() {
                   : 'bg-surface text-text-secondary hover:text-text'
               }`}
             >
-              {tab.label}
+              {t(tab.labelKey)}
             </button>
           ))}
         </div>
@@ -199,7 +199,7 @@ export default function SavedPostsPage() {
                 </button>
                 {f.is_public ? (
                   <Link href={`/boards/${f.id}`} className="rounded-full bg-surface px-2 py-1 text-[10px] font-semibold text-vault hover:underline">
-                    Public board
+                    {t('saved.publicBoard')}
                   </Link>
                 ) : null}
                 <button
@@ -208,7 +208,7 @@ export default function SavedPostsPage() {
                   disabled={updatingFolderId === f.id}
                   className="rounded-full bg-surface px-2 py-1 text-[10px] font-semibold text-text-secondary hover:text-vault disabled:opacity-50"
                 >
-                  {f.is_public ? 'Make private' : 'Make public'}
+                  {f.is_public ? t('saved.makePrivate') : t('saved.makePublic')}
                 </button>
               </span>
             ))}
@@ -224,23 +224,23 @@ export default function SavedPostsPage() {
         {!me && (
           <div className="rounded-2xl p-6 mb-6 bg-surface border border-surface text-center text-sm text-text-secondary">
             <Link href="/login" className="text-vault font-semibold hover:underline">
-              Sign in
+              {t('saved.signIn')}
             </Link>{' '}
-            to sync saved posts across devices.
+            {t('saved.signInHint')}
           </div>
         )}
 
         {loading ? (
-          <div className="text-center py-16 text-text-secondary">Loading saved items…</div>
+          <div className="text-center py-16 text-text-secondary">{t('saved.loading')}</div>
         ) : error ? (
           <div className="text-center py-16">
-            <p className="text-text-secondary mb-3">Could not load saved items.</p>
+            <p className="text-text-secondary mb-3">{t('saved.loadError')}</p>
             <button
               type="button"
               onClick={() => load()}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-white bg-vault"
             >
-              Try again
+              {t('saved.tryAgain')}
             </button>
           </div>
         ) : totalVisible === 0 ? (
@@ -250,15 +250,15 @@ export default function SavedPostsPage() {
             className="rounded-2xl py-16 px-6 text-center border border-surface bg-surface/50"
           >
             <p className="text-4xl mb-3">🔖</p>
-            <p className="font-semibold text-text mb-2">Nothing saved yet</p>
+            <p className="font-semibold text-text mb-2">{t('saved.emptyTitle')}</p>
             <p className="text-sm text-text-secondary max-w-sm mx-auto mb-4">
-              Tap the bookmark on any post, reel, idea, or story to save it here.
+              {t('saved.emptyBody')}
             </p>
             <Link
               href="/"
               className="inline-block px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-vault to-bazaar"
             >
-              Explore feed
+              {t('saved.exploreFeed')}
             </Link>
           </motion.div>
         ) : (

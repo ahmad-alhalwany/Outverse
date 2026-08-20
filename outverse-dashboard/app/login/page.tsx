@@ -4,7 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { login, verifyEmail } from '@/lib/auth';
+import { login, verifyEmail, resendVerificationEmail } from '@/lib/auth';
 import { loginWith2fa, loginWithGoogle, loginWithApple } from '@/lib/accountSecurityApi';
 import { useLocale } from '@/components/LocaleProvider';
 import { FiEye, FiEyeOff, FiLock, FiMail } from 'react-icons/fi';
@@ -60,7 +60,9 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const [notice, setNotice] = useState('');
+  const [resending, setResending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [pending2fa, setPending2fa] = useState<string | null>(null);
   const [totpCode, setTotpCode] = useState('');
@@ -191,6 +193,7 @@ function LoginForm() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+    setErrorCode('');
     setLoading(true);
     try {
       if (pending2fa) {
@@ -207,8 +210,23 @@ function LoginForm() {
       router.push(nextPath.startsWith('/') ? nextPath : '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : t('auth.loginFailed'));
+      setErrorCode((err as { code?: string })?.code || '');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setResending(true);
+    setError('');
+    try {
+      await resendVerificationEmail(username.trim());
+      setErrorCode('');
+      setNotice(t('auth.verificationResent'));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('auth.loginFailed'));
+    } finally {
+      setResending(false);
     }
   }
 
@@ -301,7 +319,7 @@ function LoginForm() {
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full bg-transparent text-base outline-none placeholder:text-[#9691B8]"
                   style={{ color: COLORS.text }}
-                  placeholder="Enter your email"
+                  placeholder={t('auth.enterEmail')}
                   autoComplete="username"
                 />
               </div>
@@ -328,14 +346,14 @@ function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-transparent text-base outline-none placeholder:text-[#9691B8]"
                   style={{ color: COLORS.text }}
-                  placeholder="Enter your password"
+                  placeholder={t('auth.enterPassword')}
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((current) => !current)}
                   className="icon-only p-1.5 shrink-0"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-label={showPassword ? t('auth.hidePassword') : t('auth.showPassword')}
                 >
                   {showPassword ? (
                     <FiEyeOff className="h-5 w-5" style={{ color: COLORS.muted }} />
@@ -372,6 +390,17 @@ function LoginForm() {
 
             {notice && <div className="text-sm" style={{ color: COLORS.success }}>{notice}</div>}
             {error && <div className="text-sm" style={{ color: COLORS.error }}>{error}</div>}
+            {errorCode === 'email_not_verified' && (
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resending}
+                className="text-sm font-semibold underline disabled:opacity-60"
+                style={{ color: COLORS.text }}
+              >
+                {resending ? t('auth.resendingVerification') : t('auth.resendVerification')}
+              </button>
+            )}
 
             <button
               type="submit"
@@ -412,7 +441,7 @@ function LoginForm() {
           <p className="mt-8 text-center text-lg" style={{ color: COLORS.muted }}>
             {t('auth.newToCosmory')}{' '}
             <Link href="/register" className="font-semibold" style={{ color: COLORS.primary }}>
-              Sign up
+              {t('auth.signUp')}
             </Link>
           </p>
         </section>

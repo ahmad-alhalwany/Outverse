@@ -4,7 +4,11 @@ from rest_framework.response import Response
 
 def rate_limit_response(request, key_prefix: str, limit: int = 20, window: int = 60):
     """Return a 429 Response if the client exceeded the limit, else None."""
-    ip = (request.META.get('HTTP_X_FORWARDED_FOR') or '').split(',')[0].strip()
+    # Take the LAST hop of X-Forwarded-For, not the first: behind an AWS ALB (or any
+    # reverse proxy) the leftmost entries are client-supplied and trivially spoofable,
+    # while the proxy always appends the real connecting IP as the final hop.
+    xff = request.META.get('HTTP_X_FORWARDED_FOR') or ''
+    ip = xff.split(',')[-1].strip() if xff else ''
     if not ip:
         ip = request.META.get('REMOTE_ADDR', 'unknown')
     cache_key = f'rl:{key_prefix}:{ip}'

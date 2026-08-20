@@ -199,6 +199,18 @@ export async function verifyEmail(token: string): Promise<void> {
   if (!res.ok) throw new Error(data.error || 'Verification failed.');
 }
 
+export async function resendVerificationEmail(email: string): Promise<string> {
+  const res = await fetch(apiUrl('users/verify-email/resend/'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ email }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Unable to resend verification email.');
+  return data.message as string;
+}
+
 export async function forgotPassword(email: string): Promise<string> {
   const res = await fetch(apiUrl('users/forgot-password/'), {
     method: 'POST',

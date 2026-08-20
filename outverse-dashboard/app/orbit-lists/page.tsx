@@ -93,16 +93,20 @@ export default function OrbitListsPage() {
     if (!activeId || !memberId.trim()) return;
     const uid = Number(memberId);
     if (!Number.isFinite(uid)) return;
-    const updated = await addOrbitListMember(activeId, uid);
+    setError('');
+    const { list: updated, error: err } = await addOrbitListMember(activeId, uid);
     if (updated) {
       setLists((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       setMemberId('');
+    } else {
+      setError(err || t('signal.addMemberFailed'));
     }
   };
 
   const handleRemoveMember = async (userId: number) => {
     if (!activeId) return;
-    const ok = await removeOrbitListMember(activeId, userId);
+    setError('');
+    const { ok, error: err } = await removeOrbitListMember(activeId, userId);
     if (ok) {
       setLists((prev) =>
         prev.map((l) =>
@@ -115,17 +119,22 @@ export default function OrbitListsPage() {
             : l,
         ),
       );
+    } else {
+      setError(err || t('signal.removeMemberFailed'));
     }
   };
 
   const handleDelete = async (listId: number) => {
-    const ok = await deleteOrbitList(listId);
+    setError('');
+    const { ok, error: err } = await deleteOrbitList(listId);
     if (ok) {
       setLists((prev) => prev.filter((l) => l.id !== listId));
       if (activeId === listId) {
         setActiveId(null);
         setFeedPosts([]);
       }
+    } else {
+      setError(err || t('signal.deleteListFailed'));
     }
   };
 

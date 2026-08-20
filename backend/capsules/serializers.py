@@ -1,3 +1,4 @@
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import TimeCapsule
@@ -57,3 +58,8 @@ class TimeCapsuleCreateSerializer(serializers.ModelSerializer):
         if not value or not value.strip() or len(value.strip()) < 4:
             raise serializers.ValidationError('Write a slightly longer message.')
         return value.strip()
+
+    def validate_open_at(self, value):
+        if value <= timezone.now():
+            raise serializers.ValidationError('open_at must be in the future.')
+        return value

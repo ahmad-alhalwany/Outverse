@@ -60,8 +60,8 @@ class AdCampaignViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and not user.is_staff:
             # Advertiser: own campaigns (all statuses) — this is their dashboard.
             qs = qs.filter(advertiser=user)
-        elif not user.is_authenticated and self.action == 'list':
-            # Public/anonymous: only active campaigns.
+        elif not user.is_authenticated:
+            # Public/anonymous: only active campaigns (list AND retrieve).
             qs = qs.filter(status='active')
         # Staff sees all
         return qs
@@ -123,6 +123,8 @@ class AdCampaignViewSet(viewsets.ModelViewSet):
         campaign = self.get_object()
         if campaign.advertiser_id != request.user.id and not request.user.is_staff:
             return Response({'detail': 'Not your campaign.'}, status=403)
+        if campaign.status == 'active':
+            return Response({'detail': 'Campaign is already active.'}, status=400)
         if not campaign.can_be_activated:
             return Response(
                 {'detail': 'Campaign cannot be activated (budget exhausted or schedule ended).'},
@@ -284,8 +286,8 @@ class AdViewSet(viewsets.ModelViewSet):
         if user.is_authenticated and not user.is_staff:
             # Advertiser: own ads (all statuses) — this is their dashboard.
             qs = qs.filter(campaign__advertiser=user)
-        elif not user.is_authenticated and self.action == 'list':
-            # Public/anonymous: only active ads.
+        elif not user.is_authenticated:
+            # Public/anonymous: only active ads (list AND retrieve).
             qs = qs.filter(status='active')
         campaign_id = self.request.query_params.get('campaign')
         if campaign_id:
