@@ -1,3 +1,4 @@
+import logging
 import secrets
 import os
 
@@ -46,6 +47,7 @@ from .serializers import (
 
 User = get_user_model()
 TOKEN_TTL_HOURS = 24
+logger = logging.getLogger(__name__)
 WORLD_OPTIONS = ['The Lab', 'The Bazaar', 'The Vault', 'Story Forge', 'Madness Shop']
 
 
@@ -150,27 +152,35 @@ def _issue_token(user, token_type):
 
 
 def _send_verification_email(user, token):
+    """Best-effort — a mail-provider hiccup must never 500 a request whose
+    real work (account/token already created in the DB) already succeeded."""
     if not user.email:
         return
     verify_url = f"{_frontend_base_url()}/login?verified=1&token={token.token}"
-    send_mail(
-        'Verify your Outverse account',
-        f'Welcome to Outverse.\n\nVerify your email by opening:\n{verify_url}\n\nThis link expires in {TOKEN_TTL_HOURS} hours.',
-        getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@outverse.local'),
-        [user.email],
-        fail_silently=False,
-    )
+    try:
+        send_mail(
+            'Verify your Outverse account',
+            f'Welcome to Outverse.\n\nVerify your email by opening:\n{verify_url}\n\nThis link expires in {TOKEN_TTL_HOURS} hours.',
+            getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@outverse.local'),
+            [user.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception('Failed to send verification email to user %s', user.id)
 
 
 def _send_password_reset_email(user, token):
     reset_url = f"{_frontend_base_url()}/reset-password?token={token.token}"
-    send_mail(
-        'Reset your Outverse password',
-        f'Use this link to reset your password:\n{reset_url}\n\nThis link expires in {TOKEN_TTL_HOURS} hours.',
-        getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@outverse.local'),
-        [user.email],
-        fail_silently=False,
-    )
+    try:
+        send_mail(
+            'Reset your Outverse password',
+            f'Use this link to reset your password:\n{reset_url}\n\nThis link expires in {TOKEN_TTL_HOURS} hours.',
+            getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@outverse.local'),
+            [user.email],
+            fail_silently=False,
+        )
+    except Exception:
+        logger.exception('Failed to send password reset email to user %s', user.id)
 
 
 def _get_active_token(token_value, token_type):
