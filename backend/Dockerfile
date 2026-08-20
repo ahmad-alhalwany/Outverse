@@ -27,7 +27,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 libjpeg62-turbo zlib1g libwebp2 \
+    libpq5 libjpeg62-turbo zlib1g libwebp7 \
     && rm -rf /var/lib/apt/lists/* && \
     useradd -m -u 1000 outverse
 
