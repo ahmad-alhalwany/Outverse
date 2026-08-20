@@ -2,6 +2,10 @@
 
 This guide covers a typical VPS deployment with Docker Compose, nginx, HTTPS, Stripe, and Web Push.
 
+> Deploying to AWS with RDS Postgres + S3 media instead of a local Postgres
+> container? See [DEPLOY_AWS.md](./DEPLOY_AWS.md) — same guide, `docker-compose.aws.yml`
+> instead of `docker-compose.prod.yml`, no local `db` container.
+
 ## Prerequisites
 
 - Ubuntu 22.04+ VPS (2 GB RAM minimum, 4 GB recommended)

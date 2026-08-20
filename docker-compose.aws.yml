@@ -1,0 +1,125 @@
+# AWS variant of docker-compose.prod.yml — for a single EC2 instance talking to an
+# external RDS Postgres instance instead of a local Postgres container.
+#
+# Differences from docker-compose.prod.yml:
+#   - no `db` service / `pgdata` volume — set POSTGRES_HOST to your RDS endpoint instead
+#   - no dockerized `nginx` service — a host-installed nginx + certbot terminates TLS
+#     and reverse-proxies to 127.0.0.1:8000 (backend) / 127.0.0.1:3000 (frontend), using
+#     deploy/nginx/outverse.conf as-is
+#   - backend/frontend ports are published to 127.0.0.1 only (not the public interface)
+#
+# Usage: see docs/DEPLOY_AWS.md
+#
+# docker compose -f docker-compose.aws.yml up -d --build
+# docker compose -f docker-compose.aws.yml exec backend python manage.py migrate
+# docker compose -f docker-compose.aws.yml exec backend python manage.py createsuperuser
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_started
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost}
+      DJANGO_ENABLE_HTTPS_SECURITY: ${DJANGO_ENABLE_HTTPS_SECURITY:-True}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
+      # RDS endpoint — e.g. outverse-db.xxxxxxxx.us-east-1.rds.amazonaws.com
+      POSTGRES_HOST: ${POSTGRES_HOST:?POSTGRES_HOST (RDS endpoint) is required}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-outverse}
+      POSTGRES_USER: ${POSTGRES_USER:-outverse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
+      CDN_URL: ${CDN_URL:-}
+      FRONTEND_URL: ${FRONTEND_URL:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      CLOUDFLARE_STREAM_ACCOUNT_ID: ${CLOUDFLARE_STREAM_ACCOUNT_ID:-}
+      CLOUDFLARE_STREAM_API_TOKEN: ${CLOUDFLARE_STREAM_API_TOKEN:-}
+      CLOUDFLARE_STREAM_CUSTOMER_CODE: ${CLOUDFLARE_STREAM_CUSTOMER_CODE:-}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_ADMIN_EMAIL: ${VAPID_ADMIN_EMAIL:-mailto:admin@outverse.local}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      # S3 media storage — set these to serve uploads from S3 instead of the
+      # instance's local disk (recommended: EC2 disks don't survive replacement).
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME:-us-east-1}
+      AWS_S3_CUSTOM_DOMAIN: ${AWS_S3_CUSTOM_DOMAIN:-}
+    volumes:
+      - backend_media:/app/media
+      - backend_static:/app/staticfiles
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             daphne -b 0.0.0.0 -p 8000 outverse.asgi:application"
+
+  frontend:
+    build:
+      context: ./outverse-dashboard
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://YOUR_DOMAIN}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://YOUR_DOMAIN}
+      NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    ports:
+      - "127.0.0.1:3000:3000"
+
+  # Sidecar: publish scheduled posts + premieres every minute; digests once daily.
+  cron:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost}
+      POSTGRES_HOST: ${POSTGRES_HOST:?POSTGRES_HOST (RDS endpoint) is required}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_DB: ${POSTGRES_DB:-outverse}
+      POSTGRES_USER: ${POSTGRES_USER:-outverse}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_URL: redis://redis:6379/0
+      FRONTEND_URL: ${FRONTEND_URL:-}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-}
+      CRON_DIGEST_HOUR: ${CRON_DIGEST_HOUR:-08}
+      CRON_DIGEST_MINUTE: ${CRON_DIGEST_MINUTE:-00}
+      AWS_STORAGE_BUCKET_NAME: ${AWS_STORAGE_BUCKET_NAME:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_S3_REGION_NAME: ${AWS_S3_REGION_NAME:-us-east-1}
+      AWS_S3_CUSTOM_DOMAIN: ${AWS_S3_CUSTOM_DOMAIN:-}
+    volumes:
+      - backend_media:/app/media
+    entrypoint: ["/bin/sh", "/app/scripts/cron-loop.sh"]
+
+volumes:
+  backend_media:
+  backend_static:
