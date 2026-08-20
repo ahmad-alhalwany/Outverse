@@ -1,6 +1,6 @@
 # Django backend image for Outverse.
 # Multi-stage: builder installs deps, runtime copies them into a slim image.
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim-bookworm AS builder
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -20,7 +20,7 @@ RUN python -m venv /opt/venv && \
     /opt/venv/bin/pip install -r requirements.txt
 
 # ---- runtime ----
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
