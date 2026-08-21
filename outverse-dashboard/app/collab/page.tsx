@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import WorldShell from '@/components/world/WorldShell';
 import { useTheme } from '@/components/ThemeProvider';
@@ -59,6 +59,14 @@ const STATUS_LABEL_KEY: Record<(typeof STATUS_COLUMNS)[number], string> = {
 };
 
 export default function CollabHubPage() {
+  return (
+    <Suspense fallback={null}>
+      <CollabHubPageContent />
+    </Suspense>
+  );
+}
+
+function CollabHubPageContent() {
   const { theme } = useTheme();
   const { t } = useLocale();
   const C = PALETTES[theme];

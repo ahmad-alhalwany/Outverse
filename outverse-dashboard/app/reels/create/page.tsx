@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeftIcon } from '@heroicons/react/24/outline';
@@ -26,6 +26,14 @@ import {
 import { useLocale } from '@/components/LocaleProvider';
 
 export default function CreateReelPage() {
+  return (
+    <Suspense fallback={null}>
+      <CreateReelPageContent />
+    </Suspense>
+  );
+}
+
+function CreateReelPageContent() {
   const { t, locale } = useLocale();
   const router = useRouter();
   const searchParams = useSearchParams();

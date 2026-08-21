@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -56,6 +56,14 @@ function formatRemaining(openAt: string): string {
 }
 
 export default function CapsulesPage() {
+  return (
+    <Suspense fallback={null}>
+      <CapsulesPageContent />
+    </Suspense>
+  );
+}
+
+function CapsulesPageContent() {
   const { theme } = useTheme();
   const { t, locale, dir } = useLocale();
   const user = useAuthUser();
