@@ -36,6 +36,11 @@ COPY --from=builder /opt/venv /opt/venv
 WORKDIR /app
 COPY --chown=outverse:outverse . .
 
+# Pre-create the directories that get overmounted by named volumes in prod
+# compose (media/staticfiles) — Docker gives a fresh named volume root:root
+# ownership unless the image path it covers already has the right owner.
+RUN mkdir -p /app/media /app/staticfiles && chown -R outverse:outverse /app/media /app/staticfiles
+
 USER outverse
 
 EXPOSE 8000
