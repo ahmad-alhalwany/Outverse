@@ -26,7 +26,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Cosmory Dashboard",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL || "https://outverse-six.vercel.app"
+  ),
+  title: {
+    default: "Cosmory",
+    template: "%s | Cosmory",
+  },
   description: "Your creative social space where ideas come to life",
   manifest: "/manifest.json",
   applicationName: "Cosmory",
