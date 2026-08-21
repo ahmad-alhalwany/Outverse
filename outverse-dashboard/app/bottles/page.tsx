@@ -929,7 +929,7 @@ function ThrowBottleModal({
     onLocationChange(next);
   }
 
-  async function useMyGps() {
+  async function handleUseMyGps() {
     setLocating(true);
     setError('');
     const loc = await getLocation();
@@ -1047,7 +1047,7 @@ function ThrowBottleModal({
             <div className="flex flex-wrap gap-2 mb-2">
               <button
                 type="button"
-                onClick={() => void useMyGps()}
+                onClick={() => void handleUseMyGps()}
                 disabled={locating}
                 className="rounded-full px-3 py-1.5 text-xs font-semibold"
                 style={{ background: C.white, color: C.brown, border: `1px solid ${C.line}` }}

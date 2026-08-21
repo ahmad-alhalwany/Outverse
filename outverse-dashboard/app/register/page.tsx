@@ -368,7 +368,7 @@ export default function RegisterPage() {
               {step === 2 && (
                 <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
                   <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Your Avatar</h2>
-                  <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>You'll fully customize this in the next step</p>
+                  <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>You&apos;ll fully customize this in the next step</p>
                   <div className="mt-8 rounded-[20px] p-5" style={{ background: COLORS.panelSoft }}>
                     <p className="text-2xl font-semibold" style={{ color: COLORS.accentDark }}>Your Future Avatar</p>
                     <div
