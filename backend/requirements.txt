@@ -3,6 +3,7 @@ djangorestframework
 django-cors-headers
 django-filter
 psycopg2-binary
+Pillow>=11.0
 channels>=4.0,<5
 channels-redis>=4.2,<5
 daphne>=4.0,<5
