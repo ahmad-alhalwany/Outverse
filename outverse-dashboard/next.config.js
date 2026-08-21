@@ -36,8 +36,16 @@ const nextConfig = {
     const mediaSrc = isDev
       ? "media-src 'self' blob: http://localhost:8000 http://127.0.0.1:8000 https:"
       : "media-src 'self' blob: https:";
+    // The actual backend origin (NEXT_PUBLIC_API_URL) must always be allowed,
+    // whatever it currently points at — a temporary IP/nip.io host during
+    // early deployment, or the real api.cosmory.app domain later — so this
+    // never needs another code change when the backend's address changes.
+    const apiOrigin = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
+    const apiWsOrigin = apiOrigin.replace(/^http/, 'ws');
     const connectSrc = [
       "connect-src 'self'",
+      apiOrigin,
+      apiWsOrigin,
       'https://api.cosmory.app',
       'https://cosmory.app',
       'https://fonts.googleapis.com',
