@@ -246,7 +246,7 @@ export default function Sidebar() {
                   }`}
                 >
                   <GroupIcon className="h-[1.1rem] w-[1.1rem] shrink-0" strokeWidth={1.8} />
-                  <span className="flex-1 text-left">{t(group.groupKey)}</span>
+                  <span className="flex-1 text-start">{t(group.groupKey)}</span>
                   <ChevronDownIcon
                     className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
                     strokeWidth={2}

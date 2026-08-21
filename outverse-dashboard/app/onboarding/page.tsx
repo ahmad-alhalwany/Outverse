@@ -16,6 +16,7 @@ import {
 import { authFetch, setAuth } from '@/lib/auth';
 import { apiFetch, apiUrl, mediaUrl } from '@/lib/api';
 import { useLocale } from '@/components/LocaleProvider';
+import { useTheme } from '@/components/ThemeProvider';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 
 const WORLDS_FALLBACK = ['The Lab', 'The Bazaar', 'The Vault'];
@@ -51,11 +52,12 @@ type Suggestion = {
   is_following: boolean;
 };
 
-const COLORS = {
+const LIGHT_COLORS = {
   page: '#F3F0FC',
   panel: '#FFFFFF',
   panelSoft: '#DCC9FA',
   panelMuted: '#F5F1FE',
+  panelInactive: '#F7F5F5',
   border: '#E3D9F7',
   text: '#211B3D',
   muted: '#79709E',
@@ -64,6 +66,34 @@ const COLORS = {
   darkPanel: '#1E1740',
   peach: '#C4B5FD',
   olive: '#A855F7',
+  borderSoft: '#EFE4DE',
+  dotInactive: '#ECE7E5',
+  trackBg: '#EFE9E6',
+  errorBorder: '#E8B7A8',
+  errorBg: '#FFF1EC',
+  errorText: '#A24F39',
+};
+
+const DARK_COLORS = {
+  page: '#14102A',
+  panel: '#1E1740',
+  panelSoft: '#2A2154',
+  panelMuted: '#251B4D',
+  panelInactive: '#251B4D',
+  border: 'rgba(167,139,250,0.20)',
+  text: '#F5F3FF',
+  muted: '#B0A6D9',
+  accent: '#C4B5FD',
+  accentDark: '#A78BFA',
+  darkPanel: '#0F0C22',
+  peach: '#C4B5FD',
+  olive: '#C084FC',
+  borderSoft: 'rgba(255,255,255,0.10)',
+  dotInactive: 'rgba(255,255,255,0.14)',
+  trackBg: 'rgba(255,255,255,0.08)',
+  errorBorder: 'rgba(239,115,115,0.4)',
+  errorBg: 'rgba(239,115,115,0.12)',
+  errorText: '#FCA5A5',
 };
 
 const GUIDE_OPTIONS = [
@@ -84,6 +114,8 @@ function initials(value: string) {
 export default function OnboardingPage() {
   const router = useRouter();
   const { t } = useLocale();
+  const { theme } = useTheme();
+  const COLORS = theme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
   const [worlds, setWorlds] = useState<string[]>(WORLDS_FALLBACK);
   const [selectedWorlds, setSelectedWorlds] = useState<string[]>(WORLDS_FALLBACK);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -222,7 +254,7 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen" style={{ background: COLORS.page }}>
-      <header className="border-b px-5 py-5 md:px-12" style={{ borderColor: '#EFE4DE' }}>
+      <header className="border-b px-5 py-5 md:px-12" style={{ borderColor: COLORS.borderSoft }}>
         <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-4">
           <button type="button" onClick={() => router.back()} className="inline-flex items-center gap-2 text-sm font-medium" style={{ color: COLORS.text }}>
             <ArrowLeft size={18} />
@@ -244,7 +276,7 @@ export default function OnboardingPage() {
                   <button key={id} type="button" onClick={() => setSelectedGuide(id)} className="text-center">
                     <div
                       className="mx-auto flex h-28 w-28 items-center justify-center rounded-full md:h-36 md:w-36"
-                      style={{ background: active ? COLORS.panelSoft : '#F7F5F5' }}
+                      style={{ background: active ? COLORS.panelSoft : COLORS.panelInactive }}
                     >
                       <Icon size={52} style={{ color: active ? COLORS.accent : COLORS.text }} />
                     </div>
@@ -274,7 +306,7 @@ export default function OnboardingPage() {
               <span
                 key={index}
                 className="h-3 w-3 rounded-full"
-                style={{ background: index === step ? COLORS.text : '#ECE7E5' }}
+                style={{ background: index === step ? COLORS.text : COLORS.dotInactive }}
               />
             ))}
           </div>
@@ -295,7 +327,7 @@ export default function OnboardingPage() {
                   className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
                   style={{ left: star.left, top: star.top }}
                 >
-                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: selectedMood === star.id ? COLORS.accent : '#FFFFFF' }}>
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: selectedMood === star.id ? COLORS.accent : COLORS.panel }}>
                     <Star size={24} style={{ color: selectedMood === star.id ? '#fff' : COLORS.text }} />
                   </div>
                   <p className="mt-3 text-lg font-medium" style={{ color: COLORS.text }}>{t(star.labelKey)}</p>
@@ -312,7 +344,7 @@ export default function OnboardingPage() {
         {step === 1 && (
         <section className="mt-16">
           <h2 className="text-center text-4xl font-bold tracking-[-0.04em] md:text-5xl" style={{ color: COLORS.text }}>{t('onboarding.discoverUniverse')}</h2>
-          <div className="mt-8 rounded-[28px] px-6 py-10 md:px-10" style={{ background: '#F5F3F3' }}>
+          <div className="mt-8 rounded-[28px] px-6 py-10 md:px-10" style={{ background: COLORS.panelMuted }}>
             <div className="grid gap-8 md:grid-cols-3">
               {worldCards.map(({ value, label, icon: Icon, subtitle, tone }) => (
                 <button
@@ -321,11 +353,11 @@ export default function OnboardingPage() {
                   onClick={() => setSelectedWorlds((current) => current.includes(value) ? current.filter((item) => item !== value) : [...current, value])}
                   className="flex flex-col items-center rounded-[24px] px-6 py-8 text-center transition"
                   style={{
-                    background: selectedWorlds.includes(value) ? '#FFFFFF' : 'transparent',
+                    background: selectedWorlds.includes(value) ? COLORS.panel : 'transparent',
                     boxShadow: selectedWorlds.includes(value) ? '0 12px 30px rgba(33, 27, 61, 0.10)' : 'none',
                   }}
                 >
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: '#FFFFFF' }}>
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full" style={{ background: COLORS.panel }}>
                     <Icon size={30} style={{ color: tone }} />
                   </div>
                   <p className="mt-5 text-3xl font-semibold tracking-[-0.03em]" style={{ color: COLORS.text }}>{label}</p>
@@ -364,7 +396,7 @@ export default function OnboardingPage() {
                           )}
                           className="rounded-full px-4 py-2 text-sm font-medium transition"
                           style={{
-                            background: active ? COLORS.accent : '#F7F5F5',
+                            background: active ? COLORS.accent : COLORS.panelInactive,
                             color: active ? '#fff' : COLORS.text,
                             border: `1px solid ${active ? COLORS.accent : 'transparent'}`,
                           }}
@@ -393,7 +425,7 @@ export default function OnboardingPage() {
             </div>
             <div className="mt-6 grid gap-4">
               {suggestions.slice(0, 4).map((creator) => (
-                <div key={creator.id} className="flex items-center gap-4 rounded-[20px] border p-4" style={{ borderColor: COLORS.border, background: '#FFFDFC' }}>
+                <div key={creator.id} className="flex items-center gap-4 rounded-[20px] border p-4" style={{ borderColor: COLORS.border, background: COLORS.panel }}>
                   {creator.avatar ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={mediaUrl(creator.avatar)} alt={creator.username} className="h-14 w-14 rounded-full object-cover" />
@@ -445,13 +477,13 @@ export default function OnboardingPage() {
         )}
 
         {error && (
-          <div className="mx-auto mt-8 max-w-[760px] rounded-2xl border px-4 py-3 text-sm font-medium" style={{ borderColor: '#E8B7A8', background: '#FFF1EC', color: '#A24F39' }}>
+          <div className="mx-auto mt-8 max-w-[760px] rounded-2xl border px-4 py-3 text-sm font-medium" style={{ borderColor: COLORS.errorBorder, background: COLORS.errorBg, color: COLORS.errorText }}>
             {error}
           </div>
         )}
       </main>
 
-      <footer className="border-t px-5 py-5 md:px-12" style={{ borderColor: '#EFE4DE' }}>
+      <footer className="border-t px-5 py-5 md:px-12" style={{ borderColor: COLORS.borderSoft }}>
         <div className="mx-auto flex max-w-[1320px] items-center justify-between gap-4">
           <button
             type="button"
@@ -469,7 +501,7 @@ export default function OnboardingPage() {
           >
             {t('onboarding.skipForNow')}
           </button>
-          <div className="h-4 w-56 overflow-hidden rounded-full" style={{ background: '#EFE9E6' }}>
+          <div className="h-4 w-56 overflow-hidden rounded-full" style={{ background: COLORS.trackBg }}>
             <div className="h-full rounded-full" style={{ width: `${((step + 1) / 3) * 100}%`, background: COLORS.text }} />
           </div>
           <button

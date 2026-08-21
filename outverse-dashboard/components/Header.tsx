@@ -757,19 +757,19 @@ const Header = () => {
                         <div className="text-sm font-semibold text-text">{user.username}</div>
                         {user.email && <div className="text-xs text-text-secondary truncate">{user.email}</div>}
                       </div>
-                      <a href={`/profile/${user.id}`} className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors">
+                      <Link href={`/profile/${user.id}`} className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors">
                         Profile
-                      </a>
-                      <a href="/saved" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">
+                      </Link>
+                      <Link href="/saved" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">
                         Saved posts
-                      </a>
-                      <a href="/settings" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">
+                      </Link>
+                      <Link href="/settings" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">
                         Settings
-                      </a>
+                      </Link>
                       {user.is_staff && (
-                        <a href="/admin" className="block px-4 py-3 text-sm text-vault font-semibold hover:bg-surface transition-colors border-t border-surface">
+                        <Link href="/admin" className="block px-4 py-3 text-sm text-vault font-semibold hover:bg-surface transition-colors border-t border-surface">
                           Admin panel
-                        </a>
+                        </Link>
                       )}
                       <button onClick={handleLogout} className="w-full text-left px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">
                         Sign out
@@ -777,8 +777,8 @@ const Header = () => {
                     </>
                   ) : (
                     <>
-                      <a href="/login" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors">Sign in</a>
-                      <a href="/register" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">Create account</a>
+                      <Link href="/login" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors">Sign in</Link>
+                      <Link href="/register" className="block px-4 py-3 text-sm text-text hover:bg-surface transition-colors border-t border-surface">Create account</Link>
                     </>
                   )}
                 </motion.div>

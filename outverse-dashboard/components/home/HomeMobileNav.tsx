@@ -36,6 +36,7 @@ type NavItem = {
 };
 
 const MORE_LINKS = [
+  { key: 'nav.bazaar', href: '/bazaar', icon: ShoppingBagIcon },
   { key: 'nav.vault', href: '/bottles', icon: ArchiveBoxIcon },
   { key: 'nav.forge', href: '/forge', icon: BookOpenIcon },
   { key: 'nav.shop', href: '/shop', icon: ShoppingCartIcon },
@@ -57,8 +58,7 @@ export default function HomeMobileNav() {
     { href: '/', label: t('nav.home'), icon: HomeIcon, match: (p: string) => p === '/' },
     { href: '/reels', label: t('nav.reels'), icon: RectangleStackIcon, match: (p: string) => p.startsWith('/reels'), reelsIcon: true },
     { href: '/lab', label: t('nav.lab'), icon: BeakerIcon, match: (p: string) => p.startsWith('/lab') },
-    { href: '/bazaar', label: t('nav.bazaar'), icon: ShoppingBagIcon, match: (p: string) => p.startsWith('/bazaar') },
-    { href: profileHref, label: 'Profile', icon: UserCircleIcon, match: (p: string) => p.startsWith('/profile') || p.startsWith('/u/') },
+    { href: profileHref, label: t('nav.profile'), icon: UserCircleIcon, match: (p: string) => p.startsWith('/profile') || p.startsWith('/u/') },
   ];
 
   // Close sheet on route change
@@ -134,13 +134,13 @@ export default function HomeMobileNav() {
             onClick={() => setMoreOpen(true)}
             className="flex flex-col items-center gap-0.5 min-w-[3rem] py-1 text-[10px] font-medium transition"
             style={{ color: moreActive ? 'var(--c-icon-hover)' : 'var(--c-text-secondary)' }}
-            aria-label="More navigation"
+            aria-label={t('nav.moreNavigation')}
             aria-expanded={moreOpen}
           >
             <span className={`p-1 rounded-lg transition-colors ${moreActive ? 'bg-vault/15' : ''}`}>
               <Squares2X2Icon className="h-5 w-5" strokeWidth={1.8} />
             </span>
-            More
+            {t('nav.more')}
           </button>
         </div>
       </nav>
