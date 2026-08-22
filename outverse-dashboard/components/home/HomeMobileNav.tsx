@@ -38,7 +38,7 @@ type NavItem = {
 const MORE_LINKS = [
   { key: 'nav.bazaar', href: '/bazaar', icon: ShoppingBagIcon },
   { key: 'nav.vault', href: '/bottles', icon: ArchiveBoxIcon },
-  { key: 'nav.forge', href: '/forge', icon: BookOpenIcon },
+  { key: 'nav.story', href: '/forge', icon: BookOpenIcon },
   { key: 'nav.shop', href: '/shop', icon: ShoppingCartIcon },
   { key: 'nav.chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
   { key: 'nav.wallet', href: '/wallet', icon: SparklesIcon },
