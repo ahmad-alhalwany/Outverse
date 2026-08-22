@@ -357,22 +357,31 @@ function SearchContent() {
           </p>
         </div>
 
-        <div
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitSearch();
+          }}
           className="flex items-center gap-3 rounded-2xl border px-5 py-4"
           style={{ background: palette.card, borderColor: palette.border, boxShadow: palette.shadow }}
         >
-          <MagnifyingGlassIcon className="h-5 w-5 shrink-0" style={{ color: palette.textMuted }} />
+          <button
+            type="submit"
+            aria-label={t('search.searchPlaceholder')}
+            className="shrink-0"
+            style={{ color: palette.textMuted }}
+          >
+            <MagnifyingGlassIcon className="h-5 w-5" />
+          </button>
           <input
+            type="search"
             value={searchValue}
             onChange={(event) => setSearchValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') submitSearch();
-            }}
             placeholder={t('search.searchPlaceholder')}
             className="w-full bg-transparent text-base outline-none placeholder:text-current"
             style={{ color: palette.textMuted }}
           />
-        </div>
+        </form>
 
         {query && (
           <div className="flex flex-wrap items-center justify-between gap-4">
