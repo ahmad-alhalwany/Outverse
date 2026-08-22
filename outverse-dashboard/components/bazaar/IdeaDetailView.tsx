@@ -66,7 +66,7 @@ const PALETTES = {
     fundedText: '#4ade80',
     btnShadow: '0 6px 20px rgba(167,139,250,0.3)',
     overlay: 'rgba(10,8,24,0.65)',
-    toastBg: '#4ade80',
+    toastBg: '#2f8f6b',
   },
 };
 
