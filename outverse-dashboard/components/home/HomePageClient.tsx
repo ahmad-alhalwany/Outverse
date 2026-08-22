@@ -180,14 +180,18 @@ export default function HomePageClient({
                   ? 'Your following feed is quiet'
                   : feed === 'discover'
                     ? 'Nothing new to discover yet'
-                    : 'The cosmos awaits you'}
+                    : feed === 'joined'
+                      ? t('feed.emptyResonanceTitle')
+                      : 'The cosmos awaits you'}
               </p>
               <p className="text-sm text-text-secondary max-w-sm mx-auto mb-4">
                 {feed === 'following'
                   ? 'Follow creators from suggestions below or the sidebar on larger screens.'
                   : feed === 'discover'
                     ? 'Trending signals from beyond your orbit will appear here.'
-                    : 'Post your first spark — a post or a story.'}
+                    : feed === 'joined'
+                      ? t('feed.emptyResonanceBody')
+                      : 'Post your first spark — a post or a story.'}
               </p>
               {feed === 'following' ? (
                 <button
@@ -205,6 +209,13 @@ export default function HomePageClient({
                 >
                   Back to For You
                 </button>
+              ) : feed === 'joined' ? (
+                <a
+                  href="/communities"
+                  className="inline-block px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-vault to-bazaar"
+                >
+                  {t('feed.browseCommunities')}
+                </a>
               ) : (
                 <a
                   href="#create-post"

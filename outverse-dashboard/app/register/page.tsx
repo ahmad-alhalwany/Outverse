@@ -6,37 +6,17 @@ import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import {
   LuArrowRight as ArrowRight,
-  LuBadgeCheck as CheckCircle2,
   LuEye as Eye,
   LuEyeOff as EyeOff,
-  LuHouse as Home,
   LuLock as Lock,
   LuMail as Mail,
-  LuMountain as Mountain,
-  LuTrees as Trees,
   LuUser as User,
-  LuWaves as Waves,
 } from 'react-icons/lu';
 import type { IconType } from 'react-icons';
 import { checkUsernameAvailability, register } from '@/lib/auth';
 import { useLocale } from '@/components/LocaleProvider';
 
-const QUIZ_OPTIONS = {
-  environment: [
-    { id: 'ocean', label: 'Ocean', icon: Waves },
-    { id: 'mountains', label: 'Mountains', icon: Mountain },
-    { id: 'city', label: 'City', icon: Home },
-    { id: 'forest', label: 'Forest', icon: Trees },
-  ],
-  power: [
-    { id: 'time-travel', label: 'Time Travel' },
-    { id: 'mind-reading', label: 'Mind Reading' },
-    { id: 'flying', label: 'Flying' },
-    { id: 'invisibility', label: 'Invisibility' },
-  ],
-} as const;
-
-const STEPS = ['Basic Info', 'Interests', 'Avatar'] as const;
+const STEPS = ['Basic Info', 'Avatar'] as const;
 
 const COLORS = {
   page: '#F3F0FC',
@@ -52,11 +32,6 @@ const COLORS = {
   accentSoft: '#EDE4FB',
   success: '#7C3AED',
   shadow: '0 24px 60px rgba(33, 27, 61, 0.10)',
-};
-
-type QuizState = {
-  environment: string;
-  power: string;
 };
 
 function ProgressBar({ currentStep }: { currentStep: number }) {
@@ -147,10 +122,6 @@ export default function RegisterPage() {
   const [agreed, setAgreed] = useState(false);
   const [step, setStep] = useState(0);
   const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
-  const [quiz, setQuiz] = useState<QuizState>({
-    environment: 'ocean',
-    power: 'time-travel',
-  });
 
   useEffect(() => {
     if (!username.trim()) {
@@ -304,69 +275,6 @@ export default function RegisterPage() {
 
               {step === 1 && (
                 <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Quick Personality Quiz</h2>
-                      <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>Help us personalize your experience</p>
-                    </div>
-                    <CheckCircle2 size={28} style={{ color: COLORS.accent }} />
-                  </div>
-
-                  <div className="mt-8">
-                    <h3 className="text-2xl font-semibold tracking-[-0.02em]" style={{ color: COLORS.text }}>Pick your favorite environment:</h3>
-                    <div className="mt-5 grid grid-cols-2 gap-4">
-                      {QUIZ_OPTIONS.environment.map(({ id, label, icon: Icon }) => {
-                        const active = quiz.environment === id;
-                        return (
-                          <button
-                            key={id}
-                            type="button"
-                            onClick={() => setQuiz((current) => ({ ...current, environment: id }))}
-                            className="rounded-[20px] border p-4 text-left transition hover:-translate-y-0.5"
-                            style={{
-                              background: COLORS.panelSoft,
-                              borderColor: active ? COLORS.accent : COLORS.panelSoft,
-                              boxShadow: active ? 'inset 0 0 0 1px #7C3AED' : 'none',
-                            }}
-                          >
-                            <div className="flex h-28 items-center justify-center rounded-2xl" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.55), rgba(255,255,255,0.2))' }}>
-                              <Icon size={42} style={{ color: COLORS.accentDark }} />
-                            </div>
-                            <p className="mt-4 text-center text-2xl font-semibold" style={{ color: COLORS.accentDark }}>{label}</p>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="mt-8">
-                    <h3 className="text-2xl font-semibold tracking-[-0.02em]" style={{ color: COLORS.text }}>Choose your superpower:</h3>
-                    <div className="mt-5 grid grid-cols-2 gap-4">
-                      {QUIZ_OPTIONS.power.map(({ id, label }) => {
-                        const active = quiz.power === id;
-                        return (
-                          <button
-                            key={id}
-                            type="button"
-                            onClick={() => setQuiz((current) => ({ ...current, power: id }))}
-                            className="rounded-[18px] border px-4 py-5 text-center text-xl font-semibold transition"
-                            style={{
-                              background: active ? '#F4C8B8' : COLORS.panelSoft,
-                              borderColor: active ? COLORS.accent : COLORS.panelSoft,
-                              color: COLORS.accentDark,
-                            }}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {step === 2 && (
-                <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
                   <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Your Avatar</h2>
                   <p className="mt-2 text-lg" style={{ color: COLORS.muted }}>You&apos;ll fully customize this in the next step</p>
                   <div className="mt-8 rounded-[20px] p-5" style={{ background: COLORS.panelSoft }}>
@@ -434,10 +342,8 @@ export default function RegisterPage() {
                   {loading
                     ? 'Creating account...'
                     : step === 0
-                      ? 'Continue to Interests'
-                      : step === 1
-                        ? 'Continue to Avatar'
-                        : 'Create Account'}
+                      ? 'Continue to Avatar'
+                      : 'Create Account'}
                   <ArrowRight size={20} />
                 </button>
               </div>
