@@ -30,7 +30,7 @@ export default function FeedTabs({
                 key={tab.key}
                 type="button"
                 onClick={() => onChange(tab.key)}
-                className="relative shrink-0 px-4 py-2 rounded-full text-sm font-semibold transition-colors z-10"
+                className="relative shrink-0 px-3 py-2 text-sm font-semibold transition-colors z-10 rounded-full sm:px-4"
                 style={{ color: feed === tab.key ? '#fff' : undefined }}
               >
                 {feed === tab.key && (

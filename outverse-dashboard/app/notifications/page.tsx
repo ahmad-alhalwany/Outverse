@@ -13,12 +13,14 @@ import {
   MagnifyingGlassIcon,
   SparklesIcon,
   StarIcon,
+  UserCircleIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { FlagIcon } from '@heroicons/react/24/solid';
 import { apiFetch, apiFetchJson } from '@/lib/api';
 import RelativeTime from '@/components/RelativeTime';
 import { useLocale } from '@/components/LocaleProvider';
+import { useProfileHref } from '@/lib/hooks/useAuthUser';
 
 interface AppNotification {
   id: number;
@@ -196,6 +198,7 @@ function notificationHref(notification: AppNotification): string | null {
 export default function NotificationsPage() {
   const { t } = useLocale();
   const router = useRouter();
+  const profileHref = useProfileHref();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -374,11 +377,11 @@ export default function NotificationsPage() {
               <Cog6ToothIcon className="h-6 w-6" />
             </Link>
             <Link
-              href="/profile"
+              href={profileHref}
               className="rounded-full p-2 transition hover:bg-[#E9E1FA]"
               aria-label={t('notifications.profileLink')}
             >
-              <BellIcon className="h-5 w-5" />
+              <UserCircleIcon className="h-5 w-5" />
             </Link>
           </div>
         </div>
