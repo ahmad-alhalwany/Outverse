@@ -1,5 +1,7 @@
 import { MetadataRoute } from 'next';
 
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://outverse-six.vercel.app';
+
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
@@ -10,21 +12,20 @@ export default function robots(): MetadataRoute.Robots {
         '/_next/',
         '/static/',
         '/admin/',
-        '/settings/',
+        '/settings',
         '/login',
         '/register',
         '/onboarding',
+        '/reset-password',
+        '/forgot-password',
         '/chat',
         '/wallet',
         '/notifications',
         '/search',
-        '/api/',
-        '/_next/',
         '/*.json$',
-        '/*.xml$',
       ],
     },
-    sitemap: 'https://cosmory.app/sitemap.xml',
-    host: 'https://cosmory.app',
+    sitemap: `${baseUrl}/sitemap.xml`,
+    host: baseUrl,
   };
 }

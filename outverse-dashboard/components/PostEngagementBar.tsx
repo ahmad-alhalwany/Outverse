@@ -98,6 +98,7 @@ export default function PostEngagementBar({
           onClick={onCommentsToggle}
           className={`post-engagement__chip${commentsOpen ? ' post-engagement__chip--active' : ''}`}
           aria-expanded={commentsOpen}
+          aria-label={commentsOpen ? t('feed.hideComments') : t('feed.discuss')}
         >
           <ChatBubbleLeftRightIcon className="h-5 w-5" strokeWidth={1.75} />
           <span className="hidden sm:inline">
@@ -155,6 +156,7 @@ export default function PostEngagementBar({
           type="button"
           onClick={onShare}
           className="post-engagement__chip post-engagement__chip--share"
+          aria-label={t('feed.share')}
         >
           <ShareIcon className="h-5 w-5" strokeWidth={1.75} />
           <span className="hidden sm:inline">{t('feed.share')}</span>

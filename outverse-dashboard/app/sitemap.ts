@@ -1,85 +1,30 @@
 import { MetadataRoute } from 'next';
 
-const baseUrl = 'https://cosmory.app';
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://outverse-six.vercel.app';
 
+// Only real, public, unauthenticated pages belong here — no placeholder
+// [id]/[slug] paths (those 404 for crawlers) and nothing robots.ts disallows.
 const staticPages = [
   '',
-  '/reels',
-  '/reels/discover',
-  '/reels/create',
-  '/lab',
   '/bazaar',
   '/shop',
-  '/shop/dashboard',
-  '/shop/orders',
   '/forge',
-  '/vault',
-  '/bottles',
-  '/settings',
-  '/login',
-  '/register',
-  '/onboarding',
-  '/chat',
-  '/wallet',
-  '/year',
-  '/studio',
+  '/reels',
+  '/reels/discover',
+  '/museum',
+  '/communities',
+  '/characters',
   '/simulator',
   '/garden',
-  '/memories',
-  '/characters',
-  '/premium',
-  '/collab',
-  '/saved',
-  '/notifications',
-  '/search',
   '/terms',
   '/privacy',
-  '/communities',
-  '/reels/discover',
-  '/reels/sound',
-  '/bazaar',
-  '/bazaar/create',
-  '/bazaar/dashboard',
-  '/bazaar/analytics',
-  '/characters',
-  '/characters/create',
-  '/characters/[id]',
-  '/bazaar/[id]',
-  '/communities',
-  '/communities/create',
-  '/communities/[slug]',
-  '/simulator',
-  '/museum',
-  '/garden',
-  '/memories',
-  '/characters',
-  '/premium',
-  '/collab',
-  '/saved',
-  '/notifications',
-  '/search',
-  '/profile',
-  '/profile/[username]',
-  '/post/[id]',
-  '/reels/[id]',
-  '/reels/sound/[id]',
-  '/reels/create',
-  '/reels/discover',
-  '/reels/sound/[id]',
-  '/u/[username]',
-  '/rooms',
-  '/rooms/[id]',
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticSitemap = staticPages.map((page) => ({
-    url: `https://cosmory.app${page}`,
+  return staticPages.map((page) => ({
+    url: `${baseUrl}${page}`,
     lastModified: new Date(),
     changeFrequency: 'daily' as const,
     priority: page === '' ? 1 : 0.8,
   }));
-
-  // Dynamic pages would be fetched from API in production
-  // For now, return static sitemap
-  return staticSitemap;
 }
