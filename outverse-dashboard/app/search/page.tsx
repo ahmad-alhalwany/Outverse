@@ -7,6 +7,7 @@ import {
   ArchiveBoxIcon,
   BookOpenIcon,
   DocumentTextIcon,
+  ExclamationTriangleIcon,
   FireIcon,
   LightBulbIcon,
   MagnifyingGlassIcon,
@@ -242,11 +243,13 @@ function SearchContent() {
   const palette = PALETTES[theme];
   const [results, setResults] = useState<SearchResults>(EMPTY_RESULTS);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
   const [activeTab, setActiveTab] = useState<SearchTab>('users');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchValue, setSearchValue] = useState(searchParams.get('q')?.trim() ?? '');
   const [moreAvailable, setMoreAvailable] = useState<Partial<Record<SearchTab, boolean>>>({});
   const [loadingMore, setLoadingMore] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
   const query = searchParams.get('q')?.trim() ?? '';
 
   useEffect(() => {
@@ -257,13 +260,15 @@ function SearchContent() {
     if (!query) {
       setResults(EMPTY_RESULTS);
       setMoreAvailable({});
+      setError(false);
       return;
     }
     let cancelled = false;
     setLoading(true);
+    setError(false);
     apiFetch(`search/?q=${encodeURIComponent(query)}`, { cache: 'no-store' })
       .then(async (res) => {
-        if (!res.ok) return EMPTY_RESULTS;
+        if (!res.ok) throw new Error('search failed');
         return (await res.json()) as SearchResults;
       })
       .then((data) => {
@@ -280,7 +285,10 @@ function SearchContent() {
         if (firstWithResults) setActiveTab(firstWithResults);
       })
       .catch(() => {
-        if (!cancelled) setResults(EMPTY_RESULTS);
+        if (!cancelled) {
+          setResults(EMPTY_RESULTS);
+          setError(true);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -288,7 +296,7 @@ function SearchContent() {
     return () => {
       cancelled = true;
     };
-  }, [query]);
+  }, [query, retryTick]);
 
   async function loadMore() {
     if (loadingMore) return;
@@ -418,11 +426,36 @@ function SearchContent() {
         )}
 
         {loading ? (
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-3 md:grid-cols-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-[24px] border p-5"
+                style={{ background: palette.card, borderColor: palette.border, boxShadow: palette.shadow }}
+              >
+                <div className="h-12 w-12 rounded-2xl skeleton-pulse mb-4" />
+                <div className="h-4 w-3/4 rounded skeleton-pulse mb-2" />
+                <div className="h-3 w-1/2 rounded skeleton-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : error ? (
           <div
-            className="rounded-[28px] border px-6 py-16 text-center text-sm"
-            style={{ background: palette.card, borderColor: palette.border, color: palette.textMuted, boxShadow: palette.shadow }}
+            className="rounded-[28px] border px-6 py-16 text-center"
+            style={{ background: palette.card, borderColor: palette.border, boxShadow: palette.shadow }}
           >
-            {t('search.loading')}
+            <ExclamationTriangleIcon className="h-8 w-8 mx-auto mb-3" style={{ color: palette.textMuted }} />
+            <h2 className="text-xl font-semibold" style={{ color: palette.text }}>
+              {t('search.loadError')}
+            </h2>
+            <button
+              type="button"
+              onClick={() => setRetryTick((n) => n + 1)}
+              className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold transition-colors"
+              style={{ background: palette.accentSoft, color: palette.accentStrong }}
+            >
+              {t('search.retry')}
+            </button>
           </div>
         ) : !query ? (
           <div
@@ -448,6 +481,17 @@ function SearchContent() {
             <p className="mt-3 text-sm" style={{ color: palette.textMuted }}>
               {t('search.noResultsHint')}
             </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchValue('');
+                router.push('/search');
+              }}
+              className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold transition-colors"
+              style={{ background: palette.accentSoft, color: palette.accentStrong }}
+            >
+              {t('search.clearSearch')}
+            </button>
           </div>
         ) : (
           <>

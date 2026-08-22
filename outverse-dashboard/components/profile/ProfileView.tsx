@@ -214,6 +214,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
   const [tab, setTab] = useState<TabKey>('posts');
   const [suggestions, setSuggestions] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [profileError, setProfileError] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
   const [followError, setFollowError] = useState('');
@@ -225,6 +226,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
   const load = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
+    setProfileError(false);
     try {
       const [profileRes, postsRes, moodRes, storiesRes, challRes, bottlesRes, suggestionsRes, experienceRes, memoryRes] =
         await Promise.all([
@@ -242,7 +244,11 @@ export default function ProfileView({ userId }: ProfileViewProps) {
           apiFetch(`users/${userId}/experience/`),
           apiFetch(`speculative/future-memories/?user=${userId}`),
         ]);
-      if (profileRes.ok) setProfile(await profileRes.json());
+      if (profileRes.ok) {
+        setProfile(await profileRes.json());
+      } else if (profileRes.status !== 404) {
+        setProfileError(true);
+      }
       if (postsRes.ok) {
         const data = await postsRes.json();
         setPosts(Array.isArray(data) ? data.map(mapPost) : []);
@@ -267,7 +273,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         setFutureMemory(list[0] || null);
       }
     } catch {
-      /* offline */
+      setProfileError(true);
     } finally {
       setLoading(false);
     }
@@ -414,6 +420,22 @@ export default function ProfileView({ userId }: ProfileViewProps) {
             <div className="h-4 w-16 rounded skeleton-pulse" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (!profile && profileError) {
+    return (
+      <div className="text-center py-20" style={{ color: C.text2 }}>
+        <p>{t('profile.loadError')}</p>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold"
+          style={{ background: C.card, color: C.brown }}
+        >
+          {t('profile.retry')}
+        </button>
       </div>
     );
   }

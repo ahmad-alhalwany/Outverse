@@ -77,6 +77,7 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
   const [scheduled, setScheduled] = useState(false);
+  const [published, setPublished] = useState(false);
   const [scheduledPanelOpen, setScheduledPanelOpen] = useState(false);
   const [locationName, setLocationName] = useState('');
   const [locationLat, setLocationLat] = useState<number | null>(null);
@@ -467,6 +468,8 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
         draftIdRef.current = null;
         setDraftSavedAt(null);
       }
+      setPublished(true);
+      setTimeout(() => setPublished(false), 4000);
       onPublished?.();
     } catch {
       setError('Could not publish your post. Check the connection.');
@@ -1006,6 +1009,7 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
 
         {error && <p className="text-sm text-red-500 mt-3">{error}</p>}
         {scheduled && <p className="text-sm text-green-500 mt-3">{t('compose.scheduledSuccess')}</p>}
+        {published && <p className="text-sm text-green-500 mt-3">{t('compose.publishedSuccess')}</p>}
 
         <div className="mt-5 flex items-center justify-between">
           <button
