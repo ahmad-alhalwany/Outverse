@@ -293,8 +293,11 @@ export default function OnboardingPage() {
                   key={id}
                   type="button"
                   onClick={() => setSelectedGuide(id)}
-                  className="rounded-xl px-5 py-3 text-lg font-semibold text-white"
-                  style={{ background: selectedGuide === id ? COLORS.text : COLORS.accent }}
+                  className="rounded-xl px-5 py-3 text-lg font-semibold"
+                  style={{
+                    background: selectedGuide === id ? COLORS.accent : COLORS.panelInactive,
+                    color: selectedGuide === id ? '#fff' : COLORS.text,
+                  }}
                 >
                   {id === 'explorer' ? t('onboarding.imExplorer') : t('onboarding.imCreator')}
                 </button>

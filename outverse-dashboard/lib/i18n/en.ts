@@ -1184,7 +1184,7 @@ export const en = {
     moodJoy: 'Joy',
     moodFocus: 'Focus',
     moodCreativity: 'Creativity',
-    placeStars: 'Place three stars to represent your current emotional state',
+    placeStars: 'Pick the star that represents your current emotional state',
     suggestedCreators: 'Suggested creators',
     suggestedCreatorsSubtitle: 'Start your feed with a few voices from across the Cosmory.',
     followers: '{count} followers',
@@ -2180,7 +2180,7 @@ export const en = {
     cookieAccept: 'Accept all',
     cookieEssential: 'Essential only',
     cookieLearnMore: 'Learn more',
-    agreeTerms: 'I agree to the Terms of Service and Privacy Policy',
+    agreeTerms: 'I agree to the',
     sections: {
       intro: 'Introduction',
       acceptance: 'Acceptance of terms',

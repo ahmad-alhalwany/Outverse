@@ -1186,7 +1186,7 @@ export const ar = {
     moodJoy: 'فرح',
     moodFocus: 'تركيز',
     moodCreativity: 'إبداع',
-    placeStars: 'ضع ثلاث نجوم لتمثل حالتك العاطفية الحالية',
+    placeStars: 'اختر النجمة التي تمثل حالتك العاطفية الحالية',
     suggestedCreators: 'مبدعون مقترحون',
     suggestedCreatorsSubtitle: 'ابدأ خلاصتك ببعض الأصوات من أنحاء Cosmory.',
     followers: '{count} متابع',
@@ -2182,7 +2182,7 @@ export const ar = {
     cookieAccept: 'قبول الكل',
     cookieEssential: 'الأساسية فقط',
     cookieLearnMore: 'اعرف المزيد',
-    agreeTerms: 'أوافق على شروط الخدمة وسياسة الخصوصية',
+    agreeTerms: 'أوافق على',
     sections: {
       intro: 'مقدمة',
       acceptance: 'قبول الشروط',
