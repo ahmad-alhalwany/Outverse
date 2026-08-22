@@ -362,7 +362,7 @@ const Header = () => {
             <Link href="/" className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-text hover:opacity-90 transition">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/cosmory-icon.svg" alt="Cosmory" width={36} height={36} className="h-9 w-9 rounded-xl shadow-[0_0_20px_rgba(124,58,237,0.35)]" />
-              <span className="bg-gradient-to-r from-white via-violet-100 to-sky-200 bg-clip-text text-transparent">Cosmory</span>
+              <span className="text-text">Cosmory</span>
             </Link>
           </div>
 

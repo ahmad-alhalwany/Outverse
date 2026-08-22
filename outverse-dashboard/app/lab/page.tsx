@@ -485,13 +485,13 @@ function WeirdnessLabContent() {
               </div>
 
               <h2 className="lab-question">{daily.title}</h2>
-              <p className="text-sm mt-2 mb-3 opacity-80" style={{ color: '#E9E1FA' }}>
+              <p className="text-sm mt-2 mb-3 opacity-80" style={{ color: C.text2 }}>
                 {daily.is_ai_generated
                   ? t('lab.aiCraftedBright')
                   : t('lab.todaysBrightPrompt')}
               </p>
               {daily.description ? (
-                <p className="text-sm mb-4 opacity-75" style={{ color: '#E9E1FA' }}>
+                <p className="text-sm mb-4 opacity-75" style={{ color: C.text2 }}>
                   {daily.description}
                 </p>
               ) : null}
