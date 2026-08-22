@@ -4393,6 +4393,16 @@ html.light .cosmic-share__url {
   box-shadow: 0 18px 42px rgba(11, 8, 29, 0.18);
 }
 
+.feed-tabs__scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-mask-image: linear-gradient(to right, transparent, black 6px, black calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 6px, black calc(100% - 24px), transparent);
+}
+.feed-tabs__scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .skeleton-pulse {
   background: linear-gradient(
     90deg,
