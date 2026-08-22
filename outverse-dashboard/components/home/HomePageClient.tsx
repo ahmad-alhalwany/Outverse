@@ -65,7 +65,14 @@ export default function HomePageClient({
   const [error, setError] = useState(false);
   const [feed, setFeed] = useState<HomeFeed>(initialFeed);
   const offsetRef = useRef(initialPosts.length);
-  const skipNextFetch = useRef(true);
+  // Tracks which feed the current `posts` state is actually for for, so the
+  // fetch-on-feed-change effect below can't be skipped by ordering luck
+  // between it and the server-hydration effect (both react to a tab click:
+  // router.push triggers a fresh server render with new initialFeed/
+  // initialPosts, while the local `feed` state change fires independently —
+  // a boolean "skip once" flag raced between them and could silently drop
+  // the fetch. Comparing against the actual feed value is race-proof.
+  const syncedFeedRef = useRef(initialFeed);
 
   useEffect(() => {
     setFeed(initialFeed);
@@ -74,8 +81,7 @@ export default function HomePageClient({
     setHasMore(initialPosts.length >= FEED_PAGE_SIZE);
     setLoading(false);
     setError(false);
-    // Server already hydrated the first page for this feed — skip the remount refetch once.
-    skipNextFetch.current = true;
+    syncedFeedRef.current = initialFeed;
   }, [initialFeed, initialPosts]);
 
   const fetchPosts = useCallback(async (reset = true, silent = false) => {
@@ -108,12 +114,10 @@ export default function HomePageClient({
   }, [feed]);
 
   useEffect(() => {
-    if (skipNextFetch.current) {
-      skipNextFetch.current = false;
-      return;
-    }
+    if (syncedFeedRef.current === feed) return;
+    syncedFeedRef.current = feed;
     void fetchPosts(true);
-  }, [fetchPosts]);
+  }, [feed, fetchPosts]);
 
   const loadMorePosts = () => {
     if (!loadingMore && hasMore) void fetchPosts(false);

@@ -49,7 +49,7 @@ export default function FeedTabs({
           </div>
         </div>
         {postCount != null && (
-          <span className="shrink-0 text-xs text-text-secondary font-medium">
+          <span className="hidden shrink-0 text-xs text-text-secondary font-medium sm:inline">
             {postCount} {postCount === 1 ? 'post' : 'posts'}
           </span>
         )}
