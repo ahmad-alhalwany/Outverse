@@ -29,7 +29,7 @@ export const en = {
   },
   nav: {
     home: 'Home',
-    lab: 'Lab',
+    lab: 'Daily',
     bazaar: 'Bazaar',
     vault: 'Vault',
     story: 'Story',

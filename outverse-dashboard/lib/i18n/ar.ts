@@ -31,7 +31,7 @@ export const ar = {
   },
   nav: {
     home: 'الرئيسية',
-    lab: 'المختبر',
+    lab: 'اليومي',
     bazaar: 'البازار',
     vault: 'الخزنة',
     story: 'القصة',
