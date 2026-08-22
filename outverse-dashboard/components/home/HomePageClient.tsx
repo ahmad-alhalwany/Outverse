@@ -124,7 +124,7 @@ export default function HomePageClient({
   const setFeedTab = (tab: HomeFeed) => {
     const q = tab === 'for_you' ? '' : `?feed=${tab}`;
     setFeed(tab);
-    router.push(`/${q}`);
+    router.push(`/${q}`, { scroll: false });
   };
 
   return (
