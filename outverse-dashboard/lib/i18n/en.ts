@@ -570,7 +570,7 @@ export const en = {
     feedAll: 'All',
     feedForYou: 'For You',
     feedFollowing: 'Following',
-    feedResonance: 'Communities',
+    feedResonance: 'My Communities',
     feedDiscover: 'Discover',
     emptyResonanceTitle: "You haven't joined any communities yet",
     emptyResonanceBody: 'Join communities to see their posts here.',
