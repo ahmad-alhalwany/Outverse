@@ -34,21 +34,23 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState(false);
   const authUser = useAuthUser();
   const isOwn = authUser ? String(authUser.id) === String(userId) : false;
 
   const load = useCallback(() => {
     setLoading(true);
     setError('');
+    setLoadError(false);
     apiFetch(mode === 'saved' ? 'reels/saved/' : `reels/?user=${userId}`)
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error('failed'))))
       .then((data) => setReels(Array.isArray(data) ? data : data.results || []))
       .catch(() => {
         setReels([]);
-        setError(t('reels.actionFailed'));
+        setLoadError(true);
       })
       .finally(() => setLoading(false));
-  }, [userId, mode, t]);
+  }, [userId, mode]);
 
   useEffect(() => {
     load();
@@ -78,6 +80,24 @@ export default function ProfileReelsGrid({ userId, palette: C, mode = 'user' }: 
         <p className="text-sm" style={{ color: C.text2 }}>
           {t('reels.profileLoading')}
         </p>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-sm" style={{ color: C.text2 }}>
+          {t('reels.loadError')}
+        </p>
+        <button
+          type="button"
+          onClick={() => load()}
+          className="mt-4 rounded-full px-6 py-2 text-sm font-semibold"
+          style={{ background: C.card, color: C.brown }}
+        >
+          {t('reels.retry')}
+        </button>
       </div>
     );
   }

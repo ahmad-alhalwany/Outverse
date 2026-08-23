@@ -34,9 +34,11 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
   const [scope, setScope] = useState<IdeasScope>('owned');
   const [ideas, setIdeas] = useState<BazaarIdea[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
+    setError(false);
     let path = `ideas/?ordering=new`;
     if (isOwn) {
       if (scope === 'owned') path += '&owner=me';
@@ -46,12 +48,18 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
       path += `&owner_id=${encodeURIComponent(userId)}`;
     }
     apiFetch(path)
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => {
+        if (!res.ok) throw new Error('failed');
+        return res.json();
+      })
       .then((data) => {
         const rows = Array.isArray(data) ? data : data?.results || [];
         setIdeas(rows as BazaarIdea[]);
       })
-      .catch(() => setIdeas([]))
+      .catch(() => {
+        setIdeas([]);
+        setError(true);
+      })
       .finally(() => setLoading(false));
   }, [isOwn, scope, userId]);
 
@@ -97,7 +105,21 @@ export default function ProfileIdeasGrid({ userId, palette: C }: ProfileIdeasGri
         </div>
       ) : null}
 
-      {ideas.length === 0 ? (
+      {error ? (
+        <div className="text-center py-12">
+          <p className="text-sm" style={{ color: C.text2 }}>
+            {t('bazaar.profileLoadError')}
+          </p>
+          <button
+            type="button"
+            onClick={() => load()}
+            className="mt-4 rounded-full px-6 py-2 text-sm font-semibold"
+            style={{ background: C.card, color: C.brown }}
+          >
+            {t('profile.retry')}
+          </button>
+        </div>
+      ) : ideas.length === 0 ? (
         <div className="text-center py-12">
           <LightBulbIcon className="h-10 w-10 mx-auto mb-3 opacity-60" style={{ color: C.brown }} />
           <p className="text-sm" style={{ color: C.text2 }}>

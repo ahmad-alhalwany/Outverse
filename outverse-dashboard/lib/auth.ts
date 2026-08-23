@@ -102,6 +102,10 @@ export function setAuth(token: string | null, user: AuthUser | null) {
   if (user) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
     localStorage.removeItem(LEGACY_USER_KEY);
+    // Components that cached the user on mount (Header's nav avatar,
+    // useAuthUser() consumers) otherwise stay stale until a full reload —
+    // this lets them re-read localStorage without a page refresh.
+    window.dispatchEvent(new Event('cosmory:user-updated'));
     return;
   }
   localStorage.removeItem(USER_KEY);

@@ -215,6 +215,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
   const [suggestions, setSuggestions] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [followModal, setFollowModal] = useState<'followers' | 'following' | null>(null);
   const [followError, setFollowError] = useState('');
@@ -424,6 +425,21 @@ export default function ProfileView({ userId }: ProfileViewProps) {
     );
   }
 
+  if (blocked) {
+    return (
+      <div className="text-center py-20" style={{ color: C.text2 }}>
+        <p>{t('profile.blockedConfirm')}</p>
+        <Link
+          href="/"
+          className="mt-4 inline-block rounded-full px-6 py-2.5 text-sm font-semibold"
+          style={{ background: C.card, color: C.brown }}
+        >
+          {t('profile.backToHome')}
+        </Link>
+      </div>
+    );
+  }
+
   if (!profile && profileError) {
     return (
       <div className="text-center py-20" style={{ color: C.text2 }}>
@@ -590,7 +606,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                 </div>
               </div>
               {!isOwnProfile && !profile.social?.is_blocked && (
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap sm:flex-nowrap">
                   <button
                     type="button"
                     onClick={toggleFollow}
@@ -625,7 +641,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
                     social={profile.social}
                     palette={{ card: C.card2, text: C.text, text2: C.text2, line: C.line }}
                     onUpdate={(social) => setProfile((p) => (p ? { ...p, social } : p))}
-                    onBlocked={() => setProfile(null)}
+                    onBlocked={() => setBlocked(true)}
                   />
                 </div>
               )}
@@ -1053,9 +1069,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         {tab === 'posts' && (
           <>
             {mappedPosts.length === 0 ? (
-              <p className="text-center py-10 text-sm" style={{ color: C.text2 }}>
-                {t('profile.noPostsYet')}
-              </p>
+              <div className="text-center py-10">
+                <p className="text-2xl mb-2">📝</p>
+                <p className="text-sm" style={{ color: C.text2 }}>{t('profile.noPostsYet')}</p>
+              </div>
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-3 sm:hidden">
@@ -1197,9 +1214,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         {tab === 'challenges' && (
           <div className="grid sm:grid-cols-2 gap-3">
             {challenges.length === 0 ? (
-              <p className="col-span-full text-center py-10 text-sm" style={{ color: C.text2 }}>
-                {t('profile.noChallengeEntries')}
-              </p>
+              <div className="col-span-full text-center py-10">
+                <p className="text-2xl mb-2">🏆</p>
+                <p className="text-sm" style={{ color: C.text2 }}>{t('profile.noChallengeEntries')}</p>
+              </div>
             ) : (
               challenges.map((entry) => (
                 <Link
@@ -1231,9 +1249,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         {tab === 'stories' && (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {stories.length === 0 ? (
-              <p className="col-span-full text-center py-10 text-sm" style={{ color: C.text2 }}>
-                {t('profile.noStoriesInForge')}
-              </p>
+              <div className="col-span-full text-center py-10">
+                <p className="text-2xl mb-2">📖</p>
+                <p className="text-sm" style={{ color: C.text2 }}>{t('profile.noStoriesInForge')}</p>
+              </div>
             ) : (
               stories.map((story) => (
                 <Link
@@ -1267,9 +1286,10 @@ export default function ProfileView({ userId }: ProfileViewProps) {
         {tab === 'bottles' && (
           <div className="space-y-3">
             {bottles.length === 0 ? (
-              <p className="text-center py-10 text-sm" style={{ color: C.text2 }}>
-                {t('profile.noActiveBottles')}
-              </p>
+              <div className="text-center py-10">
+                <p className="text-2xl mb-2">🍾</p>
+                <p className="text-sm" style={{ color: C.text2 }}>{t('profile.noActiveBottles')}</p>
+              </div>
             ) : (
               bottles.map((b) => {
                 const m = emotionMeta(b.emotion_type);

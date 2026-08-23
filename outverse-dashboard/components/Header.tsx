@@ -225,9 +225,12 @@ const Header = () => {
     const interval = setInterval(() => {
       if (isAuthenticated()) void fetchNotifications();
     }, 120000);
+    const onUserUpdated = () => setUser(getUser());
+    window.addEventListener('cosmory:user-updated', onUserUpdated);
     return () => {
       cancelled = true;
       clearInterval(interval);
+      window.removeEventListener('cosmory:user-updated', onUserUpdated);
     };
   }, []);
 
