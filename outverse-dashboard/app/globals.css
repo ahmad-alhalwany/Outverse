@@ -3371,7 +3371,8 @@ html.light .cosmic-comments__mentions {
   transition: background 0.15s;
 }
 
-.cosmic-comments__mention:hover {
+.cosmic-comments__mention:hover,
+.cosmic-comments__mention--active {
   background: rgba(124, 58, 237, 0.14);
 }
 

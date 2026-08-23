@@ -138,6 +138,7 @@ export default function Comments({
   const [mentionQuery, setMentionQuery] = useState('');
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionUsers, setMentionUsers] = useState<{ id: number; name: string }[]>([]);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
   const [canComment, setCanComment] = useState<boolean | null>(null);
   const mentionAbortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -172,6 +173,7 @@ export default function Comments({
                 }))
               : [],
           );
+          setMentionActiveIndex(0);
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') return;
@@ -278,7 +280,24 @@ export default function Comments({
     const before = newComment.slice(0, cursor).replace(/@([\w ]*)$/, `@${name} `);
     setNewComment(before + newComment.slice(cursor));
     setShowMentionList(false);
+    setMentionActiveIndex(0);
     inputRef.current?.focus();
+  };
+
+  const handleCommentKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showMentionList || mentionUsers.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMentionActiveIndex((i) => (i + 1) % mentionUsers.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMentionActiveIndex((i) => (i - 1 + mentionUsers.length) % mentionUsers.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      handleMentionSelect(mentionUsers[mentionActiveIndex].name);
+    } else if (e.key === 'Escape') {
+      setShowMentionList(false);
+    }
   };
 
   const handleVote = async (comment: CommentItem, direction: 'boost' | 'dim') => {
@@ -726,6 +745,11 @@ export default function Comments({
                   type="text"
                   value={newComment}
                   onChange={handleCommentInput}
+                  onKeyDown={handleCommentKeyDown}
+                  role="combobox"
+                  aria-expanded={showMentionList && mentionUsers.length > 0}
+                  aria-controls={showMentionList ? 'comment-mention-listbox' : undefined}
+                  aria-autocomplete="list"
                   placeholder={t('feed.commentPlaceholder')}
                   className="cosmic-comments__input"
                 />
@@ -771,14 +795,16 @@ export default function Comments({
                 </div>
               )}
               {showMentionList && (
-                <div className="cosmic-comments__mentions" role="listbox" aria-label="Mention suggestions">
-                  {mentionUsers.map((u) => (
+                <div id="comment-mention-listbox" className="cosmic-comments__mentions" role="listbox" aria-label="Mention suggestions">
+                  {mentionUsers.map((u, idx) => (
                     <button
                       key={u.id}
                       type="button"
                       role="option"
-                      className="cosmic-comments__mention"
+                      aria-selected={idx === mentionActiveIndex}
+                      className={`cosmic-comments__mention${idx === mentionActiveIndex ? ' cosmic-comments__mention--active' : ''}`}
                       onClick={() => handleMentionSelect(u.name)}
+                      onMouseEnter={() => setMentionActiveIndex(idx)}
                     >
                       <span className="cosmic-comments__mention-at">@</span>
                       {u.name}
