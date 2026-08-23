@@ -106,6 +106,33 @@ export async function fetchCommunityConstellation(slug: string): Promise<Communi
   return res.json();
 }
 
+export type CommunityRitualPrompt = {
+  id: number | null;
+  text: string;
+  category?: string;
+  placeholder: boolean;
+};
+
+export type CommunityRitual = {
+  available: boolean;
+  prompt: CommunityRitualPrompt | null;
+  date: string | null;
+  completed: boolean;
+  streak: number;
+};
+
+export async function fetchCommunityRitual(slug: string): Promise<CommunityRitual | null> {
+  const res = await apiFetch(`communities/${slug}/ritual/`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+export async function completeCommunityRitual(slug: string): Promise<CommunityRitual | null> {
+  const res = await apiFetchJson(`communities/${slug}/ritual/`, { method: 'POST', json: {} });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function createCommunity(
   name: string,
   description: string,

@@ -8,6 +8,7 @@ import { UserGroupIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import CommunityConstellationSection from '@/components/communities/CommunityConstellationSection';
+import CommunityRitualSection from '@/components/communities/CommunityRitualSection';
 import { useLocale } from '@/components/LocaleProvider';
 import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
@@ -39,6 +40,8 @@ import {
   fetchCommunityWiki,
   createOrUpdateWikiPage,
   fetchCommunityConstellation,
+  fetchCommunityRitual,
+  completeCommunityRitual,
   type Community,
   type CommunityMember,
   type CommunityPendingMember,
@@ -48,6 +51,7 @@ import {
   type CommunityChannel,
   type CommunityWikiPage,
   type CommunityConstellation,
+  type CommunityRitual,
 } from '@/lib/communityApi';
 
 export default function CommunityDetailPage() {
@@ -101,6 +105,8 @@ export default function CommunityDetailPage() {
   }>>({});
   const [channelBusy, setChannelBusy] = useState(false);
   const [constellation, setConstellation] = useState<CommunityConstellation | null>(null);
+  const [ritual, setRitual] = useState<CommunityRitual | null>(null);
+  const [ritualBusy, setRitualBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -158,6 +164,22 @@ export default function CommunityDetailPage() {
   useEffect(() => {
     if (!slug) return;
     void fetchCommunityConstellation(slug).then(setConstellation);
+  }, [slug]);
+
+  useEffect(() => {
+    if (!slug) return;
+    void fetchCommunityRitual(slug).then(setRitual);
+  }, [slug]);
+
+  const handleCompleteRitual = useCallback(async () => {
+    if (!slug) return;
+    setRitualBusy(true);
+    try {
+      const updated = await completeCommunityRitual(slug);
+      if (updated) setRitual(updated);
+    } finally {
+      setRitualBusy(false);
+    }
   }, [slug]);
 
   const loadManagement = useCallback(async () => {
@@ -604,6 +626,9 @@ export default function CommunityDetailPage() {
               )}
             </div>
 
+            {ritual ? (
+              <CommunityRitualSection data={ritual} onComplete={() => void handleCompleteRitual()} busy={ritualBusy} />
+            ) : null}
             {constellation ? <CommunityConstellationSection data={constellation} /> : null}
 
             {/* Channels (Discord Pack) */}

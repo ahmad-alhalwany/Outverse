@@ -13,7 +13,8 @@ from outverse.throttles import AnonReadThrottle, ContentPostCreateThrottle, Thro
 from outverse.auth_utils import require_user, user_from_request
 
 from .constellation import build_community_constellation
-from .models import Community, CommunityMembership, CommunityWikiPage
+from .models import Community, CommunityMembership, CommunityRitualParticipation, CommunityWikiPage
+from .ritual import complete_ritual, current_streak, get_today_prompt
 from .serializers import CommunitySerializer
 from chat.models import ChatRoom, RoomMessage, RoomReadState
 
@@ -129,7 +130,7 @@ class CommunityViewSet(ThrottleMixin, viewsets.ModelViewSet):
     lookup_field = 'slug'
 
     def get_permissions(self):
-        if self.action in ('list', 'retrieve', 'members', 'constellation'):
+        if self.action in ('list', 'retrieve', 'members', 'constellation', 'ritual'):
             return [AllowAny()]
         return [IsAuthenticated()]
 
@@ -250,6 +251,40 @@ class CommunityViewSet(ThrottleMixin, viewsets.ModelViewSet):
     def constellation(self, request, slug=None):
         community = self.get_object()
         return Response(build_community_constellation(community))
+
+    @action(detail=True, methods=['get', 'post'])
+    def ritual(self, request, slug=None):
+        community = self.get_object()
+
+        if request.method == 'POST':
+            user, err = require_user(request)
+            if err:
+                return err
+            if _membership_role(user, community) is None:
+                return Response({'error': 'Join this community to complete its ritual.'}, status=403)
+            complete_ritual(community, user)
+
+        prompt = get_today_prompt(community)
+        if not prompt:
+            return Response({'available': False, 'prompt': None, 'date': None, 'completed': False, 'streak': 0})
+
+        user = user_from_request(request)
+        completed = False
+        streak = 0
+        if user:
+            today = timezone.now().date()
+            completed = CommunityRitualParticipation.objects.filter(
+                community=community, user=user, date=today, completed_at__isnull=False,
+            ).exists()
+            streak = current_streak(community, user)
+
+        return Response({
+            'available': True,
+            'prompt': prompt,
+            'date': timezone.now().date().isoformat(),
+            'completed': completed,
+            'streak': streak,
+        })
 
     @action(detail=True, methods=['get'], url_path='pending-members')
     def pending_members(self, request, slug=None):

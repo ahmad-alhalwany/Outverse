@@ -87,6 +87,38 @@ class CommunityMembership(models.Model):
         return f"{self.user_id} {self.role} of {self.community_id} ({self.status})"
 
 
+class CommunityRitualParticipation(models.Model):
+    """One shared daily prompt per community; completion tracked per member.
+
+    No question FK — the prompt is derived on demand from
+    communities.constellation.build_community_constellation(), which can
+    return placeholder prompts with no backing Question row.
+    """
+
+    community = models.ForeignKey(
+        Community, on_delete=models.CASCADE, related_name='ritual_participations',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='community_ritual_participations',
+    )
+    date = models.DateField(db_index=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-date', '-id']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['community', 'user', 'date'],
+                name='unique_community_ritual_per_user_day',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} @ {self.community_id} {self.date}"
+
+
 class CommunityWikiPage(models.Model):
     """Reddit-style community wiki page."""
 
