@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { UserGroupIcon, ShieldCheckIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
+import CommunityConstellationSection from '@/components/communities/CommunityConstellationSection';
 import { useLocale } from '@/components/LocaleProvider';
 import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
@@ -37,6 +38,7 @@ import {
   joinCommunityChannel,
   fetchCommunityWiki,
   createOrUpdateWikiPage,
+  fetchCommunityConstellation,
   type Community,
   type CommunityMember,
   type CommunityPendingMember,
@@ -45,6 +47,7 @@ import {
   type CommunityModQueueItem,
   type CommunityChannel,
   type CommunityWikiPage,
+  type CommunityConstellation,
 } from '@/lib/communityApi';
 
 export default function CommunityDetailPage() {
@@ -97,6 +100,7 @@ export default function CommunityDetailPage() {
     channel_type: 'text' | 'voice' | 'stage';
   }>>({});
   const [channelBusy, setChannelBusy] = useState(false);
+  const [constellation, setConstellation] = useState<CommunityConstellation | null>(null);
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -150,6 +154,11 @@ export default function CommunityDetailPage() {
     if (!community?.is_moderator || !slug) return;
     void fetchModQueue(slug).then(setModQueue);
   }, [community?.is_moderator, slug]);
+
+  useEffect(() => {
+    if (!slug) return;
+    void fetchCommunityConstellation(slug).then(setConstellation);
+  }, [slug]);
 
   const loadManagement = useCallback(async () => {
     if (!slug) return;
@@ -594,6 +603,8 @@ export default function CommunityDetailPage() {
                 <p className="text-sm text-text-secondary">{t('communities.noRules')}</p>
               )}
             </div>
+
+            {constellation ? <CommunityConstellationSection data={constellation} /> : null}
 
             {/* Channels (Discord Pack) */}
             <div className="mt-4">

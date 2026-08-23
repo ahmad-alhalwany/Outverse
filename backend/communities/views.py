@@ -12,6 +12,7 @@ from outverse.throttles import AnonReadThrottle, ContentPostCreateThrottle, Thro
 
 from outverse.auth_utils import require_user, user_from_request
 
+from .constellation import build_community_constellation
 from .models import Community, CommunityMembership, CommunityWikiPage
 from .serializers import CommunitySerializer
 from chat.models import ChatRoom, RoomMessage, RoomReadState
@@ -128,7 +129,7 @@ class CommunityViewSet(ThrottleMixin, viewsets.ModelViewSet):
     lookup_field = 'slug'
 
     def get_permissions(self):
-        if self.action in ('list', 'retrieve', 'members'):
+        if self.action in ('list', 'retrieve', 'members', 'constellation'):
             return [AllowAny()]
         return [IsAuthenticated()]
 
@@ -244,6 +245,11 @@ class CommunityViewSet(ThrottleMixin, viewsets.ModelViewSet):
             }
             for m in rows
         ])
+
+    @action(detail=True, methods=['get'])
+    def constellation(self, request, slug=None):
+        community = self.get_object()
+        return Response(build_community_constellation(community))
 
     @action(detail=True, methods=['get'], url_path='pending-members')
     def pending_members(self, request, slug=None):

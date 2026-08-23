@@ -86,6 +86,26 @@ export async function fetchCommunity(slug: string): Promise<Community | null> {
   return res.json();
 }
 
+export type CommunityConstellationQuestion = {
+  id: number | null;
+  text: string;
+  category?: string;
+  placeholder?: boolean;
+};
+
+export type CommunityConstellation = {
+  community_id: number;
+  keywords: string[];
+  questions: CommunityConstellationQuestion[];
+  deep_links: { lab: string };
+};
+
+export async function fetchCommunityConstellation(slug: string): Promise<CommunityConstellation | null> {
+  const res = await apiFetch(`communities/${slug}/constellation/`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function createCommunity(
   name: string,
   description: string,
