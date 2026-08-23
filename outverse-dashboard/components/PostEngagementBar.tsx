@@ -119,6 +119,8 @@ export default function PostEngagementBar({
               onBlur={() => setTimeout(() => setRepostMenu(false), 160)}
               className={`post-engagement__chip${reposted ? ' post-engagement__chip--active' : ''}`}
               aria-expanded={repostMenu}
+              aria-haspopup="menu"
+              aria-label={t('feed.repost')}
               title={t('feed.repost')}
             >
               <ArrowPathRoundedSquareIcon className="h-5 w-5" strokeWidth={1.75} />
@@ -128,9 +130,10 @@ export default function PostEngagementBar({
               )}
             </button>
             {repostMenu && (
-              <div className="post-engagement__repost-menu">
+              <div className="post-engagement__repost-menu" role="menu">
                 <button
                   type="button"
+                  role="menuitem"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => { setRepostMenu(false); onRepost?.(); }}
                   className="post-engagement__repost-item"
@@ -140,6 +143,7 @@ export default function PostEngagementBar({
                 </button>
                 <button
                   type="button"
+                  role="menuitem"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => { setRepostMenu(false); onQuote?.(); }}
                   className="post-engagement__repost-item"

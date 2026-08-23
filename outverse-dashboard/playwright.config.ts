@@ -33,7 +33,7 @@ export default defineConfig({
     },
     {
       name: 'smoke',
-      testMatch: /(coreflows|newpages|shop|lab|search)\.spec\.ts$/,
+      testMatch: /(coreflows|newpages|shop|lab|search|a11y-dialogs)\.spec\.ts$/,
       use: { ...devices['Desktop Chrome'] },
     },
     { name: 'cleanup', testMatch: /.*\.teardown\.ts$/ },

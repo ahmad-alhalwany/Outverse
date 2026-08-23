@@ -1404,13 +1404,17 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                 onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
                 className="icon-only p-2"
                 title="Post options"
+                aria-label="Post options"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
               >
                 <EllipsisHorizontalIcon className="h-6 w-6" strokeWidth={1.5} />
               </button>
               {menuOpen && (
-                <div className="post-card__menu absolute right-0 top-10 z-20 w-48 overflow-hidden rounded-2xl">
+                <div className="post-card__menu absolute right-0 top-10 z-20 w-48 overflow-hidden rounded-2xl" role="menu">
                   <button
                     type="button"
+                    role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => { setEditText(displayText); setIsEditing(true); setMenuOpen(false); }}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-text hover:bg-surface text-left"
@@ -1419,6 +1423,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                   </button>
                   <button
                     type="button"
+                    role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void handlePinProfile()}
                     disabled={pinBusy}
@@ -1429,6 +1434,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                   </button>
                   <button
                     type="button"
+                    role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void handleBoostPost()}
                     disabled={boostBusy || boostActive}
@@ -1439,6 +1445,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                   </button>
                   <button
                     type="button"
+                    role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={handleDeletePost}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm post-card__menu-danger text-left"
@@ -1462,13 +1469,17 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                 onBlur={() => setTimeout(() => setMenuOpen(false), 150)}
                 className="icon-only p-2"
                 title="Report post"
+                aria-label="Post options"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
               >
                 <EllipsisHorizontalIcon className="h-6 w-6" strokeWidth={1.5} />
               </button>
               {menuOpen && (
-                <div className="post-card__menu absolute right-0 top-10 z-20 w-48 overflow-hidden rounded-2xl">
+                <div className="post-card__menu absolute right-0 top-10 z-20 w-48 overflow-hidden rounded-2xl" role="menu">
                   <button
                     type="button"
+                    role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void handleFeedFeedback('hide_post')}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-text hover:bg-surface text-left"
@@ -1477,6 +1488,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                   </button>
                   <button
                     type="button"
+                    role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void handleFeedFeedback('not_interested')}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-text hover:bg-surface text-left"
@@ -1485,6 +1497,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                   </button>
                   <button
                     type="button"
+                    role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => void handleFeedFeedback('see_less')}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-text hover:bg-surface text-left"
@@ -1494,6 +1507,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                   {!followingAuthor && user.id ? (
                     <button
                       type="button"
+                      role="menuitem"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => { setMenuOpen(false); void handleFollowAuthor(); }}
                       className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-text hover:bg-surface text-left"
@@ -1503,6 +1517,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
                   ) : null}
                   <button
                     type="button"
+                    role="menuitem"
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={handleReportPost}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-text hover:bg-surface text-left"

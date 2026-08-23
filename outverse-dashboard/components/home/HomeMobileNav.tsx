@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   HomeIcon,
@@ -25,6 +25,7 @@ import {
 } from '@heroicons/react/24/outline';
 import ReelsIcon from '@/components/icons/ReelsIcon';
 import { useProfileHref } from '@/lib/hooks/useAuthUser';
+import { useDialogA11y } from '@/lib/hooks/useDialogA11y';
 import { useLocale } from '@/components/LocaleProvider';
 
 type NavItem = {
@@ -52,7 +53,6 @@ export default function HomeMobileNav() {
   const profileHref = useProfileHref();
   const { t } = useLocale();
   const [moreOpen, setMoreOpen] = useState(false);
-  const sheetRef = useRef<HTMLDivElement>(null);
 
   const items: NavItem[] = [
     { href: '/', label: t('nav.home'), icon: HomeIcon, match: (p: string) => p === '/' },
@@ -78,15 +78,7 @@ export default function HomeMobileNav() {
     };
   }, [moreOpen]);
 
-  // Close on Escape
-  useEffect(() => {
-    if (!moreOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMoreOpen(false);
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [moreOpen]);
+  const sheetRef = useDialogA11y<HTMLDivElement>(moreOpen, () => setMoreOpen(false));
 
   // Check if current path is in the "more" links
   const moreActive = MORE_LINKS.some((link) => pathname.startsWith(link.href));

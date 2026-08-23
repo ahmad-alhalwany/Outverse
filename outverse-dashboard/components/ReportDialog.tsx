@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useLocale } from '@/components/LocaleProvider';
+import { useDialogA11y } from '@/lib/hooks/useDialogA11y';
 
 export const REPORT_REASONS = [
   { value: 'spam', labelKey: 'social.reportReasonSpam' },
@@ -36,6 +37,8 @@ export default function ReportDialog({ open, onClose, title, onSubmit }: Props) 
     setBusy(false);
   }, [open]);
 
+  const dialogRef = useDialogA11y<HTMLDivElement>(open, onClose);
+
   if (!open) return null;
 
   const submit = async () => {
@@ -53,14 +56,14 @@ export default function ReportDialog({ open, onClose, title, onSubmit }: Props) 
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
       <button
         type="button"
         className="absolute inset-0 bg-black/55"
         aria-label={t('social.reportCancel')}
         onClick={onClose}
       />
-      <div className="relative z-10 w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--surface,#1E1740)] p-5 shadow-2xl">
+      <div ref={dialogRef} className="relative z-10 w-full max-w-sm rounded-2xl border border-white/10 bg-[var(--surface,#1E1740)] p-5 shadow-2xl">
         <p className="mb-3 text-base font-semibold text-text">{title}</p>
         <div className="mb-3 space-y-1">
           {REPORT_REASONS.map((r) => (

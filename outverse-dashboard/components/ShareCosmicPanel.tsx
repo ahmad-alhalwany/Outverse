@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -32,6 +32,7 @@ import {
 } from '@/lib/communityApi';
 import { BrandShareIcon } from './share/BrandShareIcons';
 import ShareToStoryConfirm, { type StoryShareDraft } from './ShareToStoryConfirm';
+import { useDialogA11y } from '@/lib/hooks/useDialogA11y';
 
 interface ShareFriend {
   id: number;
@@ -144,18 +145,22 @@ export default function ShareCosmicPanel({
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (crossEchoOpen) setCrossEchoOpen(false);
-        else onClose();
-      }
-    };
-    window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prev;
-      window.removeEventListener('keydown', onKey);
     };
-  }, [onClose, crossEchoOpen]);
+  }, []);
+
+  // Kept stable across crossEchoOpen toggles so the a11y hook's focus/trap
+  // effect doesn't re-run (and steal focus back) every time the sub-panel opens.
+  const crossEchoOpenRef = useRef(crossEchoOpen);
+  useEffect(() => {
+    crossEchoOpenRef.current = crossEchoOpen;
+  }, [crossEchoOpen]);
+  const handleEscape = useCallback(() => {
+    if (crossEchoOpenRef.current) setCrossEchoOpen(false);
+    else onClose();
+  }, [onClose]);
+  const panelRef = useDialogA11y<HTMLDivElement>(true, handleEscape);
 
   const copyLink = async (channel: ShareChannel = 'copy') => {
     try {
@@ -311,6 +316,7 @@ export default function ShareCosmicPanel({
         />
 
         <motion.div
+          ref={panelRef}
           className="cosmic-share-sheet cosmic-share-sheet--wide"
           initial={{ opacity: 0, y: 36, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}

@@ -18,6 +18,7 @@ import {
 } from '@/lib/reactionsApi';
 import { mediaUrl } from '@/lib/api';
 import { publicDisplayName, looksLikeEmail } from '@/lib/publicDisplayName';
+import { useDialogA11y } from '@/lib/hooks/useDialogA11y';
 
 type Props = {
   open: boolean;
@@ -62,14 +63,7 @@ export default function ReactorsModal({
     setFilter(initialFilter);
   }, [open, initialFilter]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  const dialogRef = useDialogA11y<HTMLDivElement>(open, onClose);
 
   const tabs = COSMIC_REACTIONS.filter((r) => (counts[r.type] ?? 0) > 0);
 
@@ -87,6 +81,7 @@ export default function ReactorsModal({
           onClick={onClose}
         >
           <motion.div
+            ref={dialogRef}
             className="reactors-modal"
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
