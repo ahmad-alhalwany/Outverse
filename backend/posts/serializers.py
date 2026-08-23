@@ -300,7 +300,12 @@ class PostSerializer(serializers.ModelSerializer):
     def get_community(self, obj):
         if not obj.community_id:
             return None
-        return {'id': obj.community_id, 'slug': obj.community.slug, 'name': obj.community.name}
+        return {
+            'id': obj.community_id,
+            'slug': obj.community.slug,
+            'name': obj.community.name,
+            'is_nsfw': obj.community.is_nsfw,
+        }
 
     def get_is_boost_active(self, obj):
         return obj.is_boost_active

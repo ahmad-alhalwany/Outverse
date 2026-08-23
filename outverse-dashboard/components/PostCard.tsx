@@ -97,7 +97,7 @@ interface PostCardProps {
   is_profile_pinned?: boolean;
   is_community_pinned?: boolean;
   is_spoiler?: boolean;
-  community?: { id?: number; slug?: string; name?: string } | null;
+  community?: { id?: number; slug?: string; name?: string; is_nsfw?: boolean } | null;
   stats: {
     views: number;
     comments: number;
@@ -304,6 +304,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
   const [profilePinned, setProfilePinned] = useState(!!is_profile_pinned);
   const [pinBusy, setPinBusy] = useState(false);
   const [spoilerRevealed, setSpoilerRevealed] = useState(false);
+  const [nsfwRevealed, setNsfwRevealed] = useState(false);
   const [threadOpen, setThreadOpen] = useState(false);
   const [threadPosts, setThreadPosts] = useState<EmbeddedPost[]>([]);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -1642,6 +1643,14 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
           >
             Spoiler — tap to reveal
           </button>
+        ) : community?.is_nsfw && !nsfwRevealed && !isEditing ? (
+          <button
+            type="button"
+            onClick={() => setNsfwRevealed(true)}
+            className="w-full rounded-xl border border-dashed border-border bg-surface/50 px-4 py-6 text-sm font-semibold text-text-secondary"
+          >
+            {t('feed.nsfwReveal')}
+          </button>
         ) : isEditing ? (
           <div className="mb-2">
             <textarea
@@ -1713,7 +1722,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
         {firstUrl && <LinkPreview url={firstUrl} />}
         {renderPoll()}
         {renderQuestion()}
-        {hasMedia && (
+        {hasMedia && !(is_spoiler && !spoilerRevealed) && !(community?.is_nsfw && !nsfwRevealed) && (
           <div className="post-media-gallery-wrap">
             <PostMediaGallery
               images={images}

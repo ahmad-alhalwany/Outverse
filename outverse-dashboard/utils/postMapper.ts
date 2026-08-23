@@ -55,7 +55,7 @@ type ApiPost = {
   is_boost_active?: boolean;
   shared_reel?: { id?: number; caption?: string; username?: string; video_url?: string | null } | null;
   flair?: string;
-  community?: { id?: number; slug?: string; name?: string } | null;
+  community?: { id?: number; slug?: string; name?: string; is_nsfw?: boolean } | null;
   top_reactors?: { id: number; name: string; username?: string; type?: string }[];
   is_profile_pinned?: boolean;
   profile_pinned_at?: string | null;

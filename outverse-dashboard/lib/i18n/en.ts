@@ -580,6 +580,7 @@ export const en = {
     emptyResonanceBody: 'Join communities to see their posts here.',
     browseCommunities: 'Browse communities',
     seeMore: 'See more',
+    nsfwReveal: 'Sensitive content — tap to reveal',
     seeLess: 'See less',
     reactedYou: 'You reacted',
     reactedYouAndOthers: 'You and {count} others',

@@ -9,6 +9,7 @@ import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import CommunityConstellationSection from '@/components/communities/CommunityConstellationSection';
 import CommunityRitualSection from '@/components/communities/CommunityRitualSection';
+import EmptyState from '@/components/ui/EmptyState';
 import ErrorState from '@/components/ui/ErrorState';
 import { useLocale } from '@/components/LocaleProvider';
 import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
@@ -232,7 +233,7 @@ export default function CommunityDetailPage() {
   const handleApprove = async (userId: number) => {
     if (await approveMember(slug, userId)) {
       await loadManagement();
-      await load();
+      setCommunity((c) => (c ? { ...c, members_count: c.members_count + 1 } : c));
     }
   };
 
@@ -246,7 +247,7 @@ export default function CommunityDetailPage() {
     if (!(await confirm(t('communities.confirmKick'), { danger: true, confirmLabel: t('communities.kick') }))) return;
     if (await kickMember(slug, userId)) {
       await loadManagement();
-      await load();
+      setCommunity((c) => (c ? { ...c, members_count: Math.max(0, c.members_count - 1) } : c));
     }
   };
 
@@ -254,7 +255,7 @@ export default function CommunityDetailPage() {
     if (!(await confirm(t('communities.confirmBan'), { danger: true, confirmLabel: t('communities.ban') }))) return;
     if (await banMember(slug, userId)) {
       await loadManagement();
-      await load();
+      setCommunity((c) => (c ? { ...c, members_count: Math.max(0, c.members_count - 1) } : c));
     }
   };
 
@@ -664,7 +665,7 @@ export default function CommunityDetailPage() {
               {channelsOpen && (
                 <div className="space-y-2 rounded-xl border border-surface bg-surface/30 p-3">
                   {channels.length === 0 ? (
-                    <p className="text-sm text-text-secondary">{t('communities.noChannels')}</p>
+                    <p className="text-sm text-text-secondary">#️⃣ {t('communities.noChannels')}</p>
                   ) : (
                     <ul className="space-y-1">
                       {Object.entries(
@@ -1150,7 +1151,7 @@ export default function CommunityDetailPage() {
           )}
 
           {mappedPosts.length === 0 ? (
-            <div className="text-center py-10 text-text-secondary">{t('communities.emptyFeed')}</div>
+            <EmptyState icon="💬" title={t('communities.emptyFeed')} />
           ) : (
             mappedPosts.map((post, idx) => (
               <motion.div

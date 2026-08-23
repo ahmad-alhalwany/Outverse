@@ -582,6 +582,7 @@ export const ar = {
     emptyResonanceBody: 'انضم لمجتمعات لتشوف منشوراتها هون.',
     browseCommunities: 'تصفح المجتمعات',
     seeMore: 'عرض المزيد',
+    nsfwReveal: 'محتوى حساس — اضغط للكشف',
     seeLess: 'عرض أقل',
     reactedYou: 'تفاعلتَ',
     reactedYouAndOthers: 'أنت و{count} آخرون',
