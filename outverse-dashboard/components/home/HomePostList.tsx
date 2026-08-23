@@ -24,8 +24,7 @@ function isAdSlot(item: FeedItem): item is AdSlot {
 
 interface HomePostListProps {
   posts: MappedPost[];
-  onDeleted: () => void;
-  onUpdated: () => void;
+  onDeleted: (id: number) => void;
   adInterval?: number; // Show ad every N posts (default: 5)
   adPlacement?: 'feed' | 'stories' | 'reels' | 'explore' | 'profile';
 }
@@ -33,7 +32,6 @@ interface HomePostListProps {
 function HomePostList({
   posts,
   onDeleted,
-  onUpdated,
   adInterval = 5,
   adPlacement = 'feed',
 }: HomePostListProps) {
@@ -85,7 +83,6 @@ function HomePostList({
               {...post}
               variant="premium"
               onDeleted={onDeleted}
-              onUpdated={onUpdated}
             />
           )}
         </div>

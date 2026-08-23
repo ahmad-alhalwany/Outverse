@@ -100,7 +100,15 @@ export default function HomePageClient({
         offset,
       });
       if (!page) throw new Error('feed failed');
-      setPosts((prev) => (reset ? page.results : [...prev, ...page.results]));
+      setPosts((prev) => {
+        if (reset) return page.results;
+        // The ranker re-scores against live engagement on every request
+        // (backend/analytics/feed_ranker.py), so a post already on screen
+        // can shift to a different offset — dedup or it renders twice
+        // (or silently vanishes via a React key collision).
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...page.results.filter((p) => !seen.has(p.id))];
+      });
       offsetRef.current = offset + page.results.length;
       setHasMore(page.has_more);
     } catch {
@@ -233,8 +241,7 @@ export default function HomePageClient({
             <>
               <HomePostList
                 posts={mappedPosts}
-                onDeleted={() => fetchPosts(true, true)}
-                onUpdated={() => fetchPosts(true, true)}
+                onDeleted={(deletedId) => setPosts((prev) => prev.filter((p) => p.id !== deletedId))}
               />
               {hasMore && (
                 <div className="flex justify-center mt-4 mb-8">
