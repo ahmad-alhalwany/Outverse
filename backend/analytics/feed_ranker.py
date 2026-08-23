@@ -42,6 +42,13 @@ INTEREST_VECTOR_REBUILD_THROTTLE = 300
 INTEREST_VECTORS_BULK_REBUILD_THROTTLE = 3600
 INTEREST_VECTOR_LOOKBACK_DAYS = 30
 POOL_SIZE = 400
+EVERGREEN_POOL_SIZE = 100
+# ponytail: static multipliers tuned by feel, not learned like
+# get_learned_feature_weights(). Upgrade path: fold into that self-tuning
+# system once there's enough cold-user engagement data to learn the right
+# cold-start bias empirically instead of guessing it.
+COLD_CREATIVITY_MULTIPLIER = 1.4
+COLD_BASE_MULTIPLIER = 0.7
 
 DEFAULT_FEATURE_WEIGHTS = {
     'recency': 1.0,
@@ -557,9 +564,18 @@ def rank_for_you_queryset(qs, viewer, following_ids=None):
     following_ids = following_ids or []
     following_set = set(following_ids)
 
-    pool = list(
-        qs.order_by('-created_at')[:POOL_SIZE]
+    recent_pool = list(qs.order_by('-created_at')[:POOL_SIZE])
+    recent_ids = {post.id for post in recent_pool}
+    # ponytail: recency-only candidates can never resurface a strong older post
+    # no matter how well it matches the viewer — widen with a small evergreen
+    # slice ranked by raw engagement instead of date. Global ranking, not
+    # per-user; upgrade path: rank the evergreen slice by tag/interest match
+    # too if this still under-serves niche old content.
+    evergreen_pool = list(
+        qs.exclude(id__in=recent_ids)
+        .order_by('-likes_count', '-comments_count', '-shares_count')[:EVERGREEN_POOL_SIZE]
     )
+    pool = recent_pool + evergreen_pool
     if not pool:
         return qs.order_by('-created_at')
 
@@ -570,6 +586,15 @@ def rank_for_you_queryset(qs, viewer, following_ids=None):
     collaborative_boost = get_collaborative_author_boost(viewer.id)
     interests = list(getattr(viewer, 'interests', None) or [])
     now = timezone.now()
+
+    # Cold start: no engagement history and no stated interests means every
+    # personalization signal below is empty, so the feed would otherwise just
+    # be raw popularity. Lean on creativity (content-based, needs no history)
+    # instead of popularity for that first impression.
+    if not affinity and not tag_affinity and not interest_vector and not interests:
+        feature_weights = dict(feature_weights)
+        feature_weights['creativity'] = feature_weights.get('creativity', 1.0) * COLD_CREATIVITY_MULTIPLIER
+        feature_weights['base'] = feature_weights.get('base', 1.0) * COLD_BASE_MULTIPLIER
 
     # Suppress authors the viewer recently hid
     hidden_authors = set()
