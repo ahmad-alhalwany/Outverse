@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { HashtagIcon, PlayIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
+import EmptyState from '@/components/ui/EmptyState';
 import { mapPost, type ApiPost } from '@/utils/postMapper';
 import { apiFetch, mediaUrl } from '@/lib/api';
 import { reelPagePath } from '@/lib/fetchReel';
@@ -119,7 +120,15 @@ export default function TagPage() {
             </div>
           ) : tab === 'posts' ? (
             mappedPosts.length === 0 ? (
-              <div className="text-center py-10 text-text-secondary">No posts with this tag yet.</div>
+              <EmptyState
+                icon="🌌"
+                title="No posts with this tag yet."
+                action={
+                  <Link href="/?feed=discover" className="text-sm font-semibold text-vault hover:underline">
+                    Explore Discover
+                  </Link>
+                }
+              />
             ) : (
               mappedPosts.map((post, idx) => (
                 <motion.div
@@ -134,7 +143,15 @@ export default function TagPage() {
               ))
             )
           ) : reels.length === 0 ? (
-            <div className="text-center py-10 text-text-secondary">No reels with this tag yet.</div>
+            <EmptyState
+              icon="🎬"
+              title="No signals with this tag yet."
+              action={
+                <Link href="/reels/discover" className="text-sm font-semibold text-vault hover:underline">
+                  Discover signals
+                </Link>
+              }
+            />
           ) : (
             <div className="profile-reels-grid">
               {reels.map((reel) => {

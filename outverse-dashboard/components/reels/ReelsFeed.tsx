@@ -8,6 +8,7 @@ import type { ReactionType } from '@/lib/reactions';
 import ReelSlide from './ReelSlide';
 import ReelsFeedProgress from './ReelsFeedProgress';
 import FeedUndoToast from '../FeedUndoToast';
+import ErrorState from '../ui/ErrorState';
 import { useLocale } from '../LocaleProvider';
 
 interface ReelsFeedProps {
@@ -20,6 +21,7 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
   const { t } = useLocale();
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [reactionError, setReactionError] = useState('');
   const [dimUndoId, setDimUndoId] = useState<number | null>(null);
@@ -29,6 +31,7 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError(false);
     try {
       const params = new URLSearchParams();
       if (feed === 'following') params.set('feed', 'following');
@@ -47,9 +50,11 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
         }
       } else {
         setReels([]);
+        setError(true);
       }
     } catch {
       setReels([]);
+      setError(true);
     } finally {
       setLoading(false);
     }
@@ -157,6 +162,14 @@ export default function ReelsFeed({ feed, tag, focusId }: ReelsFeedProps) {
           <span className="reels-feed__orb" />
           <p>{t('reels.loading')}</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="reels-feed reels-feed--empty">
+        <ErrorState message={t('reels.loadError')} retryLabel={t('reels.retry')} onRetry={() => void load()} />
       </div>
     );
   }

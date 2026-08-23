@@ -4,14 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { UserGroupIcon, PlusIcon } from '@heroicons/react/24/outline';
 import AppShell from '@/components/AppShell';
+import EmptyState from '@/components/ui/EmptyState';
+import ErrorState from '@/components/ui/ErrorState';
 import { useLocale } from '@/components/LocaleProvider';
-import { createCommunity, fetchCommunities, type Community } from '@/lib/communityApi';
+import { createCommunity, fetchCommunitiesResult, type Community } from '@/lib/communityApi';
 
 export default function CommunitiesPage() {
   const { t } = useLocale();
   const [communities, setCommunities] = useState<Community[]>([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
@@ -22,8 +25,12 @@ export default function CommunitiesPage() {
 
   const load = useCallback(async (q?: string, sortMode?: 'popular' | 'trending') => {
     setLoading(true);
-    const list = await fetchCommunities(q, sortMode === 'trending' ? 'trending' : undefined);
+    const { communities: list, ok } = await fetchCommunitiesResult(
+      q,
+      sortMode === 'trending' ? 'trending' : undefined,
+    );
     setCommunities(list);
+    setLoadError(!ok);
     setLoading(false);
   }, []);
 
@@ -57,10 +64,13 @@ export default function CommunitiesPage() {
     <AppShell contentClassName="flex-1 min-w-0 w-full max-w-3xl mx-auto px-4 pb-16">
       <div className="pt-4 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <UserGroupIcon className="h-6 w-6" />
-            {t('communities.title')}
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold flex items-center gap-2">
+              <UserGroupIcon className="h-6 w-6" />
+              {t('communities.title')}
+            </h1>
+            <p className="mt-1 text-sm text-text-secondary">{t('communities.subtitle')}</p>
+          </div>
           <button
             type="button"
             onClick={() => setCreating((c) => !c)}
@@ -148,9 +158,34 @@ export default function CommunitiesPage() {
         </div>
 
         {loading ? (
-          <p className="text-sm text-text-secondary py-8 text-center">{t('common.loading')}</p>
+          <ul className="space-y-2">
+            {[0, 1, 2, 3].map((i) => (
+              <li key={i} className="rounded-2xl border border-surface bg-surface/30 px-4 py-3">
+                <div className="h-4 w-1/3 rounded skeleton-pulse mb-2" />
+                <div className="h-3 w-2/3 rounded skeleton-pulse" />
+              </li>
+            ))}
+          </ul>
+        ) : loadError ? (
+          <ErrorState
+            message={t('communities.loadError')}
+            retryLabel={t('communities.retry')}
+            onRetry={() => void load(query || undefined, sort)}
+          />
         ) : communities.length === 0 ? (
-          <p className="text-sm text-text-secondary py-8 text-center">{t('communities.empty')}</p>
+          <EmptyState
+            icon="🌌"
+            title={t('communities.empty')}
+            action={
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="inline-block px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-vault to-bazaar"
+              >
+                {t('communities.create')}
+              </button>
+            }
+          />
         ) : (
           <ul className="space-y-2">
             {communities.map((c) => (

@@ -73,6 +73,20 @@ export async function fetchCommunities(q?: string, ordering?: 'trending'): Promi
   return Array.isArray(data) ? data : data.results || [];
 }
 
+export async function fetchCommunitiesResult(
+  q?: string,
+  ordering?: 'trending',
+): Promise<{ communities: Community[]; ok: boolean }> {
+  const params = new URLSearchParams();
+  if (q) params.set('q', q);
+  if (ordering) params.set('ordering', ordering);
+  const qs = params.toString() ? `?${params.toString()}` : '';
+  const res = await apiFetch(`communities/${qs}`);
+  if (!res.ok) return { communities: [], ok: false };
+  const data = await res.json();
+  return { communities: Array.isArray(data) ? data : data.results || [], ok: true };
+}
+
 export async function fetchMyCommunities(): Promise<Community[]> {
   const res = await apiFetch('communities/?mine=1');
   if (!res.ok) return [];
@@ -84,6 +98,14 @@ export async function fetchCommunity(slug: string): Promise<Community | null> {
   const res = await apiFetch(`communities/${slug}/`);
   if (!res.ok) return null;
   return res.json();
+}
+
+export async function fetchCommunityResult(
+  slug: string,
+): Promise<{ community: Community | null; status: number }> {
+  const res = await apiFetch(`communities/${slug}/`);
+  if (!res.ok) return { community: null, status: res.status };
+  return { community: await res.json(), status: res.status };
 }
 
 export type CommunityConstellationQuestion = {

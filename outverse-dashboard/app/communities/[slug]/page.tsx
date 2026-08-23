@@ -9,12 +9,13 @@ import AppShell from '@/components/AppShell';
 import PostCard from '@/components/PostCard';
 import CommunityConstellationSection from '@/components/communities/CommunityConstellationSection';
 import CommunityRitualSection from '@/components/communities/CommunityRitualSection';
+import ErrorState from '@/components/ui/ErrorState';
 import { useLocale } from '@/components/LocaleProvider';
 import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { mapPost, type ApiPost } from '@/utils/postMapper';
 import {
-  fetchCommunity,
+  fetchCommunityResult,
   joinCommunity,
   leaveCommunity,
   fetchCommunityMembers,
@@ -107,20 +108,26 @@ export default function CommunityDetailPage() {
   const [constellation, setConstellation] = useState<CommunityConstellation | null>(null);
   const [ritual, setRitual] = useState<CommunityRitual | null>(null);
   const [ritualBusy, setRitualBusy] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   const load = useCallback(async () => {
     if (!slug) return;
     setLoading(true);
     setNotFound(false);
+    setLoadError(false);
     try {
-      const [c, feedPosts, chs, wikiPages] = await Promise.all([
-        fetchCommunity(slug),
+      const [{ community: c, status }, feedPosts, chs, wikiPages] = await Promise.all([
+        fetchCommunityResult(slug),
         fetchCommunityPosts(slug, sort),
         fetchCommunityChannels(slug),
         fetchCommunityWiki(slug),
       ]);
       if (!c) {
-        setNotFound(true);
+        if (status === 404) {
+          setNotFound(true);
+        } else {
+          setLoadError(true);
+        }
         setCommunity(null);
         setPosts([]);
         return;
@@ -434,7 +441,19 @@ export default function CommunityDetailPage() {
   return (
     <AppShell contentClassName="flex-1 min-w-0 w-full max-w-2xl mx-auto px-4 pb-16">
       {loading ? (
-        <div className="text-center py-16 text-text-secondary">{t('common.loading')}</div>
+        <div className="pt-4 space-y-4">
+          <div className="h-36 rounded-2xl skeleton-pulse" />
+          <div className="h-4 w-1/2 rounded skeleton-pulse" />
+          <div className="h-24 rounded-2xl skeleton-pulse" />
+        </div>
+      ) : loadError ? (
+        <div className="pt-16">
+          <ErrorState
+            message={t('communities.loadError')}
+            retryLabel={t('communities.retry')}
+            onRetry={() => void load()}
+          />
+        </div>
       ) : notFound || !community ? (
         <div className="text-center py-16 text-text-secondary">{t('communities.notFound')}</div>
       ) : (
