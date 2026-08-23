@@ -22,6 +22,7 @@ import {
 import CommentMediaPicker, { type PickerTab } from './comments/CommentMediaPicker';
 import PostReactions from './PostReactions';
 import RelativeTime from './RelativeTime';
+import ErrorState from './ui/ErrorState';
 import { useLocale } from './LocaleProvider';
 import Link from 'next/link';
 import { apiFetch, mediaUrl } from '@/lib/api';
@@ -81,6 +82,8 @@ interface CommentsProps {
   hasMore?: boolean;
   onLoadMore?: () => void;
   replyLocked?: boolean;
+  loadError?: boolean;
+  onRetryLoad?: () => void;
 }
 
 const MAX_NEST_DEPTH = 6;
@@ -105,6 +108,8 @@ export default function Comments({
   hasMore = false,
   onLoadMore,
   replyLocked = false,
+  loadError = false,
+  onRetryLoad,
 }: CommentsProps) {
   const { t, locale } = useLocale();
   const [newComment, setNewComment] = useState('');
@@ -840,7 +845,13 @@ export default function Comments({
               </div>
             )}
 
-            {comments.length === 0 ? (
+            {loadError && comments.length === 0 ? (
+              <ErrorState
+                message={t('feed.commentsLoadError')}
+                retryLabel={t('feed.retry')}
+                onRetry={() => onRetryLoad?.()}
+              />
+            ) : comments.length === 0 ? (
               <div className="cosmic-comments__empty">
                 <div className="cosmic-comments__empty-icon">✦</div>
                 <p>{t('feed.commentsEmpty')}</p>

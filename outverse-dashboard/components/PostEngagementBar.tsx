@@ -62,7 +62,7 @@ export default function PostEngagementBar({
   const filteredTop = useMemo(() => {
     if (!selectedReaction) return topReactors;
     const myType = COSMIC_REACTIONS.find((r) => r.emoji === selectedReaction)?.type;
-    return topReactors.filter((r) => r.id && (!myType || r.type !== myType || true));
+    return topReactors.filter((r) => r.id && r.type === myType);
   }, [topReactors, selectedReaction]);
 
   return (

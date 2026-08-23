@@ -188,6 +188,47 @@ function mapComment(c: Record<string, unknown>): CommentType {
   };
 }
 
+// Comments are a nested tree (comment.replies), and any page beyond the
+// first is only in local state (never refetched from the server) — so
+// pin/vote/react/edit/delete/reply must patch the tree in place instead of
+// calling fetchComments(), which would reset to page 1 and silently drop
+// everything a "Load more comments" click had loaded.
+function patchCommentTree(
+  list: CommentType[],
+  id: number,
+  patch: Partial<CommentType>,
+): CommentType[] {
+  return list.map((c) => {
+    if (c.id === id) return { ...c, ...patch };
+    if (c.replies?.length) {
+      const replies = patchCommentTree(c.replies, id, patch);
+      if (replies !== c.replies) return { ...c, replies };
+    }
+    return c;
+  });
+}
+
+function removeCommentFromTree(list: CommentType[], id: number): CommentType[] {
+  return list
+    .filter((c) => c.id !== id)
+    .map((c) => (c.replies?.length ? { ...c, replies: removeCommentFromTree(c.replies, id) } : c));
+}
+
+function insertReplyIntoTree(
+  list: CommentType[],
+  parentId: number,
+  reply: CommentType,
+): CommentType[] {
+  return list.map((c) => {
+    if (c.id === parentId) return { ...c, replies: [...(c.replies || []), reply] };
+    if (c.replies?.length) {
+      const replies = insertReplyIntoTree(c.replies, parentId, reply);
+      if (replies !== c.replies) return { ...c, replies };
+    }
+    return c;
+  });
+}
+
 function PostCard({ variant = 'default', id, post_type = 'normal', poll_options = [], poll_results = {}, my_poll_vote = null, question_answers_count = 0, my_question_answered = false, user, time, text, mood, tags, flair, location_name, reaction_counts, my_reaction, top_reactors = [], is_saved: isSavedProp = false, images, imageAlts = [], videos, audio, description, edited_at = null, reposts_count = 0, my_repost = null, repost_of = null, shared_reel = null, thread_count = 0, visibility = 'public', reply_control = 'everyone', vote_score = 0, my_vote = null, is_boost_active = false, is_profile_pinned = false, is_community_pinned = false, is_spoiler = false, community = null, stats, onDeleted, onUpdated, onSavedChange }: PostCardProps) {
   const { t } = useLocale();
   const [showShare, setShowShare] = useState(false);
@@ -210,6 +251,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
   const [comments, setComments] = useState<CommentType[]>([]);
   const [commentSort, setCommentSort] = useState<'old' | 'new' | 'best' | 'controversial'>('old');
   const [commentsHasMore, setCommentsHasMore] = useState(false);
+  const [commentsError, setCommentsError] = useState(false);
   const commentsOffsetRef = useRef(0);
   const [currentUser, setCurrentUser] = useState<{ id: number; name: string; avatar: string }>({ id: 0, name: 'You', avatar: DEFAULT_AVATAR });
   const [saved, setSaved] = useState(isSavedProp);
@@ -374,6 +416,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
         const rawList = Array.isArray(data) ? data : (data.results || []);
         const list = (rawList as Record<string, unknown>[]).map(mapComment);
         setComments((prev) => (reset ? list : [...prev, ...list]));
+        setCommentsError(false);
         commentsOffsetRef.current = offset + list.length;
         if (!Array.isArray(data)) {
           setCommentsHasMore(!!data.has_more);
@@ -382,10 +425,15 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
           setCommentsHasMore(false);
           if (reset) setCommentsCount(list.length);
         }
+      } else if (reset) {
+        setCommentsError(true);
+      } else {
+        flashActionError('Could not load more comments.');
       }
     } catch {
       /* keep existing comments on error */
-      if (!reset) flashActionError('Could not load more comments.');
+      if (reset) setCommentsError(true);
+      else flashActionError('Could not load more comments.');
     }
   }, [id, commentSort]);
 
@@ -580,13 +628,31 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
   ) => {
     if (!id || (!data.text?.trim() && !data.gifUrl && !data.stickerUrl)) return;
     if (!getToken() && !requireAuth()) return;
+    const me = getUser();
+    const tempId = -Date.now();
+    const optimistic = mapComment({
+      id: tempId,
+      text: data.text?.trim() || '',
+      gif_url: data.gifUrl || '',
+      sticker_url: data.stickerUrl || '',
+      created_at: new Date().toISOString(),
+      user: me
+        ? { id: me.id, username: me.username, first_name: me.first_name, last_name: me.last_name, avatar: me.avatar }
+        : { id: 0, username: 'you' },
+      replies: [],
+    });
+    setComments((prev) => insertReplyIntoTree(prev, parentId, optimistic));
+    setCommentsCount((c) => c + 1);
     try {
       const payload: Record<string, unknown> = { ...commentPayload(data), parent: parentId };
       if (data.quotedCommentId) payload.quoted_comment = data.quotedCommentId;
       const res = await apiFetchJson('comments/', { method: 'POST', json: payload });
       if (!res.ok) throw new Error('failed');
-      await fetchComments();
+      const created = mapComment((await res.json()) as Record<string, unknown>);
+      setComments((prev) => patchCommentTree(prev, tempId, created));
     } catch {
+      setComments((prev) => removeCommentFromTree(prev, tempId));
+      setCommentsCount((c) => Math.max(0, c - 1));
       flashActionError('Could not post your reply.');
     }
   };
@@ -594,8 +660,14 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
   const handlePinComment = async (commentId: number) => {
     try {
       const res = await apiFetchJson(`comments/${commentId}/pin/`, { method: 'POST', json: {} });
-      if (res.ok) await fetchComments();
-      else flashActionError('Could not pin this comment.');
+      if (res.ok) {
+        const data = await res.json();
+        setComments((prev) =>
+          patchCommentTree(prev, commentId, { isPinned: data.is_pinned, pinOrder: data.pin_order }),
+        );
+      } else {
+        flashActionError('Could not pin this comment.');
+      }
     } catch {
       flashActionError('Could not pin this comment.');
     }
@@ -604,8 +676,14 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
   const handleSparkComment = async (commentId: number) => {
     try {
       const res = await apiFetchJson(`comments/${commentId}/spark/`, { method: 'POST', json: {} });
-      if (res.ok) await fetchComments();
-      else flashActionError('Could not spark this comment.');
+      if (res.ok) {
+        const data = await res.json();
+        setComments((prev) =>
+          patchCommentTree(prev, commentId, { sparkedByAuthor: data.sparked_by_author }),
+        );
+      } else {
+        flashActionError('Could not spark this comment.');
+      }
     } catch {
       flashActionError('Could not spark this comment.');
     }
@@ -676,8 +754,19 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
         method: 'POST',
         json: { vote },
       });
-      if (res.ok) await fetchComments();
-      else flashActionError('Could not register your vote.');
+      if (res.ok) {
+        const data = await res.json();
+        setComments((prev) =>
+          patchCommentTree(prev, commentId, {
+            voteScore: data.vote_score,
+            boostCount: data.boost_count,
+            dimCount: data.dim_count,
+            myVote: data.my_vote,
+          }),
+        );
+      } else {
+        flashActionError('Could not register your vote.');
+      }
     } catch {
       flashActionError('Could not register your vote.');
     }
@@ -705,8 +794,18 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
         method: 'POST',
         json: { reaction: type },
       });
-      if (res.ok) await fetchComments();
-      else flashActionError('Could not react to this comment.');
+      if (res.ok) {
+        const data = await res.json();
+        const myType = data.my_reaction as ReactionType | null | undefined;
+        setComments((prev) =>
+          patchCommentTree(prev, commentId, {
+            reactionCounts: countsToEmojiMap(data.reaction_counts),
+            myReaction: myType ? EMOJI_BY_REACTION_TYPE[myType] : undefined,
+          }),
+        );
+      } else {
+        flashActionError('Could not react to this comment.');
+      }
     } catch {
       flashActionError('Could not react to this comment.');
     }
@@ -716,7 +815,8 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
     try {
       const res = await apiFetchJson(`comments/${commentId}/`, { method: 'DELETE' });
       if (!res.ok) throw new Error('failed');
-      await fetchComments();
+      setComments((prev) => removeCommentFromTree(prev, commentId));
+      setCommentsCount((c) => Math.max(0, c - 1));
     } catch {
       flashActionError('Could not delete this comment.');
     }
@@ -729,7 +829,10 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
         json: { text: newText },
       });
       if (!res.ok) throw new Error('failed');
-      await fetchComments();
+      const data = await res.json();
+      setComments((prev) =>
+        patchCommentTree(prev, commentId, { text: data.text, editedAt: data.edited_at }),
+      );
     } catch {
       flashActionError('Could not edit this comment.');
     }
@@ -1874,6 +1977,8 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
         hasMore={commentsHasMore}
         onLoadMore={loadMoreComments}
         replyLocked={reply_control === 'nobody' && !isOwner}
+        loadError={commentsError}
+        onRetryLoad={() => void fetchComments()}
       />
       <ReportDialog
         open={reportOpen}

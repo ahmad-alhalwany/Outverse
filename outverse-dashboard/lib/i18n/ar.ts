@@ -544,6 +544,7 @@ export const ar = {
     views: 'مشاهدات',
     commentPlaceholder: 'أضف إشاركك إلى هذا الموضوع…',
     commentsEmpty: 'لا إشارات بعد — كن أول من يتردد ✨',
+    commentsLoadError: 'تعذّر تحميل التعليقات.',
     reply: 'رد',
     shareTitle: 'أطلق إلى الفضاء',
     shareCount: '{count} مشاركة حتى الآن · ',

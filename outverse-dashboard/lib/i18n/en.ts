@@ -542,6 +542,7 @@ export const en = {
     views: 'Views',
     commentPlaceholder: 'Add your signal to this thread…',
     commentsEmpty: 'No signals yet — be the first to resonate ✨',
+    commentsLoadError: 'Could not load comments.',
     reply: 'Reply',
     shareTitle: 'Launch into the verse',
     shareCount: '{count} shares so far · ',
