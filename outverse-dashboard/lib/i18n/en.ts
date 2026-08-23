@@ -2592,7 +2592,7 @@ export const en = {
   saved: {
     tabAll: 'All',
     tabPosts: 'Posts',
-    tabReels: 'Reels',
+    tabReels: 'Signals',
     tabIdeas: 'Ideas',
     tabStories: 'Stories',
     header: 'Saved collections',
