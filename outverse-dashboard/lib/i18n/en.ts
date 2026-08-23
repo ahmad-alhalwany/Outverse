@@ -66,7 +66,7 @@ export const en = {
     popularTags: 'Signal Trends',
     mainNavigation: 'Main navigation',
     groupCreate: 'Create',
-    groupDiscover: 'Discover',
+    groupExplore: 'Explore',
     groupSocial: 'Social',
     groupYou: 'You',
   },

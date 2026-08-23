@@ -68,7 +68,7 @@ export const ar = {
     popularTags: 'اتجاهات الإشارة',
     mainNavigation: 'التنقل الرئيسي',
     groupCreate: 'إنشاء',
-    groupDiscover: 'اكتشف',
+    groupExplore: 'استكشف',
     groupSocial: 'اجتماعي',
     groupYou: 'أنت',
   },

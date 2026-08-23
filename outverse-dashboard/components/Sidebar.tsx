@@ -73,7 +73,7 @@ const groups: NavGroup[] = [
     ],
   },
   {
-    groupKey: 'nav.groupDiscover',
+    groupKey: 'nav.groupExplore',
     icon: RocketLaunchIcon,
     links: [
       { nameKey: 'nav.shop', icon: ShoppingCartIcon, href: '/shop' },
