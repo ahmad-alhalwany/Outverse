@@ -33,7 +33,7 @@ def build_community_constellation(community) -> dict:
         for q in matched
     ]
     if not questions:
-        questions = _placeholder_questions(flairs)
+        questions = _placeholder_questions(flairs or keywords[:3])
 
     return {
         'community_id': community.id,
