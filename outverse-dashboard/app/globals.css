@@ -7727,3 +7727,21 @@ html.light .reels-app {
     scroll-behavior: auto !important;
   }
 }
+
+/* Global keyboard-focus fallback. Many interactive elements strip the
+   browser's default outline (Tailwind's `outline-none`) and rely on their
+   own per-component :focus ring — this covers everything that doesn't
+   define one, so tabbing through the app never loses visible focus.
+   box-shadow (not outline) so the ring follows each element's own
+   border-radius instead of drawing a rectangle over rounded corners.
+   Several existing component rules (e.g. .icon-only) reset
+   `box-shadow: none !important` unconditionally, not just on hover/focus —
+   matching that with !important plus the doubled pseudo-class (a real,
+   if unusual, way to raise specificity past those two-class selectors)
+   and placing this last in the file is what actually wins the cascade;
+   a plain single-specificity rule earlier in the file silently lost to
+   them. Verified live via Tab-focus + getComputedStyle, not assumed. */
+:focus-visible:focus-visible {
+  outline: none !important;
+  box-shadow: var(--focus-ring) !important;
+}
