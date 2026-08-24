@@ -14,11 +14,14 @@ export default function FeedTabs({
   postCount?: number;
 }) {
   const { t } = useLocale();
+  // 'discover' intentionally isn't a tab here anymore — /discover is now a
+  // full standalone hub (posts + communities + people + reels), not just
+  // this one ranked feed variant. The feed value itself still works via
+  // direct URL (?feed=discover) for old links/bookmarks, just unlisted.
   const tabs: { key: HomeFeed; label: string }[] = [
     { key: 'for_you', label: t('feed.feedForYou') },
     { key: 'following', label: t('feed.feedFollowing') },
     { key: 'joined', label: t('feed.feedResonance') },
-    { key: 'discover', label: t('feed.feedDiscover') },
   ];
   return (
     <div className="feed-tabs sticky top-[4.5rem] z-20 py-3 mb-4 -mx-1 px-1 backdrop-blur-md rounded-xl">

@@ -54,7 +54,7 @@ export default function FeedHero() {
               </span>
             </h1>
             <p className="text-sm text-text-secondary max-w-xl">
-              Stories, sparks, and creativity from across the cosmos — all in one place.
+              Discover ideas, join communities, and create something new every day.
             </p>
             <div className="feed-hero__stats">
               {heroStats.map((stat) => (

@@ -124,7 +124,7 @@ export default function TagPage() {
                 icon="🌌"
                 title="No posts with this tag yet."
                 action={
-                  <Link href="/?feed=discover" className="text-sm font-semibold text-vault hover:underline">
+                  <Link href="/discover" className="text-sm font-semibold text-vault hover:underline">
                     Explore Discover
                   </Link>
                 }
