@@ -2,16 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { type AuthUser, getToken, getUser, isAuthenticated, logout, refreshSession } from '@/lib/auth';
 import { apiFetch, apiFetchJson, apiUrl, mediaUrl } from '@/lib/api';
 import { useTheme } from '@/components/ThemeProvider';
 import RelativeTime from '@/components/RelativeTime';
-import { 
-  HomeIcon,
-  BeakerIcon, 
-  ShoppingBagIcon, 
+import {
   ArchiveBoxIcon,
   BookOpenIcon,
   ShoppingCartIcon,
@@ -29,15 +26,6 @@ import {
 import { useRef } from 'react';
 import { useLocale } from '@/components/LocaleProvider';
 import { useLiveNotifications, type LiveNotification } from '@/hooks/useLiveNotifications';
-
-type TabId = 'home' | 'lab' | 'bazaar' | 'vault' | 'story' | 'shop';
-
-interface Tab {
-  id: TabId;
-  name: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>;
-  color: string;
-}
 
 const NOTIFICATIONS_API = apiUrl('notifications/');
 const SEARCH_API = apiUrl('search/');
@@ -72,15 +60,6 @@ const verbIcon: Record<string, string> = {
   follow: '➕',
 };
 
-const TAB_ROUTES: Record<TabId, string> = {
-  home: '/',
-  lab: '/lab',
-  bazaar: '/bazaar',
-  vault: '/vault',
-  story: '/forge',
-  shop: '/shop',
-};
-
 function notificationHref(n: AppNotification): string | null {
   const kind = n.verb;
   if (kind === 'follow' && n.actor?.id) return `/profile/${n.actor.id}`;
@@ -101,21 +80,10 @@ function notificationHref(n: AppNotification): string | null {
   return null;
 }
 
-function tabFromPath(pathname: string): TabId {
-  if (pathname.startsWith('/lab')) return 'lab';
-  if (pathname.startsWith('/bazaar')) return 'bazaar';
-  if (pathname.startsWith('/vault') || pathname.startsWith('/bottles') || pathname.startsWith('/capsules')) return 'vault';
-  if (pathname.startsWith('/forge')) return 'story';
-  if (pathname.startsWith('/shop')) return 'shop';
-  return 'home';
-}
-
 const Header = () => {
   const router = useRouter();
-  const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
   const { t } = useLocale();
-  const [activeTab, setActiveTab] = useState<TabId>(() => tabFromPath(pathname));
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAccount, setShowAccount] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -198,10 +166,6 @@ const Header = () => {
   };
 
   useEffect(() => {
-    setActiveTab(tabFromPath(pathname));
-  }, [pathname]);
-
-  useEffect(() => {
     if (!notifActionError) return;
     const timer = setTimeout(() => setNotifActionError(''), 3500);
     return () => clearTimeout(timer);
@@ -259,11 +223,6 @@ const Header = () => {
       setUnreadCount((c) => c + 1);
     },
   });
-
-  function navigateTab(tabId: TabId) {
-    setActiveTab(tabId);
-    router.push(TAB_ROUTES[tabId]);
-  }
 
   async function handleMarkAllRead() {
     try {
@@ -329,33 +288,6 @@ const Header = () => {
     </span>
   );
 
-  const tabs: Tab[] = [
-    { id: 'home', name: 'Home', icon: HomeIcon, color: 'text' },
-    { id: 'lab', name: 'Lab', icon: BeakerIcon, color: 'lab' },
-    { id: 'bazaar', name: 'Bazaar', icon: ShoppingBagIcon, color: 'bazaar' },
-    { id: 'vault', name: 'Vault', icon: ArchiveBoxIcon, color: 'vault' },
-    { id: 'story', name: 'Story', icon: BookOpenIcon, color: 'story' },
-    { id: 'shop', name: 'Shop', icon: ShoppingCartIcon, color: 'shop' },
-  ];
-
-  const tabColors: Record<TabId, string> = {
-    home: 'text-text',
-    lab: 'text-lab',
-    bazaar: 'text-bazaar',
-    vault: 'text-vault',
-    story: 'text-story',
-    shop: 'text-shop',
-  };
-
-  const tabBgColors: Record<TabId, string> = {
-    home: 'bg-text',
-    lab: 'bg-lab',
-    bazaar: 'bg-bazaar',
-    vault: 'bg-vault',
-    story: 'bg-story',
-    shop: 'bg-shop',
-  };
-
   return (
     <header className="fixed inset-x-0 top-0 z-50 px-3 pt-3 sm:px-4">
       <div className="mx-auto max-w-7xl">
@@ -368,48 +300,6 @@ const Header = () => {
               <span className="text-text">Cosmory</span>
             </Link>
           </div>
-
-          {/* Navigation Tabs — soft glass, no hard white outline */}
-          <nav
-            className="hidden lg:flex items-center gap-0.5 rounded-full bg-white/[0.04] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]"
-            aria-label={t('nav.mainNavigation')}
-          >
-            {tabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => navigateTab(tab.id)}
-                  aria-label={tab.name}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={`relative flex items-center gap-2 rounded-full px-3.5 py-2 transition-all duration-200
-                    ${isActive
-                      ? `${tabColors[tab.id]} shadow-[0_8px_22px_rgba(17,12,42,0.28)]`
-                      : 'text-text-secondary hover:bg-white/[0.06] hover:text-text'}
-                  `}
-                  style={isActive ? { fontWeight: 700 } : {}}
-                >
-                  <motion.span
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.96 }}
-                    className="flex items-center"
-                  >
-                    <Icon className="h-5 w-5" strokeWidth={isActive ? 2 : 1.75} />
-                  </motion.span>
-                  <span className="hidden md:inline-block text-sm">{tab.name}</span>
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className={`absolute inset-x-3 -bottom-0.5 h-[2px] rounded-full ${tabBgColors[tab.id]} opacity-90`}
-                      initial={false}
-                      transition={{ type: 'spring', stiffness: 500, damping: 32 }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </nav>
 
           {/* Right Side Icons */}
           <div className="flex items-center gap-1.5 sm:gap-2">

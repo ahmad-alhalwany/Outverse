@@ -22,7 +22,6 @@ import {
   ChartBarIcon,
   BookmarkSquareIcon,
   UsersIcon,
-  RocketLaunchIcon,
   GlobeAltIcon,
   BuildingLibraryIcon,
   SunIcon,
@@ -35,7 +34,6 @@ import {
   MapPinIcon,
   Squares2X2Icon,
   ChevronDownIcon,
-  PaintBrushIcon,
   MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 import ReelsIcon from '@/components/icons/ReelsIcon';
@@ -63,8 +61,8 @@ const topLinks: NavLink[] = [
 
 const groups: NavGroup[] = [
   {
-    groupKey: 'nav.groupCreate',
-    icon: PaintBrushIcon,
+    groupKey: 'nav.groupMore',
+    icon: Squares2X2Icon,
     links: [
       { nameKey: 'nav.lab', icon: BeakerIcon, href: '/lab' },
       { nameKey: 'nav.bazaar', icon: ShoppingBagIcon, href: '/bazaar' },
@@ -72,12 +70,6 @@ const groups: NavGroup[] = [
       { nameKey: 'nav.videos', icon: VideoCameraIcon, href: '/videos' },
       { nameKey: 'nav.studio', icon: VideoCameraIcon, href: '/studio' },
       { nameKey: 'nav.garden', icon: SunIcon, href: '/garden' },
-    ],
-  },
-  {
-    groupKey: 'nav.groupExplore',
-    icon: RocketLaunchIcon,
-    links: [
       { nameKey: 'nav.shop', icon: ShoppingCartIcon, href: '/shop' },
       { nameKey: 'nav.vault', icon: ArchiveBoxIcon, href: '/bottles' },
       { nameKey: 'nav.playlists', icon: QueueListIcon, href: '/playlists' },
@@ -85,22 +77,10 @@ const groups: NavGroup[] = [
       { nameKey: 'nav.museum', icon: BuildingLibraryIcon, href: '/museum' },
       { nameKey: 'nav.simulator', icon: GlobeAltIcon, href: '/simulator' },
       { nameKey: 'nav.characters', icon: PuzzlePieceIcon, href: '/characters' },
-    ],
-  },
-  {
-    groupKey: 'nav.groupSocial',
-    icon: ChatBubbleLeftRightIcon,
-    links: [
       { nameKey: 'nav.chat', icon: ChatBubbleLeftRightIcon, href: '/chat' },
       { nameKey: 'nav.rooms', icon: RectangleStackIcon, href: '/rooms' },
       { nameKey: 'nav.communities', icon: UserGroupIcon, href: '/communities' },
       { nameKey: 'nav.collab', icon: UsersIcon, href: '/collab' },
-    ],
-  },
-  {
-    groupKey: 'nav.groupYou',
-    icon: SparklesIcon,
-    links: [
       { nameKey: 'nav.wallet', icon: SparklesIcon, href: '/wallet' },
       { nameKey: 'nav.capsules', icon: ArchiveBoxIcon, href: '/capsules' },
       { nameKey: 'nav.year', icon: TrophyIcon, href: '/year' },

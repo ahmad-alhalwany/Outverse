@@ -68,10 +68,7 @@ export const ar = {
     moreNavigation: 'مزيد من التنقل',
     popularTags: 'اتجاهات الإشارة',
     mainNavigation: 'التنقل الرئيسي',
-    groupCreate: 'إنشاء',
-    groupExplore: 'استكشف',
-    groupSocial: 'اجتماعي',
-    groupYou: 'أنت',
+    groupMore: 'المزيد',
   },
   reels: {
     title: 'ريلز الإشارة',
