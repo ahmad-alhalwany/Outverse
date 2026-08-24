@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.core.cache import cache
-from django.db.models import Case, Count, IntegerField, When
+from django.db.models import Case, CharField, Count, IntegerField, Value, When
 from django.utils import timezone
 
 from analytics.models import ContentEngagementEvent, ContentTagVector, FeedRankingSnapshot, UserInterestVector
@@ -463,7 +463,7 @@ def score_post(
     interest_vector: dict[str, float] | None = None,
     feature_weights: dict[str, float] | None = None,
     collaborative_boost: dict[int, float] | None = None,
-) -> float:
+) -> tuple[float, str]:
     fw = feature_weights or DEFAULT_FEATURE_WEIGHTS
     tag_affinity = tag_affinity or {}
     interest_vector = interest_vector or {}
@@ -534,7 +534,19 @@ def score_post(
         if expires_at and expires_at > now:
             score += 40.0 * fw.get('boost', 1.0)
 
-    return score
+    # Surface *why* a post was ranked here — whichever personalization signal
+    # contributed most. Falls back to raw popularity, then plain freshness.
+    reason_candidates = {
+        'following': following_bonus,
+        'interest': interest_bonus + embedding_bonus,
+        'tag_affinity': tag_bonus,
+        'collab': collab_bonus,
+        'creativity': creativity,
+    }
+    top_reason, top_value = max(reason_candidates.items(), key=lambda kv: kv[1])
+    reason = top_reason if top_value > 0 else ('popular' if base > 0 else 'new')
+
+    return score, reason
 
 
 def _apply_diversity(scored: list[tuple[float, int, int]], max_per_author: int = 2, window: int = 15) -> list[int]:
@@ -612,28 +624,31 @@ def rank_for_you_queryset(qs, viewer, following_ids=None):
 
     id_order = {post.id: idx for idx, post in enumerate(pool)}
     scored = []
+    reason_by_id: dict[int, str] = {}
     for post in pool:
         if post.user_id in hidden_authors:
             continue
-        scored.append((
-            score_post(
-                post,
-                affinity=affinity,
-                following_ids=following_set,
-                interests=interests,
-                now=now,
-                tag_affinity=tag_affinity,
-                interest_vector=interest_vector,
-                feature_weights=feature_weights,
-                collaborative_boost=collaborative_boost,
-            ),
-            post.id,
-            post.user_id,
-        ))
+        post_score, reason = score_post(
+            post,
+            affinity=affinity,
+            following_ids=following_set,
+            interests=interests,
+            now=now,
+            tag_affinity=tag_affinity,
+            interest_vector=interest_vector,
+            feature_weights=feature_weights,
+            collaborative_boost=collaborative_boost,
+        )
+        reason_by_id[post.id] = reason
+        scored.append((post_score, post.id, post.user_id))
     scored.sort(key=lambda row: (-row[0], id_order[row[1]]))
     ordered_ids = _apply_diversity(scored)
 
     whens = [When(id=post_id, then=rank) for rank, post_id in enumerate(ordered_ids)]
+    reason_whens = [
+        When(id=post_id, then=Value(reason_by_id.get(post_id, ''))) for post_id in ordered_ids
+    ]
     return qs.filter(id__in=ordered_ids).annotate(
         _feed_rank=Case(*whens, default=999999, output_field=IntegerField()),
+        _feed_reason=Case(*reason_whens, default=Value(''), output_field=CharField()),
     ).order_by('_feed_rank')

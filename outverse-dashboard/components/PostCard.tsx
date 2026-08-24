@@ -97,6 +97,7 @@ interface PostCardProps {
   is_profile_pinned?: boolean;
   is_community_pinned?: boolean;
   is_spoiler?: boolean;
+  feed_reason?: string | null;
   community?: { id?: number; slug?: string; name?: string; is_nsfw?: boolean } | null;
   stats: {
     views: number;
@@ -229,7 +230,7 @@ function insertReplyIntoTree(
   });
 }
 
-function PostCard({ variant = 'default', id, post_type = 'normal', poll_options = [], poll_results = {}, my_poll_vote = null, question_answers_count = 0, my_question_answered = false, user, time, text, mood, tags, flair, location_name, reaction_counts, my_reaction, top_reactors = [], is_saved: isSavedProp = false, images, imageAlts = [], videos, audio, description, edited_at = null, reposts_count = 0, my_repost = null, repost_of = null, shared_reel = null, thread_count = 0, visibility = 'public', reply_control = 'everyone', vote_score = 0, my_vote = null, is_boost_active = false, is_profile_pinned = false, is_community_pinned = false, is_spoiler = false, community = null, stats, onDeleted, onUpdated, onSavedChange }: PostCardProps) {
+function PostCard({ variant = 'default', id, post_type = 'normal', poll_options = [], poll_results = {}, my_poll_vote = null, question_answers_count = 0, my_question_answered = false, user, time, text, mood, tags, flair, location_name, reaction_counts, my_reaction, top_reactors = [], is_saved: isSavedProp = false, images, imageAlts = [], videos, audio, description, edited_at = null, reposts_count = 0, my_repost = null, repost_of = null, shared_reel = null, thread_count = 0, visibility = 'public', reply_control = 'everyone', vote_score = 0, my_vote = null, is_boost_active = false, is_profile_pinned = false, is_community_pinned = false, is_spoiler = false, feed_reason = null, community = null, stats, onDeleted, onUpdated, onSavedChange }: PostCardProps) {
   const { t } = useLocale();
   const [showShare, setShowShare] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -389,9 +390,16 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
     }
   };
 
+  const feedReasonLabel = feed_reason ? t(`feed.reason.${feed_reason}` as never) : '';
+
   const renderTimestamp = () => (
     <div className="flex items-center gap-2 flex-wrap">
       <RelativeTime date={time} className="text-xs text-text-secondary" />
+      {feedReasonLabel && (
+        <span className="post-edited-badge" title={feedReasonLabel}>
+          {feedReasonLabel}
+        </span>
+      )}
       {editedAt && (
         <button
           type="button"

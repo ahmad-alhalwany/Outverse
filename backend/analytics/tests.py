@@ -45,10 +45,11 @@ class ColdStartWeightTests(PlainTestCase):
         cold_weights['base'] *= COLD_BASE_MULTIPLIER
 
         def score(post, weights):
-            return score_post(
+            value, _reason = score_post(
                 post, affinity={}, following_ids=set(), interests=[], now=now,
                 feature_weights=weights,
             )
+            return value
 
         warm_gap = score(popular_post, warm_weights) - score(creative_post, warm_weights)
         cold_gap = score(popular_post, cold_weights) - score(creative_post, cold_weights)

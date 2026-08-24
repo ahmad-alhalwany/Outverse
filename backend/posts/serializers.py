@@ -259,6 +259,7 @@ class PostSerializer(serializers.ModelSerializer):
     is_boost_active = serializers.SerializerMethodField()
     shared_reel = serializers.SerializerMethodField()
     top_reactors = serializers.SerializerMethodField()
+    feed_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
@@ -274,7 +275,7 @@ class PostSerializer(serializers.ModelSerializer):
             'is_boosted', 'boost_expires_at', 'is_boost_active', 'shared_reel',
             'top_reactors', 'is_profile_pinned', 'profile_pinned_at',
             'is_community_pinned', 'community_pinned_at', 'is_spoiler', 'crosspost_of',
-            'location_name', 'location_lat', 'location_lng',
+            'location_name', 'location_lat', 'location_lng', 'feed_reason',
         ]
         read_only_fields = [
             'created_at', 'views', 'comments_count', 'likes_count', 'shares_count',
@@ -285,7 +286,7 @@ class PostSerializer(serializers.ModelSerializer):
             'vote_score', 'boost_count', 'dim_count', 'my_vote', 'community',
             'is_boosted', 'boost_expires_at', 'is_boost_active', 'shared_reel',
             'top_reactors', 'is_profile_pinned', 'profile_pinned_at',
-            'is_community_pinned', 'community_pinned_at', 'crosspost_of',
+            'is_community_pinned', 'community_pinned_at', 'crosspost_of', 'feed_reason',
         ]
 
     def validate_required_tier(self, value):
@@ -306,6 +307,11 @@ class PostSerializer(serializers.ModelSerializer):
             'name': obj.community.name,
             'is_nsfw': obj.community.is_nsfw,
         }
+
+    def get_feed_reason(self, obj):
+        # Only set on for_you-ranked querysets (see analytics.feed_ranker); a
+        # plain '-created_at' list never gets this annotation.
+        return getattr(obj, '_feed_reason', '') or None
 
     def get_is_boost_active(self, obj):
         return obj.is_boost_active

@@ -66,6 +66,7 @@ type ApiPost = {
   location_name?: string;
   location_lat?: number | null;
   location_lng?: number | null;
+  feed_reason?: string | null;
 };
 
 export type { ApiPost };
