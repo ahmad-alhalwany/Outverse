@@ -8,21 +8,7 @@ import {
   BellIcon,
   ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline';
-import ReelsIcon from '@/components/icons/ReelsIcon';
 import { useAuthUser, useProfileHref } from '@/lib/hooks/useAuthUser';
-
-type WorldLink =
-  | { href: string; label: string; color: string; reelsIcon: true }
-  | { href: string; label: string; color: string; emoji: string };
-
-const WORLDS: WorldLink[] = [
-  { href: '/lab', label: 'Lab', emoji: '✦', color: '#4CAF50' },
-  { href: '/bazaar', label: 'Bazaar', emoji: '◫', color: '#2196F3' },
-  { href: '/bottles', label: 'Vault', emoji: '◌', color: '#9C27B0' },
-  { href: '/reels', label: 'Signals', reelsIcon: true, color: '#22D3EE' },
-  { href: '/forge', label: 'Story', emoji: '✎', color: '#FF8A65' },
-  { href: '/shop', label: 'Shop', emoji: '◈', color: '#FFB300' },
-];
 
 export default function FeedHero() {
   const user = useAuthUser();
@@ -30,7 +16,6 @@ export default function FeedHero() {
   const greeting = user?.first_name || user?.username || 'Creator';
   const heroStats = [
     { value: '24/7', label: 'Fresh inspiration' },
-    { value: '6', label: 'Creative worlds' },
     { value: 'Live', label: 'Community pulse' },
   ];
 
@@ -96,27 +81,6 @@ export default function FeedHero() {
               <Cog6ToothIcon className="h-5 w-5 text-text-secondary" />
             </Link>
           </div>
-        </div>
-        <div className="flex gap-3 mt-5 overflow-x-auto pb-1 scrollbar-thin">
-          {WORLDS.map((world) => (
-            <Link
-              key={world.href}
-              href={world.href}
-              className="home-world-chip shrink-0 flex items-center gap-2 px-4 py-3 rounded-2xl text-sm font-semibold border transition hover:scale-[1.02]"
-              style={{
-                borderColor: `${world.color}44`,
-                background: `${world.color}18`,
-                color: 'var(--card-text)',
-              }}
-            >
-              {'reelsIcon' in world ? (
-                <ReelsIcon size={18} active className="shrink-0" />
-              ) : (
-                <span>{world.emoji}</span>
-              )}
-              {world.label}
-            </Link>
-          ))}
         </div>
       </div>
     </motion.section>
