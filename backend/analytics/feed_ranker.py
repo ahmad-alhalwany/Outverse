@@ -549,19 +549,38 @@ def score_post(
     return score, reason
 
 
-def _apply_diversity(scored: list[tuple[float, int, int]], max_per_author: int = 2, window: int = 15) -> list[int]:
-    """Limit author concentration in the top of the feed."""
+def _apply_diversity(
+    scored: list[tuple[float, int, int]],
+    tag_by_id: dict[int, str] | None = None,
+    max_per_author: int = 2,
+    max_per_tag: int = 3,
+    window: int = 15,
+) -> list[int]:
+    """Limit author *and* topic concentration in the top of the feed.
+
+    Author-only capping still let a same-topic run through from different
+    authors (e.g. 5 #digitalart posts in a row) — cap each post's primary tag
+    the same way, within the same lead window.
+    """
+    tag_by_id = tag_by_id or {}
     ordered: list[int] = []
     deferred: list[tuple[float, int, int]] = []
     author_hits: dict[int, int] = defaultdict(int)
+    tag_hits: dict[str, int] = defaultdict(int)
 
     for item in scored:
         score, post_id, author_id = item
-        if len(ordered) < window and author_hits[author_id] >= max_per_author:
+        tag = tag_by_id.get(post_id, '')
+        if len(ordered) < window and (
+            author_hits[author_id] >= max_per_author
+            or (tag and tag_hits[tag] >= max_per_tag)
+        ):
             deferred.append(item)
             continue
         ordered.append(post_id)
         author_hits[author_id] += 1
+        if tag:
+            tag_hits[tag] += 1
 
     seen = set(ordered)
     for _score, post_id, _author_id in deferred + scored:
@@ -625,6 +644,7 @@ def rank_for_you_queryset(qs, viewer, following_ids=None):
     id_order = {post.id: idx for idx, post in enumerate(pool)}
     scored = []
     reason_by_id: dict[int, str] = {}
+    tag_by_id: dict[int, str] = {}
     for post in pool:
         if post.user_id in hidden_authors:
             continue
@@ -640,9 +660,11 @@ def rank_for_you_queryset(qs, viewer, following_ids=None):
             collaborative_boost=collaborative_boost,
         )
         reason_by_id[post.id] = reason
+        post_tags = _normalize_tags(getattr(post, 'tags', None))
+        tag_by_id[post.id] = min(post_tags) if post_tags else ''
         scored.append((post_score, post.id, post.user_id))
     scored.sort(key=lambda row: (-row[0], id_order[row[1]]))
-    ordered_ids = _apply_diversity(scored)
+    ordered_ids = _apply_diversity(scored, tag_by_id)
 
     whens = [When(id=post_id, then=rank) for rank, post_id in enumerate(ordered_ids)]
     reason_whens = [
