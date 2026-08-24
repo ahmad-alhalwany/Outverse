@@ -36,6 +36,7 @@ import {
   Squares2X2Icon,
   ChevronDownIcon,
   PaintBrushIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline';
 import ReelsIcon from '@/components/icons/ReelsIcon';
 
@@ -57,6 +58,7 @@ const topLinks: NavLink[] = [
   { nameKey: 'nav.home', icon: HomeIcon, href: '/' },
   { nameKey: 'nav.reels', href: '/reels', reelsIcon: true },
   { nameKey: 'nav.following', icon: UserGroupIcon, href: '/?feed=following' },
+  { nameKey: 'nav.discover', icon: MagnifyingGlassIcon, href: '/discover' },
 ];
 
 const groups: NavGroup[] = [

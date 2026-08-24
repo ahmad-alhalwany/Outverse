@@ -9,6 +9,9 @@ type Creator = {
   id: number;
   username: string;
   avatar: string | null;
+  bio: string;
+  posts_count: number;
+  followers_count: number;
   is_following: boolean;
 };
 

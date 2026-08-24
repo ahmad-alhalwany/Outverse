@@ -37,6 +37,7 @@ type NavItem = {
 };
 
 const MORE_LINKS = [
+  { key: 'nav.discover', href: '/discover', icon: MagnifyingGlassIcon },
   { key: 'nav.bazaar', href: '/bazaar', icon: ShoppingBagIcon },
   { key: 'nav.vault', href: '/bottles', icon: ArchiveBoxIcon },
   { key: 'nav.story', href: '/forge', icon: BookOpenIcon },

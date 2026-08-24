@@ -10,7 +10,8 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline';
 import ReelsIcon from '@/components/icons/ReelsIcon';
-import { apiFetch, mediaUrl } from '@/lib/api';
+import { mediaUrl } from '@/lib/api';
+import { fetchReelsDiscover } from '@/lib/reelsApi';
 import {
   REEL_MOOD_META,
   type ReelDiscoverPayload,
@@ -78,10 +79,8 @@ export default function ReelsDiscoverPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch('reels/discover/')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json) => setData(json))
-      .catch(() => setData(null))
+    fetchReelsDiscover()
+      .then(setData)
       .finally(() => setLoading(false));
   }, []);
 
