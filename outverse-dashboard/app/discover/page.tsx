@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import {
   MagnifyingGlassIcon,
   FireIcon,
+  HashtagIcon,
   UserGroupIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -23,16 +24,20 @@ import { mapPost, type MappedPost } from '@/utils/postMapper';
 import type { ReelItem } from '@/lib/reelTypes';
 
 type SuggestedCreator = { id: number; username: string; avatar: string | null; followers_count: number };
+type TrendingTopic = { tag: string; count: number };
 type Section<T> = { loading: boolean; error: boolean; items: T[] };
 const INITIAL = { loading: true, error: false, items: [] };
 
 function SectionHeader({
-  icon, title, seeAllHref, seeAllLabel,
-}: { icon: React.ReactNode; title: string; seeAllHref?: string; seeAllLabel?: string }) {
+  icon, title, subtitle, seeAllHref, seeAllLabel,
+}: { icon: React.ReactNode; title: string; subtitle?: string; seeAllHref?: string; seeAllLabel?: string }) {
   return (
-    <div className="flex items-center justify-between mb-3">
-      <h2 className="flex items-center gap-2 text-sm font-bold text-text">{icon}{title}</h2>
-      {seeAllHref && <Link href={seeAllHref} className="text-xs font-semibold text-vault">{seeAllLabel}</Link>}
+    <div className="flex items-start justify-between mb-3 gap-3">
+      <div>
+        <h2 className="flex items-center gap-2 text-sm font-bold text-text">{icon}{title}</h2>
+        {subtitle && <p className="text-xs text-text-secondary mt-0.5">{subtitle}</p>}
+      </div>
+      {seeAllHref && <Link href={seeAllHref} className="shrink-0 text-xs font-semibold text-vault">{seeAllLabel}</Link>}
     </div>
   );
 }
@@ -71,6 +76,18 @@ function PersonTeaser({ c }: { c: SuggestedCreator }) {
   );
 }
 
+function TopicTeaser({ topic }: { topic: TrendingTopic }) {
+  return (
+    <Link
+      href={`/tag/${encodeURIComponent(topic.tag)}`}
+      className="shrink-0 rounded-full border border-surface bg-surface/30 px-3.5 py-2 text-sm font-semibold text-text hover:bg-surface/60 transition-colors"
+    >
+      #{topic.tag}
+      <span className="ms-1.5 text-xs font-normal text-text-secondary">{topic.count}</span>
+    </Link>
+  );
+}
+
 function ReelTeaser({ reel }: { reel: ReelItem }) {
   return (
     <Link href={`/reels/${reel.id}`} className="shrink-0 w-28 rounded-xl overflow-hidden bg-surface/30 border border-surface">
@@ -83,6 +100,7 @@ function ReelTeaser({ reel }: { reel: ReelItem }) {
 export default function DiscoverPage() {
   const { t } = useLocale();
   const [posts, setPosts] = useState<Section<MappedPost>>(INITIAL);
+  const [topics, setTopics] = useState<Section<TrendingTopic>>(INITIAL);
   const [communities, setCommunities] = useState<Section<Community>>(INITIAL);
   const [people, setPeople] = useState<Section<SuggestedCreator>>(INITIAL);
   const [reels, setReels] = useState<Section<ReelItem>>(INITIAL);
@@ -95,6 +113,14 @@ export default function DiscoverPage() {
       if (!page) return setPosts({ loading: false, error: true, items: [] });
       setPosts({ loading: false, error: false, items: page.results.map(mapPost) });
     });
+
+    apiFetch('posts/trending_tags/')
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((list: TrendingTopic[]) => {
+        if (cancelled) return;
+        setTopics({ loading: false, error: false, items: Array.isArray(list) ? list.slice(0, 12) : [] });
+      })
+      .catch(() => { if (!cancelled) setTopics({ loading: false, error: true, items: [] }); });
 
     fetchCommunitiesResult(undefined, 'trending').then(({ communities: list, ok }) => {
       if (cancelled) return;
@@ -142,6 +168,14 @@ export default function DiscoverPage() {
         </section>
 
         <section>
+          <SectionHeader icon={<HashtagIcon className="h-4 w-4 text-lab" />} title={t('discover.topics')} />
+          {topics.loading ? <div className="flex flex-wrap gap-2">{Array.from({ length: 8 }).map((_, i) => <div key={i} className="h-8 w-20 rounded-full skeleton-pulse" />)}</div>
+            : topics.error ? <ErrorState message={t('discover.loadError')} retryLabel={t('discover.retry')} onRetry={() => window.location.reload()} />
+            : topics.items.length === 0 ? <EmptyState icon="#️⃣" title={t('discover.topicsEmpty')} />
+            : <div className="flex flex-wrap gap-2">{topics.items.map((topic) => <TopicTeaser key={topic.tag} topic={topic} />)}</div>}
+        </section>
+
+        <section>
           <SectionHeader icon={<UserGroupIcon className="h-4 w-4 text-vault" />} title={t('discover.communities')} seeAllHref="/communities" seeAllLabel={t('discover.communitiesSeeAll')} />
           {communities.loading ? <SectionSkeleton />
             : communities.error ? <ErrorState message={t('discover.loadError')} retryLabel={t('discover.retry')} onRetry={() => window.location.reload()} />
@@ -158,7 +192,7 @@ export default function DiscoverPage() {
         </section>
 
         <section>
-          <SectionHeader icon={<ReelsIcon size={18} active />} title={t('discover.reels')} seeAllHref="/reels/discover" seeAllLabel={t('discover.reelsSeeAll')} />
+          <SectionHeader icon={<ReelsIcon size={18} active />} title={t('discover.reels')} subtitle={t('discover.reelsSub')} seeAllHref="/reels/discover" seeAllLabel={t('discover.reelsSeeAll')} />
           {reels.loading ? <div className="flex gap-3">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="w-28 aspect-[9/16] rounded-xl skeleton-pulse shrink-0" />)}</div>
             : reels.error ? <ErrorState message={t('discover.loadError')} retryLabel={t('discover.retry')} onRetry={() => window.location.reload()} />
             : reels.items.length === 0 ? <EmptyState icon="🎬" title={t('discover.reelsEmpty')} />

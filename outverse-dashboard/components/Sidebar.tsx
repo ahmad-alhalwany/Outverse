@@ -43,6 +43,7 @@ type NavLink = {
   href: string;
   icon?: React.ComponentType<{ className?: string; strokeWidth?: string | number }>;
   reelsIcon?: true;
+  titleKey?: string;
 };
 
 type NavGroup = {
@@ -54,7 +55,7 @@ type NavGroup = {
 /** Always visible, no accordion — the links used daily. */
 const topLinks: NavLink[] = [
   { nameKey: 'nav.home', icon: HomeIcon, href: '/' },
-  { nameKey: 'nav.reels', href: '/reels', reelsIcon: true },
+  { nameKey: 'nav.reels', href: '/reels', reelsIcon: true, titleKey: 'nav.reelsHint' },
   { nameKey: 'nav.following', icon: UserGroupIcon, href: '/?feed=following' },
   { nameKey: 'nav.discover', icon: MagnifyingGlassIcon, href: '/discover' },
 ];
@@ -118,6 +119,7 @@ function NavItem({ link, active, t }: { link: NavLink; active: boolean; t: (k: s
   return (
     <Link
       href={link.href}
+      title={link.titleKey ? t(link.titleKey) : undefined}
       className={`group flex items-center gap-3 font-medium py-2.5 px-3.5 rounded-2xl transition-all ${
         isReels ? 'sidebar-link--reels ' : ''
       }${
