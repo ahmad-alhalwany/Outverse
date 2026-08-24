@@ -2575,8 +2575,8 @@ export const en = {
     eveningTitle: 'Tonight\u2019s reflection',
     morningSubtitle: 'A gentle question to start the day.',
     eveningSubtitle: 'A quieter question to close it.',
-    complete: 'I answered this',
-    completed: 'Done today',
+    complete: 'Mark done (no post)',
+    completed: 'Marked done',
     streakLabel: 'day streak',
     streakZero: 'Start a streak today',
     cta: 'Answer this',
@@ -2584,6 +2584,7 @@ export const en = {
     loading: 'Finding today\u2019s prompt\u2026',
     error: 'Could not load the ritual prompt.',
     completeError: 'Could not mark this as complete. Please try again.',
+    pulseTitle: 'What the community created today',
   },
   capsules: {
     title: 'Time Capsules',

@@ -12,6 +12,9 @@ import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 import { useRouter } from 'next/navigation';
 import { getToken } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { mapPost, type MappedPost } from '@/utils/postMapper';
+import PostTeaser from '@/components/ui/PostTeaser';
 import {
   completeDailyRitual,
   fetchDailyRitual,
@@ -57,6 +60,7 @@ export default function DailyRitualPanel() {
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
   const [completeError, setCompleteError] = useState(false);
+  const [pulse, setPulse] = useState<MappedPost[]>([]);
 
   const period = detectPeriod();
   const isMorning = period === 'morning';
@@ -84,6 +88,18 @@ export default function DailyRitualPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    apiFetch('posts/?inspiration_only=1&limit=3')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const list = Array.isArray(data) ? data : data.results || [];
+        setPulse(list.map(mapPost));
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleComplete() {
     if (!getToken()) return;
@@ -202,6 +218,16 @@ export default function DailyRitualPanel() {
               <p className="mt-2 text-xs" style={{ color: '#c0392b' }}>
                 {t('ritual.completeError' as never)}
               </p>
+            )}
+            {pulse.length > 0 && (
+              <div className="mt-5 pt-4 border-t" style={{ borderColor: C.border }}>
+                <p className="text-xs font-semibold mb-2" style={{ color: C.muted }}>
+                  {t('ritual.pulseTitle' as never)}
+                </p>
+                <div className="space-y-2">
+                  {pulse.map((p) => <PostTeaser key={p.id} post={p} />)}
+                </div>
+              </div>
             )}
           </>
         ) : (

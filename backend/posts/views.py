@@ -516,6 +516,9 @@ class PostViewSet(viewsets.ModelViewSet):
         tag = self.request.query_params.get('tag')
         if tag:
             qs = qs.filter(tags__contains=[tag])
+        inspiration_only = self.request.query_params.get('inspiration_only')
+        if inspiration_only:
+            qs = qs.filter(inspiration_question_id__isnull=False)
         feed = self.request.query_params.get('feed')
         following_ids = []
         if viewer:

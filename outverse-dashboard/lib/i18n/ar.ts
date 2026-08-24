@@ -2598,8 +2598,8 @@ export const ar = {
     eveningTitle: 'تأمل هذه الليلة',
     morningSubtitle: 'سؤال لطيف لبدء اليوم.',
     eveningSubtitle: 'سؤال أهدأ لختامه.',
-    complete: 'أجبت عن هذا',
-    completed: 'تم اليوم',
+    complete: 'وسم كمكتمل (بدون نشر)',
+    completed: 'مكتمل',
     streakLabel: 'يوم متتالي',
     streakZero: 'ابدأ سلسلة اليوم',
     cta: 'أجب عن هذا',
@@ -2607,6 +2607,7 @@ export const ar = {
     loading: 'جاري إيجاد سؤال اليوم…',
     error: 'تعذر تحميل سؤال الطقس.',
     completeError: 'تعذر وضع علامة مكتمل. حاول مرة أخرى.',
+    pulseTitle: 'ماذا أنشأ المجتمع اليوم',
   },
   capsules: {
     title: 'كبسولات الزمن',
