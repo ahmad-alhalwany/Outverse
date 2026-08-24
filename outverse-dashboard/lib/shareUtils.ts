@@ -196,6 +196,56 @@ function wrapText(
   if (line) ctx.fillText(line, x, cy);
 }
 
+export type PublicProfileMeta = {
+  id: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  bio?: string;
+  avatar?: string | null;
+  followers_count?: number;
+};
+
+export async function fetchProfilePublic(id: string): Promise<PublicProfileMeta | null> {
+  try {
+    const res = await fetch(apiUrl(`users/${id}/`), { next: { revalidate: 60 } });
+    if (!res.ok) return null;
+    return (await res.json()) as PublicProfileMeta;
+  } catch {
+    return null;
+  }
+}
+
+export function profileOgMeta(profile: PublicProfileMeta) {
+  const name =
+    [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.username || 'Creator';
+  const pageUrl = buildShareUrl(`/profile/${profile.id}`, { campaign: 'profile_share' });
+  const description = profile.bio?.trim()
+    ? profile.bio.slice(0, 160)
+    : `@${profile.username || 'creator'} on Cosmory`;
+  const imageUrl = profile.avatar ? mediaUrl(profile.avatar) || profile.avatar : `${SITE_ORIGIN}/vercel.svg`;
+
+  return {
+    title: `${name} (@${profile.username || 'creator'})`,
+    description,
+    pageUrl,
+    openGraph: {
+      title: `${name} on Cosmory`,
+      description,
+      url: pageUrl,
+      siteName: 'Cosmory',
+      type: 'profile' as const,
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: name }],
+    },
+    twitter: {
+      card: 'summary_large_image' as const,
+      title: `${name} — Cosmory`,
+      description,
+      images: [imageUrl],
+    },
+  };
+}
+
 export type PublicPostMeta = {
   id: number;
   text?: string;
@@ -229,7 +279,7 @@ export function postOgMeta(post: PublicPostMeta & { media?: { file?: string; med
   const imageUrl = imageField ? mediaUrl(imageField) || imageField : `${SITE_ORIGIN}/vercel.svg`;
 
   return {
-    title: `${text.slice(0, 57)}${text.length > 57 ? '…' : ''} | Cosmory`,
+    title: `${text.slice(0, 57)}${text.length > 57 ? '…' : ''}`,
     description: `@${author} · Cosmory`,
     pageUrl,
     openGraph: {

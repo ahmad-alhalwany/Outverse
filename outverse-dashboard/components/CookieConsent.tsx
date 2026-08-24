@@ -32,6 +32,7 @@ export default function CookieConsent() {
     } catch {
       /* ignore */
     }
+    window.dispatchEvent(new Event('cosmory:cookie-consent-updated'));
   }
 
   if (!mounted || consent !== null) return null;

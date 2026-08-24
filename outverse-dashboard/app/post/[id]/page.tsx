@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const post = await fetchPostPublic(id);
   if (!post) {
     return {
-      title: 'Signal not found | Cosmory',
+      title: 'Signal not found',
       description: 'This transmission drifted out of orbit.',
     };
   }

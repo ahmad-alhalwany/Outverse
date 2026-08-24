@@ -7,6 +7,7 @@ import AuthBootstrap from "@/components/AuthBootstrap";
 import CookieConsent from "@/components/CookieConsent";
 import SkipToMain from "@/components/SkipToMain";
 import ConfirmDialogProvider from "@/components/ui/ConfirmDialogProvider";
+import GoogleAnalytics from "@/components/GoogleAnalytics";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -88,6 +89,7 @@ export default function RootLayout({
               <AuthBootstrap />
               {children}
               <CookieConsent />
+              <GoogleAnalytics />
             </ConfirmDialogProvider>
           </LocaleProvider>
         </ThemeProvider>

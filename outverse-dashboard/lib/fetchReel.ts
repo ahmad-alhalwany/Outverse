@@ -35,7 +35,7 @@ export function reelOgMeta(reel: ReelItem) {
   const imageUrl = videoUrl || `${SITE_ORIGIN}/vercel.svg`;
 
   return {
-    title: `${title} | Cosmory`,
+    title,
     description,
     pageUrl,
     openGraph: {
