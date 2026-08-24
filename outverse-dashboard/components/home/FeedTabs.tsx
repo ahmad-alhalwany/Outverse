@@ -26,29 +26,34 @@ export default function FeedTabs({
   return (
     <div className="feed-tabs sticky top-[4.5rem] z-20 py-3 mb-4 -mx-1 px-1 backdrop-blur-md rounded-xl">
       <div className="flex items-center justify-between gap-3">
-        <div className="feed-tabs__scroll min-w-0 overflow-x-auto">
-          <div className="flex w-max gap-1 p-1 rounded-full bg-surface/80 border border-vault/10">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => onChange(tab.key)}
-                className="relative shrink-0 px-3 py-2 text-sm font-semibold transition-colors z-10 rounded-full sm:px-4"
-                style={{ color: feed === tab.key ? '#fff' : undefined }}
-              >
-                {feed === tab.key && (
-                  <motion.div
-                    layoutId="homeFeedTab"
-                    className="absolute inset-0 rounded-full bg-gradient-to-r from-vault via-bazaar to-lab shadow-lg"
-                    style={{ zIndex: -1 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <span className={feed === tab.key ? 'text-white' : 'text-text-secondary'}>
-                  {tab.label}
-                </span>
-              </button>
-            ))}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="hidden sm:inline shrink-0 text-[11px] font-semibold uppercase tracking-[0.2em] text-text-secondary/70">
+            {t('nav.home')}
+          </span>
+          <div className="feed-tabs__scroll min-w-0 overflow-x-auto">
+            <div className="flex w-max gap-1 p-1 rounded-full bg-surface/80 border border-vault/10">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => onChange(tab.key)}
+                  className="relative shrink-0 px-3 py-2 text-sm font-semibold transition-colors z-10 rounded-full sm:px-4"
+                  style={{ color: feed === tab.key ? '#fff' : undefined }}
+                >
+                  {feed === tab.key && (
+                    <motion.div
+                      layoutId="homeFeedTab"
+                      className="absolute inset-0 rounded-full bg-gradient-to-r from-vault via-bazaar to-lab shadow-lg"
+                      style={{ zIndex: -1 }}
+                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                    />
+                  )}
+                  <span className={feed === tab.key ? 'text-white' : 'text-text-secondary'}>
+                    {tab.label}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         {postCount != null && (
