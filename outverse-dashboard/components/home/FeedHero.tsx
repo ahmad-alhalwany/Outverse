@@ -30,7 +30,7 @@ export default function FeedHero() {
           <div className="space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-text-secondary/80 mb-1 flex items-center gap-1">
               <SparklesIcon className="h-4 w-4 text-vault" />
-              Cosmory Feed
+              Home
             </p>
             <h1 className="text-[1.75rem] sm:text-[2.1rem] leading-tight font-bold text-text">
               Hey,{' '}
