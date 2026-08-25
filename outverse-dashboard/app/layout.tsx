@@ -19,6 +19,18 @@ const themeInitScript = `(function(){try{var t=localStorage.getItem('cosmory-the
 
 const swRegisterScript = `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){/* SW registration is best-effort */});});}`;
 
+// Almost every page fires an API request on mount (feed, sidebar, etc.) —
+// without a preconnect hint, that first request pays DNS + TCP + TLS setup
+// cost on the critical path. PageSpeed's "Network dependency tree" insight
+// flagged this specifically.
+const apiOrigin = (() => {
+  try {
+    return new URL(process.env.NEXT_PUBLIC_API_URL || '').origin;
+  } catch {
+    return null;
+  }
+})();
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -70,6 +82,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {apiOrigin && (
+          <>
+            <link rel="preconnect" href={apiOrigin} />
+            <link rel="dns-prefetch" href={apiOrigin} />
+          </>
+        )}
         <script
           id="theme-init"
           // eslint-disable-next-line react/no-danger
