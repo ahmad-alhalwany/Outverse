@@ -246,6 +246,53 @@ export function profileOgMeta(profile: PublicProfileMeta) {
   };
 }
 
+export type PublicCommunityMeta = {
+  slug: string;
+  name?: string;
+  description?: string;
+  cover_url?: string;
+  members_count?: number;
+};
+
+export async function fetchCommunityPublic(slug: string): Promise<PublicCommunityMeta | null> {
+  try {
+    const res = await fetch(apiUrl(`communities/${slug}/`), { next: { revalidate: 60 } });
+    if (!res.ok) return null;
+    return (await res.json()) as PublicCommunityMeta;
+  } catch {
+    return null;
+  }
+}
+
+export function communityOgMeta(community: PublicCommunityMeta) {
+  const name = community.name || community.slug;
+  const pageUrl = buildShareUrl(`/communities/${community.slug}`, { campaign: 'community_share' });
+  const description = community.description?.trim()
+    ? community.description.slice(0, 160)
+    : `${community.members_count ?? 0} members on Cosmory`;
+  const imageUrl = community.cover_url ? mediaUrl(community.cover_url) || community.cover_url : `${SITE_ORIGIN}/vercel.svg`;
+
+  return {
+    title: name,
+    description,
+    pageUrl,
+    openGraph: {
+      title: `${name} on Cosmory`,
+      description,
+      url: pageUrl,
+      siteName: 'Cosmory',
+      type: 'website' as const,
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: name }],
+    },
+    twitter: {
+      card: 'summary_large_image' as const,
+      title: `${name} — Cosmory`,
+      description,
+      images: [imageUrl],
+    },
+  };
+}
+
 export type PublicPostMeta = {
   id: number;
   text?: string;
