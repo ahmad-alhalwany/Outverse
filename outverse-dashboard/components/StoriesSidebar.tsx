@@ -8,6 +8,7 @@ import { apiFetchJson } from '@/lib/api';
 import { useAuthUser } from '@/lib/hooks/useAuthUser';
 import { useLocale } from '@/components/LocaleProvider';
 import { useConfirm } from '@/components/ui/ConfirmDialogProvider';
+import { useDialogA11y } from '@/lib/hooks/useDialogA11y';
 import {
   fetchStoryRings,
   trackStoryView,
@@ -270,6 +271,10 @@ export function StoryModal({
   onMuted?: () => void
   onUnlocked?: () => void
 }) {
+  // Only ever mounted while open (parent does {showStory && <StoryModal />}),
+  // so `open` is always true. Fixes a real audit finding: role="dialog" was
+  // present but nothing backed it — no Escape handler, no focus trap.
+  const dialogRef = useDialogA11y<HTMLDivElement>(true, onClose);
   const { t } = useLocale();
   const me = useAuthUser();
   const confirm = useConfirm();
@@ -753,7 +758,7 @@ export function StoryModal({
   const relativeTime = story.createdAt ? formatRelativeTime(story.createdAt) : '';
 
   return (
-    <div className="story-viewer-backdrop" role="dialog" aria-modal="true" aria-label="Story viewer">
+    <div ref={dialogRef} className="story-viewer-backdrop" role="dialog" aria-modal="true" aria-label="Story viewer">
       <audio ref={audioRef} src={SWITCH_SOUND_URL} preload="auto" className="hidden" />
 
       {hasPrev && (

@@ -27,6 +27,7 @@ import {
   type CloseFriendItem,
 } from '@/lib/storyUtils';
 import StoryOverlaysLayer from './StoryOverlaysLayer';
+import { useDialogA11y } from '@/lib/hooks/useDialogA11y';
 import {
   STORY_FILTERS,
   STORY_BACKGROUNDS,
@@ -57,6 +58,11 @@ import {
 type Tool = 'none' | 'draw' | 'stickers' | 'mention-search';
 
 export function AddStoryModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  // Only ever mounted while open (parent does {showAdd && <AddStoryModal />}),
+  // so `open` is always true — the hook's cleanup on unmount still restores
+  // focus correctly. Fixes a real audit finding: this modal had no Escape
+  // handler and no focus trap at all.
+  const dialogRef = useDialogA11y<HTMLDivElement>(true, onClose);
   const [mode, setMode] = useState<'text' | 'media'>('text');
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState('');
@@ -389,7 +395,7 @@ export function AddStoryModal({ onClose, onCreated }: { onClose: () => void; onC
 
   return (
     <div className="story-studio-backdrop">
-      <div className="story-studio-shell">
+      <div className="story-studio-shell" ref={dialogRef} role="dialog" aria-modal="true" aria-label="New cosmic story">
         <div className="story-studio-header">
           <h3>New cosmic story</h3>
           <button onClick={onClose} type="button" className="story-viewer-close" aria-label="Close">

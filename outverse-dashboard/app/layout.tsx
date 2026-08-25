@@ -8,6 +8,7 @@ import CookieConsent from "@/components/CookieConsent";
 import SkipToMain from "@/components/SkipToMain";
 import ConfirmDialogProvider from "@/components/ui/ConfirmDialogProvider";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
+import Link from "next/link";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -106,6 +107,18 @@ export default function RootLayout({
               <SkipToMain />
               <AuthBootstrap />
               {children}
+              {/* Site-wide contentinfo landmark — no page had one before
+                  (a11y audit flagged it as a Level A issue). <footer> at the
+                  end of body implies role=contentinfo natively; kept small
+                  and unobtrusive so it doesn't compete with full-bleed pages
+                  like Reels — it just sits below their fixed viewport. */}
+              <footer className="border-t border-white/5 px-4 py-3 text-center text-[11px] text-text-secondary">
+                <span>&copy; {new Date().getFullYear()} Cosmory</span>
+                <span className="mx-2">&middot;</span>
+                <Link href="/privacy" className="hover:underline">Privacy</Link>
+                <span className="mx-2">&middot;</span>
+                <Link href="/terms" className="hover:underline">Terms</Link>
+              </footer>
               <CookieConsent />
               <GoogleAnalytics />
             </ConfirmDialogProvider>
