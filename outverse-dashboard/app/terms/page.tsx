@@ -5,7 +5,7 @@ import { useLocale } from '@/components/LocaleProvider';
 
 export default function TermsPage() {
   const { t, locale } = useLocale();
-  const updated = locale === 'ar' ? '29 يونيو 2026' : 'June 29, 2026';
+  const updated = locale === 'ar' ? '25 أغسطس 2026' : 'August 25, 2026';
 
   return (
     <LegalLayout
@@ -41,6 +41,11 @@ export default function TermsPage() {
           body: <p>{t('legal.termsContent')}</p>,
         },
         {
+          id: 'copyright',
+          title: t('legal.sections.copyright'),
+          body: <p>{t('legal.termsCopyright')}</p>,
+        },
+        {
           id: 'termination',
           title: t('legal.sections.termination'),
           body: <p>{t('legal.termsTermination')}</p>,
@@ -49,6 +54,16 @@ export default function TermsPage() {
           id: 'disclaimer',
           title: t('legal.sections.disclaimer'),
           body: <p>{t('legal.termsDisclaimer')}</p>,
+        },
+        {
+          id: 'liability',
+          title: t('legal.sections.liability'),
+          body: <p>{t('legal.termsLiability')}</p>,
+        },
+        {
+          id: 'governing-law',
+          title: t('legal.sections.governingLaw'),
+          body: <p>{t('legal.termsGoverningLaw')}</p>,
         },
         {
           id: 'changes',
