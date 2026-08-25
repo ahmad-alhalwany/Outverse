@@ -12,11 +12,13 @@ import { getToken } from '@/lib/auth';
 import { useLocale } from '@/components/LocaleProvider';
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-// These 5 are static/prop-driven with no render-time browser-API calls —
-// safe to SSR. The other 5 below stay ssr:false: each either has a genuine
-// SSR blocker (useSearchParams, or a render-time getToken() call) or is
-// 100% useEffect-fetch-dependent with no static content worth rendering
-// server-side. See plan: quizzical-sleeping-nova.
+// These 4 are static/prop-driven with no render-time browser-API calls —
+// safe to SSR, and cheap to hydrate (small, mostly-static trees). The other
+// 6 below stay ssr:false: each either has a genuine SSR blocker
+// (useSearchParams, or a render-time getToken() call), is 100%
+// useEffect-fetch-dependent with no static content worth rendering
+// server-side, or (HomePostList) was SSR'd here first but reverted — see
+// note below. See plan: quizzical-sleeping-nova.
 const Header = dynamic(() => import('@/components/Header'));
 const Sidebar = dynamic(() => import('@/components/Sidebar'));
 const CreatePostCard = dynamic(() => import('@/components/CreatePostCard'), {
@@ -29,7 +31,15 @@ const HomeStoriesRail = dynamic(() => import('@/components/home/HomeStoriesRail'
   ssr: false,
   loading: () => <div className="h-20 rounded-xl bg-surface/30 animate-pulse mb-4" />,
 });
+// Reverted to ssr:false — SSR'ing this (with it, up to 10 full PostCard
+// trees, ~2000 lines each) was in the original plan but a post-deploy
+// PageSpeed run showed real Total Blocking Time regressions (desktop
+// TBT 0ms -> 675ms, Performance 91 -> 66) from the added hydration cost.
+// This was the plan's own pre-agreed fallback for exactly this outcome —
+// keep the cheap shell (Header/Sidebar/FeedHero/CreatePostCard) server-
+// rendered for the LCP win, drop the expensive one.
 const HomePostList = dynamic(() => import('@/components/home/HomePostList'), {
+  ssr: false,
   loading: () => <PostFeedSkeleton count={4} />,
 });
 const RightSidebar = dynamic(() => import('@/components/RightSidebar'), {
