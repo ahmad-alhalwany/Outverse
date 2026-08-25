@@ -32,6 +32,29 @@ const apiOrigin = (() => {
   }
 })();
 
+// Basic Organization/WebSite structured data so search engines have a
+// factual identity to attach to the site (Foresight audit flagged the
+// total absence of schema markup). No SearchAction here — /search is
+// disallowed in robots.ts, and Google requires that page to be
+// crawlable for the sitelinks searchbox feature to apply.
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://outverse-six.vercel.app';
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      name: 'Cosmory',
+      url: siteUrl,
+      logo: `${siteUrl}/cosmory-icon.svg`,
+    },
+    {
+      '@type': 'WebSite',
+      name: 'Cosmory',
+      url: siteUrl,
+    },
+  ],
+};
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -40,9 +63,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "https://outverse-six.vercel.app"
-  ),
+  metadataBase: new URL(siteUrl),
   title: {
     default: "Cosmory",
     template: "%s | Cosmory",
@@ -89,6 +110,12 @@ export default function RootLayout({
             <link rel="dns-prefetch" href={apiOrigin} />
           </>
         )}
+        <script
+          id="structured-data"
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
         <script
           id="theme-init"
           // eslint-disable-next-line react/no-danger
