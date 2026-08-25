@@ -501,7 +501,6 @@ export default function CreatePostCard({ onPublished }: { onPublished?: () => vo
                 width={44}
                 height={44}
                 className="h-11 w-11 rounded-full object-cover border border-[#DED0F7]"
-                unoptimized
               />
             ) : (
               <span className="create-post-card__avatar-fallback">

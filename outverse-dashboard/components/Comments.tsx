@@ -394,7 +394,7 @@ export default function Comments({
           </button>
         </div>
       )}
-      <Image src={comment.user.avatar} alt={`${comment.user.name} avatar`} width={isReply ? 28 : 40} height={isReply ? 28 : 40} className="cosmic-comment__avatar" style={{ width: isReply ? '1.75rem' : undefined, height: isReply ? '1.75rem' : undefined }} unoptimized />
+      <Image src={comment.user.avatar} alt={`${comment.user.name} avatar`} width={isReply ? 28 : 40} height={isReply ? 28 : 40} className="cosmic-comment__avatar" style={{ width: isReply ? '1.75rem' : undefined, height: isReply ? '1.75rem' : undefined }} />
       <div className="flex-1 min-w-0">
         <div className="cosmic-comment__bubble">
           <div className="flex items-start justify-between gap-2">
@@ -712,7 +712,6 @@ export default function Comments({
                     width={36}
                     height={36}
                     className="cosmic-comments__composer-avatar"
-                    unoptimized
                   />
                 ) : (
                   <span className="cosmic-comments__composer-avatar cosmic-comments__composer-avatar--fallback" aria-hidden>

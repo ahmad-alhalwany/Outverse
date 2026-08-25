@@ -319,7 +319,7 @@ export default function SettingsPage() {
                   style={{ background: palette.card }}
                 >
                   {avatarSrc ? (
-                    <Image src={avatarSrc} alt={displayName} width={64} height={64} className="h-full w-full object-cover" unoptimized />
+                    <Image src={avatarSrc} alt={displayName} width={64} height={64} className="h-full w-full object-cover" />
                   ) : (
                     <UserCircleIcon className="h-12 w-12" style={{ color: palette.icon }} />
                   )}

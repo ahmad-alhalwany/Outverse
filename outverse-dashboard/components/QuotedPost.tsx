@@ -31,7 +31,6 @@ export default function QuotedPost({ id, user, text, time, images }: QuotedPostP
           width={22}
           height={22}
           className="quoted-post__avatar"
-          unoptimized
         />
         <span className="quoted-post__name">{name}</span>
         {time && <RelativeTime date={time} className="quoted-post__time" />}
@@ -45,7 +44,6 @@ export default function QuotedPost({ id, user, text, time, images }: QuotedPostP
             width={480}
             height={270}
             className="quoted-post__cover"
-            unoptimized
           />
         </div>
       )}

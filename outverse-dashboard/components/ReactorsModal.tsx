@@ -136,7 +136,6 @@ export default function ReactorsModal({
                           width={40}
                           height={40}
                           className="reactors-modal__avatar"
-                          unoptimized
                         />
                       ) : (
                         <span className="reactors-modal__avatar reactors-modal__avatar--fallback">

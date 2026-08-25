@@ -138,7 +138,6 @@ export default function RightSidebar() {
                       width={32}
                       height={32}
                       className="w-8 h-8 rounded-full border-2 border-vault/40 object-cover"
-                      unoptimized
                     />
                   ) : (
                     <span className="w-8 h-8 rounded-full bg-gradient-to-tr from-vault to-bazaar text-white flex items-center justify-center text-[10px] font-bold">

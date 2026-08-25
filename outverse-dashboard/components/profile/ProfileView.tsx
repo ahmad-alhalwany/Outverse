@@ -556,7 +556,6 @@ export default function ProfileView({ userId }: ProfileViewProps) {
               height={96}
               className="w-24 h-24 rounded-full object-cover border-4 shrink-0"
               style={{ borderColor: C.cream, boxShadow: C.shadowSm }}
-              unoptimized
             />
           ) : (
             <span
@@ -1001,7 +1000,7 @@ export default function ProfileView({ userId }: ProfileViewProps) {
               suggestions.map((suggested) => (
                 <Link key={suggested.id} href={`/profile/${suggested.id}`} className="flex items-center gap-3 rounded-xl p-2 transition-colors hover:opacity-90" style={{ background: C.card2 }}>
                   {suggested.avatar ? (
-                    <Image src={mediaUrl(suggested.avatar)} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover" unoptimized />
+                    <Image src={mediaUrl(suggested.avatar)} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
                   ) : (
                     <span className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: `linear-gradient(135deg, ${C.brown}, ${C.brownDk})` }}>
                       {initials(displayName(suggested))}

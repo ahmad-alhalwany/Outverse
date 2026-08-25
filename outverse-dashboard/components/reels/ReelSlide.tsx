@@ -739,7 +739,7 @@ export default function ReelSlide({ reel, active, onLike, onView, onDeleted, onS
           <span className="reel-slide__avatar-ring">
             {avatar ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <Image src={avatar} alt={`${reelAuthorName(reel.user)} avatar`} width={40} height={40} className="reel-slide__avatar" unoptimized />
+              <Image src={avatar} alt={`${reelAuthorName(reel.user)} avatar`} width={40} height={40} className="reel-slide__avatar" />
             ) : (
               <span className="reel-slide__avatar-fallback">{mood.emoji}</span>
             )}

@@ -1369,7 +1369,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
       <div className="post-card__header mb-4">
         {user.id ? (
           <Link href={`/profile/${user.id}`} className="post-card__author group">
-            <Image src={user.avatar || DEFAULT_AVATAR} alt={`${user.name} avatar`} width={40} height={40} className="post-card__avatar" unoptimized />
+            <Image src={user.avatar || DEFAULT_AVATAR} alt={`${user.name} avatar`} width={40} height={40} className="post-card__avatar" />
             <div className="min-w-0">
               <div className="flex items-center gap-1 font-semibold text-text group-hover:underline">
                 {user.name}
@@ -1395,7 +1395,7 @@ function PostCard({ variant = 'default', id, post_type = 'normal', poll_options 
           </Link>
         ) : (
           <div className="post-card__author">
-            <Image src={user.avatar || DEFAULT_AVATAR} alt={`${user.name} avatar`} width={40} height={40} className="post-card__avatar" unoptimized />
+            <Image src={user.avatar || DEFAULT_AVATAR} alt={`${user.name} avatar`} width={40} height={40} className="post-card__avatar" />
             <div className="min-w-0">
               <div className="flex items-center gap-1 font-semibold text-text">
                 {user.name}

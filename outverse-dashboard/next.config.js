@@ -1,3 +1,25 @@
+// Derive a remotePatterns entry for the actual media host from the same env
+// var the CSP already reads (NEXT_PUBLIC_API_URL) — this is what was missing:
+// only localhost/127.0.0.1 were whitelisted, so next/image couldn't load any
+// real uploaded media in production and every usage had to pass `unoptimized`.
+// Recomputes automatically whenever that env var changes (temporary nip.io
+// host now, api.cosmory.app later) — no second code change needed then.
+function apiMediaRemotePattern() {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
+  try {
+    const parsed = new URL(apiUrl);
+    if (parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1') return null;
+    return {
+      protocol: parsed.protocol.replace(':', ''),
+      hostname: parsed.hostname,
+      port: parsed.port || '',
+      pathname: '/media/**',
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
@@ -122,6 +144,7 @@ const nextConfig = {
       { protocol: 'http', hostname: '127.0.0.1', port: '8000', pathname: '/media/**' },
       { protocol: 'http', hostname: 'localhost', port: '8000', pathname: '/media/**' },
       { protocol: 'https', hostname: 'randomuser.me', pathname: '/api/portraits/**' },
+      ...(apiMediaRemotePattern() ? [apiMediaRemotePattern()] : []),
     ],
   },
 };
