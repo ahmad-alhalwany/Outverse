@@ -1,8 +1,12 @@
 import { API_ORIGIN, apiUrl, mediaUrl } from './api';
 import { reelAuthorName, type ReelItem } from './reelTypes';
 
+// Falls back to the real deployed origin, not localhost — this constant backs
+// every share link, canonical URL, and OG image fallback across the app, so a
+// missing NEXT_PUBLIC_SITE_URL must not silently break them in production.
 const SITE_ORIGIN =
-  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ?? 'http://localhost:3000';
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '')
+  ?? (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://outverse-six.vercel.app');
 
 export function reelPagePath(id: number | string): string {
   return `/reels/${id}`;
