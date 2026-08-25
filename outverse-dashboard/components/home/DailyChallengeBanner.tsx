@@ -32,20 +32,30 @@ export default function DailyChallengeBanner() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Mirrors the real banner's exact layout classes (same padding/flex
-  // structure) instead of a guessed fixed height — a magic-number height
-  // still measurably drifted from the real content's height post-deploy
-  // (PageSpeed's CLS culprit trace pointed at this banner pushing
-  // everything below it). Matching the real markup's spacing guarantees
-  // near-zero drift regardless of how long the real title/description run.
+  // Mirrors the real banner's layout classes AND its worst-case content
+  // height, not just a plausible-looking guess — the first attempt at this
+  // (matching layout classes but reserving one line for the title) still
+  // measurably drifted, because AI-generated challenge titles can run long
+  // enough to wrap to 2 lines (title had no line-clamp, so its real height
+  // was open-ended). Bounded the real title to line-clamp-2 below and sized
+  // this skeleton's title placeholder to the same 2-line worst case, so
+  // "loading" and "loaded" can never differ in height regardless of title
+  // length.
   if (loading) {
     return (
       <div className="daily-challenge-banner-skeleton mb-5 rounded-[28px] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
         <div className="flex-1">
           <div className="h-2.5 w-28 rounded skeleton-pulse mb-3" />
-          <div className="h-6 w-3/4 rounded skeleton-pulse mb-2" />
+          <div className="h-6 w-full rounded skeleton-pulse mb-1" />
+          <div className="h-6 w-2/3 rounded skeleton-pulse mb-2" />
           <div className="h-4 w-full rounded skeleton-pulse mb-1" />
-          <div className="h-4 w-2/3 rounded skeleton-pulse" />
+          <div className="h-4 w-2/3 rounded skeleton-pulse mb-3" />
+          {/* Reserves space for the type_display chip even though it's
+              conditional in the real markup — it's present on nearly every
+              challenge (confirmed via the live API), and over-reserving on
+              the rare day it's absent is a far smaller shift than under-
+              reserving on the common day it's there. */}
+          <div className="h-6 w-24 rounded-full skeleton-pulse" />
         </div>
         <div className="h-11 sm:min-w-[11rem] rounded-2xl skeleton-pulse" />
       </div>
@@ -66,7 +76,7 @@ export default function DailyChallengeBanner() {
         </p>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-[1.55rem] leading-tight font-bold text-white">{challenge.title}</h2>
+            <h2 className="text-[1.55rem] leading-tight font-bold text-white line-clamp-2">{challenge.title}</h2>
             <p className="text-sm sm:text-base text-white/78 mt-2 line-clamp-2">
               {challenge.description}
             </p>
