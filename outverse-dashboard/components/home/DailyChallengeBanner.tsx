@@ -20,6 +20,7 @@ type Challenge = {
 
 export default function DailyChallengeBanner() {
   const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(apiUrl('challenges/daily/'))
@@ -27,9 +28,16 @@ export default function DailyChallengeBanner() {
       .then((data) => {
         if (data && data.id) setChallenge(data);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
+  // Reserve roughly the real banner's height while loading — returning null
+  // here until the fetch resolves let everything below (stories, trending
+  // tags, feed) pop downward the instant it arrived, a real CLS source.
+  if (loading) {
+    return <div className="daily-challenge-banner-skeleton mb-5 rounded-[28px] h-[180px] sm:h-[132px] skeleton-pulse" />;
+  }
   if (!challenge) return null;
 
   return (
