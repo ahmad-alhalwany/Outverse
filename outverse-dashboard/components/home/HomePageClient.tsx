@@ -8,17 +8,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { mapPost, type ApiPost } from '@/utils/postMapper';
 import { fetchFeedPage, type HomeFeed } from '@/lib/postsApi';
+import { getToken } from '@/lib/auth';
 import { useLocale } from '@/components/LocaleProvider';
 import { ArrowPathIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 
-const Header = dynamic(() => import('@/components/Header'), { ssr: false });
-const Sidebar = dynamic(() => import('@/components/Sidebar'), { ssr: false });
+// These 5 are static/prop-driven with no render-time browser-API calls —
+// safe to SSR. The other 5 below stay ssr:false: each either has a genuine
+// SSR blocker (useSearchParams, or a render-time getToken() call) or is
+// 100% useEffect-fetch-dependent with no static content worth rendering
+// server-side. See plan: quizzical-sleeping-nova.
+const Header = dynamic(() => import('@/components/Header'));
+const Sidebar = dynamic(() => import('@/components/Sidebar'));
 const CreatePostCard = dynamic(() => import('@/components/CreatePostCard'), {
-  ssr: false,
   loading: () => <div className="h-32 rounded-2xl bg-surface/40 animate-pulse mb-6" />,
 });
 const FeedHero = dynamic(() => import('@/components/home/FeedHero'), {
-  ssr: false,
   loading: () => <div className="h-24 rounded-2xl bg-surface/30 animate-pulse mb-4" />,
 });
 const HomeStoriesRail = dynamic(() => import('@/components/home/HomeStoriesRail'), {
@@ -26,7 +30,6 @@ const HomeStoriesRail = dynamic(() => import('@/components/home/HomeStoriesRail'
   loading: () => <div className="h-20 rounded-xl bg-surface/30 animate-pulse mb-4" />,
 });
 const HomePostList = dynamic(() => import('@/components/home/HomePostList'), {
-  ssr: false,
   loading: () => <PostFeedSkeleton count={4} />,
 });
 const RightSidebar = dynamic(() => import('@/components/RightSidebar'), {
@@ -126,6 +129,17 @@ export default function HomePageClient({
     syncedFeedRef.current = feed;
     void fetchPosts(true);
   }, [feed, fetchPosts]);
+
+  // initialPosts is always the anonymous-ranked feed — the server has no way
+  // to know who's logged in (auth lives in localStorage only, see lib/auth.ts).
+  // A logged-in visitor's feed would otherwise sit on that anonymous seed
+  // until they manually switch tabs or refresh. One silent upgrade on mount
+  // closes that gap without a visible loading flash (silent=true just spins
+  // the refresh icon, per fetchPosts above).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (getToken()) void fetchPosts(true, true);
+  }, []);
 
   const loadMorePosts = () => {
     if (!loadingMore && hasMore) void fetchPosts(false);

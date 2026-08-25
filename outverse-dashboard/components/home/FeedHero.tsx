@@ -21,7 +21,7 @@ export default function FeedHero() {
 
   return (
     <motion.section
-      initial={{ opacity: 0, y: 12 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       className="feed-hero mb-5 rounded-[28px] p-4 sm:p-5 relative overflow-hidden"
     >
