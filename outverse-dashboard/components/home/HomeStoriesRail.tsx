@@ -192,7 +192,11 @@ export default function HomeStoriesRail({ onRefresh }: { onRefresh?: () => void 
         </div>
       </div>
 
-      <div className="relative z-10">
+      {/* Shared min-height across loading/empty/loaded states — the empty
+          state's generous py-10 padding used to be noticeably taller than
+          the loading skeleton, so the rail visibly shrank the instant an
+          empty result came back (a real, Lighthouse-flagged CLS source). */}
+      <div className="relative z-10 min-h-[7.6rem]">
         {loading ? (
           <div className="story-rail-track flex gap-5 overflow-x-auto py-3">
             {Array.from({ length: 7 }).map((_, i) => (
@@ -206,7 +210,7 @@ export default function HomeStoriesRail({ onRefresh }: { onRefresh?: () => void 
           <button
             type="button"
             onClick={() => setShowAdd(true)}
-            className="story-rail-empty w-full py-10 rounded-xl text-sm font-medium transition"
+            className="story-rail-empty w-full py-6 rounded-xl text-sm font-medium transition"
           >
             <span className="text-2xl block mb-2">✨</span>
             Launch your first story into orbit

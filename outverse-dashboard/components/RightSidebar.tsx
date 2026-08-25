@@ -38,11 +38,12 @@ export default function RightSidebar() {
   const [trendingPosts, setTrendingPosts] = useState<TrendingPost[]>([]);
   const [creators, setCreators] = useState<Creator[]>([]);
   const [followError, setFollowError] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
 
-    apiFetch('posts/trending/')
+    const trendingPromise = apiFetch('posts/trending/')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (active) setTrendingPosts(Array.isArray(data) ? data : []);
@@ -50,12 +51,20 @@ export default function RightSidebar() {
       .catch(() => {});
 
     const me = getUser()?.id;
-    apiFetch(me ? `users/suggestions/?exclude=${me}` : 'users/suggestions/')
+    const creatorsPromise = apiFetch(me ? `users/suggestions/?exclude=${me}` : 'users/suggestions/')
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (active) setCreators(Array.isArray(data) ? data : []);
       })
       .catch(() => {});
+
+    // Both start as empty arrays and used to jump straight to their "no
+    // results yet" one-liner, then pop to a full list once data arrived —
+    // a real CLS source PageSpeed flagged. A shared loading skeleton keeps
+    // the section height stable across that transition.
+    Promise.allSettled([trendingPromise, creatorsPromise]).then(() => {
+      if (active) setLoading(false);
+    });
 
     return () => {
       active = false;
@@ -124,7 +133,16 @@ export default function RightSidebar() {
           <span>Active Friends</span>
           <span className="text-bazaar text-base">✨</span>
         </h3>
-        {creators.length === 0 ? (
+        {loading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full skeleton-pulse shrink-0" />
+                <div className="h-2.5 w-24 rounded skeleton-pulse" />
+              </div>
+            ))}
+          </div>
+        ) : creators.length === 0 ? (
           <p className="text-xs text-text-secondary">No suggestions yet.</p>
         ) : (
           <ul className="text-xs text-text space-y-3">
@@ -179,7 +197,13 @@ export default function RightSidebar() {
           <span>Trending Posts</span>
           <span className="text-yellow-400 text-base">🌠</span>
         </h3>
-        {trendingPosts.length === 0 ? (
+        {loading ? (
+          <div className="space-y-2.5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-2.5 rounded skeleton-pulse" style={{ width: `${85 - i * 12}%` }} />
+            ))}
+          </div>
+        ) : trendingPosts.length === 0 ? (
           <p className="text-xs text-text-secondary">Nothing trending yet.</p>
         ) : (
           <ul className="text-xs text-text space-y-2">
