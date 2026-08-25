@@ -23,6 +23,7 @@ import {
 } from '@/lib/questionsApi';
 import { UserGroupIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { shareQuestionAsImage } from '@/lib/promptCardImage';
+import { useDialogA11y } from '@/lib/hooks/useDialogA11y';
 
 const PALETTES = {
   light: {
@@ -95,6 +96,7 @@ export default function InspirationPicker({ open, onClose, onUse }: InspirationP
   const [loadingAnsweredBy, setLoadingAnsweredBy] = useState(false);
   const [answeredByError, setAnsweredByError] = useState(false);
   const [shareImageError, setShareImageError] = useState(false);
+  const dialogRef = useDialogA11y<HTMLDivElement>(open, onClose);
 
   const load = useCallback(async (cat?: string) => {
     if (question?.id) void skipQuestion(question.id);
@@ -231,6 +233,7 @@ export default function InspirationPicker({ open, onClose, onUse }: InspirationP
         >
           <div className="absolute inset-0" style={{ background: C.overlay }} aria-hidden />
           <motion.div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label={t('inspiration.title')}
