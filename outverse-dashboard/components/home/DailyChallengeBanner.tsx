@@ -32,11 +32,24 @@ export default function DailyChallengeBanner() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Reserve roughly the real banner's height while loading — returning null
-  // here until the fetch resolves let everything below (stories, trending
-  // tags, feed) pop downward the instant it arrived, a real CLS source.
+  // Mirrors the real banner's exact layout classes (same padding/flex
+  // structure) instead of a guessed fixed height — a magic-number height
+  // still measurably drifted from the real content's height post-deploy
+  // (PageSpeed's CLS culprit trace pointed at this banner pushing
+  // everything below it). Matching the real markup's spacing guarantees
+  // near-zero drift regardless of how long the real title/description run.
   if (loading) {
-    return <div className="daily-challenge-banner-skeleton mb-5 rounded-[28px] h-[180px] sm:h-[132px] skeleton-pulse" />;
+    return (
+      <div className="daily-challenge-banner-skeleton mb-5 rounded-[28px] p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex-1">
+          <div className="h-2.5 w-28 rounded skeleton-pulse mb-3" />
+          <div className="h-6 w-3/4 rounded skeleton-pulse mb-2" />
+          <div className="h-4 w-full rounded skeleton-pulse mb-1" />
+          <div className="h-4 w-2/3 rounded skeleton-pulse" />
+        </div>
+        <div className="h-11 sm:min-w-[11rem] rounded-2xl skeleton-pulse" />
+      </div>
+    );
   }
   if (!challenge) return null;
 
