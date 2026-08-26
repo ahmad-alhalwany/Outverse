@@ -230,7 +230,7 @@ export default function RegisterPage() {
               {step === 0 && (
                 <section className="rounded-[24px] border p-6 md:p-8" style={{ background: COLORS.panel, borderColor: COLORS.border, boxShadow: COLORS.shadow }}>
                   <h2 className="text-3xl font-bold tracking-[-0.03em]" style={{ color: COLORS.text }}>Basic Information</h2>
-                  <div className="mt-6 grid gap-4">
+                  <div className="mt-6 grid grid-cols-1 gap-4">
                     <Field icon={User} placeholder="Enter your name" value={fullName} onChange={setFullName} autoComplete="name" />
                     <Field icon={Mail} placeholder="your@email.com" value={email} onChange={setEmail} autoComplete="email" type="email" />
                     <Field icon={User} placeholder="Choose a username" value={username} onChange={setUsername} autoComplete="username" />
