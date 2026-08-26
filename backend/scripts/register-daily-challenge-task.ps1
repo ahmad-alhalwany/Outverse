@@ -1,4 +1,4 @@
-# Register a Windows Scheduled Task that generates Cosmory's AI daily challenge
+# Register a Windows Scheduled Task that generates Cosonova's AI daily challenge
 # once per day. Run from an elevated or normal PowerShell:
 #
 #   cd "H:\project\Outverse - Copy\backend"
@@ -11,7 +11,7 @@ param(
   [int]$Hour = 6,
   [int]$Minute = 0,
   [ValidateSet('en', 'ar')]$Lang = 'en',
-  [string]$TaskName = 'CosmoryGenerateDailyChallenge'
+  [string]$TaskName = 'CosonovaGenerateDailyChallenge'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -38,7 +38,7 @@ Register-ScheduledTask `
   -Action $action `
   -Trigger $trigger `
   -Settings $settings `
-  -Description "Generate Cosmory Lab daily challenge via NVIDIA/AI at ${Hour}:$('{0:D2}' -f $Minute) local time" `
+  -Description "Generate Cosonova Lab daily challenge via NVIDIA/AI at ${Hour}:$('{0:D2}' -f $Minute) local time" `
   -Force | Out-Null
 
 Write-Host "Scheduled task '$TaskName' registered for every day at $('{0:D2}' -f $Hour):$('{0:D2}' -f $Minute) (lang=$Lang)."

@@ -78,7 +78,7 @@ def send_push_to_user(user_id: int, payload: dict) -> None:
         return
 
     verb = payload.get('verb') or payload.get('type') or 'notification'
-    title = VERB_LABELS.get(verb, 'Cosmory')
+    title = VERB_LABELS.get(verb, 'Cosonova')
     body = (payload.get('text') or '').strip() or title
     url = _notification_url(payload)
     data = json.dumps({'title': title, 'body': body, 'url': url})

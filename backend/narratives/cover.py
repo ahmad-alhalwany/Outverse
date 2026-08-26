@@ -77,7 +77,7 @@ def decorative_cover_data_url(title: str, genre: str) -> str:
   <circle cx="780" cy="220" r="120" fill="#ffffff18"/>
   <circle cx="200" cy="760" r="180" fill="#22d3ee22"/>
   <text x="72" y="820" fill="#f5f3ff" font-family="Georgia, serif" font-size="52">{safe_title}</text>
-  <text x="72" y="880" fill="#c4b5fd" font-family="sans-serif" font-size="28">{safe_genre} · Cosmory Forge</text>
+  <text x="72" y="880" fill="#c4b5fd" font-family="sans-serif" font-size="28">{safe_genre} · Cosonova Forge</text>
 </svg>'''
     encoded = base64.b64encode(svg.encode('utf-8')).decode('ascii')
     return f'data:image/svg+xml;base64,{encoded}'

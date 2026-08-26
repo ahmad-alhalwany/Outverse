@@ -20,7 +20,7 @@ MAP_SNAPS = [
         'mood': 'dreamy',
     },
     {
-        'text': 'Neon rain on Shibuya crossing. Cosmory feels close tonight.',
+        'text': 'Neon rain on Shibuya crossing. Cosonova feels close tonight.',
         'location_name': 'Tokyo, Japan',
         'location_lat': 35.6595,
         'location_lng': 139.7004,

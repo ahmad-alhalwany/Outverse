@@ -118,9 +118,9 @@ def generate_captions_for_reel(reel, *, language: str | None = None, force: bool
         if not seed:
             seed = reel.sound_label or 'Signal pulse'
             if lang.startswith('ar'):
-                seed = 'نبض إشارة Cosmory'
+                seed = 'نبض إشارة Cosonova'
             else:
-                seed = 'Cosmory signal pulse'
+                seed = 'Cosonova signal pulse'
         cues = _chunk_text(seed, duration)
         source = 'caption_timing'
 

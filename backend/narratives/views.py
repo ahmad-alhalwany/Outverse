@@ -669,7 +669,7 @@ class StoryViewSet(viewsets.ModelViewSet):
             owner_name=owner_name,
             segments=segments,
         )
-        filename = f"cosmory-{story.id}-{story.title[:40].replace(' ', '-')}.pdf"
+        filename = f"cosonova-{story.id}-{story.title[:40].replace(' ', '-')}.pdf"
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response

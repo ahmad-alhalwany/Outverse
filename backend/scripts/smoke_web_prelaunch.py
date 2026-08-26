@@ -1,4 +1,4 @@
-"""Cosmory web pre-launch smoke suite (public + soft-token + data presence)."""
+"""Cosonova web pre-launch smoke suite (public + soft-token + data presence)."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,7 @@ OUT = Path(__file__).resolve().parent / "_smoke_api_report.json"
 
 def call(method: str, path: str, *, token: str | None = None, data=None, timeout: float = 30.0):
     url = path if path.startswith("http") else f"{BASE}/api/{path.lstrip('/')}"
-    headers = {"Accept": "application/json", "User-Agent": "cosmory-smoke/1.0"}
+    headers = {"Accept": "application/json", "User-Agent": "cosonova-smoke/1.0"}
     if token:
         headers["Authorization"] = f"Token {token}"
     body = None
@@ -77,7 +77,7 @@ def front(path: str, timeout: float = 20.0):
     url = f"{FRONT}{path}"
     t0 = time.perf_counter()
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "cosmory-smoke/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "cosonova-smoke/1.0"})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read(4000)
             ms = int((time.perf_counter() - t0) * 1000)

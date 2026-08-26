@@ -1,5 +1,5 @@
 #!/bin/sh
-# Cosmory scheduled jobs - runs inside the Docker cron sidecar.
+# Cosonova scheduled jobs - runs inside the Docker cron sidecar.
 # Every minute: publish due posts + premieres.
 # Once daily at 08:00 UTC: email digests (daily + weekly-on-Monday).
 # Once daily at CRON_DAILY_CHALLENGE_HOUR:UTC: AI daily Lab challenge.
@@ -13,7 +13,7 @@ CHALLENGE_LANG="${CRON_DAILY_CHALLENGE_LANG:-en}"
 LAST_DIGEST_DAY=""
 LAST_CHALLENGE_DAY=""
 
-echo "[cron] Cosmory job loop started"
+echo "[cron] Cosonova job loop started"
 echo "[cron] digest at ${DIGEST_HOUR}:${DIGEST_MINUTE} UTC"
 echo "[cron] daily challenge at ${CHALLENGE_HOUR}:${CHALLENGE_MINUTE} UTC (lang=${CHALLENGE_LANG})"
 

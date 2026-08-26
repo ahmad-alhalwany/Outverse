@@ -37,7 +37,7 @@ NVIDIA_CHAT_URL = os.environ.get(
 
 
 def _provider() -> str | None:
-    # Prefer NVIDIA when present (Cosmory local default free path).
+    # Prefer NVIDIA when present (Cosonova local default free path).
     if os.environ.get('NVIDIA_API_KEY'):
         return 'nvidia'
     if os.environ.get('OPENAI_API_KEY'):

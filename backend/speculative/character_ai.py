@@ -47,7 +47,7 @@ def next_rarity(rarity: str) -> str | None:
 
 
 CREATE_SYSTEM = (
-    "You invent a whimsical fictional character for Cosmory, a warm social "
+    "You invent a whimsical fictional character for Cosonova, a warm social "
     "creativity app's collectible character market. Keep it playful, imaginative, "
     "gentle — no violence, horror, or dark themes. "
     "Return ONLY valid JSON with keys: name, description, emoji. "
@@ -57,7 +57,7 @@ CREATE_SYSTEM = (
 )
 
 MERGE_SYSTEM = (
-    "You fuse two fictional characters into one new character for Cosmory's "
+    "You fuse two fictional characters into one new character for Cosonova's "
     "collectible character market, genuinely blending traits and themes from "
     "both source characters. Keep it playful, imaginative, gentle — no violence, "
     "horror, or dark themes. "

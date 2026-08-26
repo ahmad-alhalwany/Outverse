@@ -18,7 +18,7 @@ from questions.llm import llm_text
 from .models import Challenge
 
 DAILY_SYSTEM = (
-    "You write daily creative challenges for Cosmory, a warm social creativity app. "
+    "You write daily creative challenges for Cosonova, a warm social creativity app. "
     "Create ONE challenge that feels beautiful, hopeful, playful, and imaginative. "
     "STRICT TONE RULES: no darkness, death, violence, horror, loneliness-as-pain, "
     "depression, trauma, cynicism, or dystopia. Prefer light, wonder, friendship, "

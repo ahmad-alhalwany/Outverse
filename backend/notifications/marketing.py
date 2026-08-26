@@ -18,12 +18,12 @@ User = get_user_model()
 UNSUBSCRIBE_HTML = (
     '<p style="font-size:12px;color:#64748b;text-align:center;margin-top:24px;">'
     'You are receiving this because you opted in to product updates. '
-    '<a href="https://cosmory.app/settings">Manage your email preferences</a>.'
+    '<a href="https://cosonova.com/settings">Manage your email preferences</a>.'
     '</p>'
 )
 UNSUBSCRIBE_TEXT = (
     '\n\n---\nYou are receiving this because you opted in to product updates. '
-    'Manage your preferences: https://cosmory.app/settings'
+    'Manage your preferences: https://cosonova.com/settings'
 )
 
 
