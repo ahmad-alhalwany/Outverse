@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Playwright E2E configuration for Cosmory dashboard.
+ * Playwright E2E configuration for Cosonova dashboard.
  *
  * Environment variables:
  * - E2E_BASE_URL: target Next.js app (default http://localhost:3000)

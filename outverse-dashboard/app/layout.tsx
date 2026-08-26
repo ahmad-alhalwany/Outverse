@@ -16,7 +16,7 @@ const inter = Inter({
   variable: "--font-inter",
 });
 
-const themeInitScript = `(function(){try{var t=localStorage.getItem('cosmory-theme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`;
+const themeInitScript = `(function(){try{var t=localStorage.getItem('cosonova-theme');if(t==='light'){document.documentElement.classList.add('light');}}catch(e){}})();`;
 
 const swRegisterScript = `if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js').catch(function(){/* SW registration is best-effort */});});}`;
 
@@ -43,13 +43,13 @@ const structuredData = {
   '@graph': [
     {
       '@type': 'Organization',
-      name: 'Cosmory',
+      name: 'Cosonova',
       url: siteUrl,
-      logo: `${siteUrl}/cosmory-icon.svg`,
+      logo: `${siteUrl}/cosonova-icon.svg`,
     },
     {
       '@type': 'WebSite',
-      name: 'Cosmory',
+      name: 'Cosonova',
       url: siteUrl,
     },
   ],
@@ -65,31 +65,31 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Cosmory",
-    template: "%s | Cosmory",
+    default: "Cosonova",
+    template: "%s | Cosonova",
   },
   description: "Your creative social space where ideas come to life",
   manifest: "/manifest.json",
-  applicationName: "Cosmory",
+  applicationName: "Cosonova",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Cosmory",
+    title: "Cosonova",
   },
   formatDetection: { telephone: false },
   openGraph: {
-    title: 'Cosmory Dashboard',
+    title: 'Cosonova Dashboard',
     description: 'Your creative social space where ideas come to life',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Cosmory Dashboard',
+    title: 'Cosonova Dashboard',
     description: 'Your creative social space where ideas come to life',
   },
   icons: {
     icon: [
-      { url: "/cosmory-icon.svg", type: "image/svg+xml" },
+      { url: "/cosonova-icon.svg", type: "image/svg+xml" },
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
     ],
     apple: [{ url: "/apple-touch-icon.png" }],
@@ -140,7 +140,7 @@ export default function RootLayout({
                   and unobtrusive so it doesn't compete with full-bleed pages
                   like Reels — it just sits below their fixed viewport. */}
               <footer className="border-t border-white/5 px-4 py-3 text-center text-[11px] text-text-secondary">
-                <span>&copy; {new Date().getFullYear()} Cosmory</span>
+                <span>&copy; {new Date().getFullYear()} Cosonova</span>
                 <span className="mx-2">&middot;</span>
                 <Link href="/about" className="hover:underline">About</Link>
                 <span className="mx-2">&middot;</span>

@@ -913,7 +913,7 @@ export function StoryModal({
               </button>
             </div>
           </div>
-          {reportSent && <p className="story-viewer-toast">Reported — thanks for helping keep Cosmory safe.</p>}
+          {reportSent && <p className="story-viewer-toast">Reported — thanks for helping keep Cosonova safe.</p>}
           {savedToast && <p className="story-viewer-toast">{savedToast}</p>}
 
           {isOwner && viewersOpen && (

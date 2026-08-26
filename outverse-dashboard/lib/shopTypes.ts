@@ -60,7 +60,7 @@ export const IDEA_KIND_ICONS: Record<string, string> = {
 };
 
 export function shopCreatorName(c: ShopItem['creator']) {
-  if (!c) return 'Cosmory';
+  if (!c) return 'Cosonova';
   const full = `${c.first_name || ''} ${c.last_name || ''}`.trim();
   return full || c.username;
 }

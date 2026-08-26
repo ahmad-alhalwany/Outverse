@@ -23,7 +23,7 @@ const PALETTES = {
   },
 } as const;
 
-const PIN_STORAGE_KEY = 'cosmory_simulator_pins';
+const PIN_STORAGE_KEY = 'cosonova_simulator_pins';
 
 const PRESETS = [
   { key: 'chaos', emoji: '🌀', creativity: 85, abstractness: 90, stability: 15 },

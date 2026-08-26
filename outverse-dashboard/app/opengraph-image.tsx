@@ -37,7 +37,7 @@ export default function Image() {
             color: 'transparent',
           }}
         >
-          Cosmory
+          Cosonova
         </div>
         <div
           style={{

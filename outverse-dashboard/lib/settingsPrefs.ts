@@ -1,6 +1,6 @@
 /** User preferences stored in localStorage (client-side). */
 
-const PREFIX = 'cosmory-pref-';
+const PREFIX = 'cosonova-pref-';
 
 export type AppLocale = 'en' | 'ar';
 

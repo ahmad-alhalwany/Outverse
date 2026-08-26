@@ -3,7 +3,7 @@
 // only localhost/127.0.0.1 were whitelisted, so next/image couldn't load any
 // real uploaded media in production and every usage had to pass `unoptimized`.
 // Recomputes automatically whenever that env var changes (temporary nip.io
-// host now, api.cosmory.app later) — no second code change needed then.
+// host now, api.cosonova.com later) — no second code change needed then.
 function apiMediaRemotePattern() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
   try {
@@ -46,7 +46,7 @@ const nextConfig = {
   async headers() {
     const isDev = process.env.NODE_ENV !== 'production';
     // Local dev needs the Django backend + its WebSocket endpoint, which
-    // production's CSP deliberately excludes (only cosmory.app is trusted
+    // production's CSP deliberately excludes (only cosonova.com is trusted
     // there). Never widen this for production builds.
     const devConnectSrc = isDev
       ? ' http://localhost:8000 http://127.0.0.1:8000 ws://localhost:8000 ws://127.0.0.1:8000'
@@ -61,7 +61,7 @@ const nextConfig = {
       : "media-src 'self' blob: https:";
     // The actual backend origin (NEXT_PUBLIC_API_URL) must always be allowed,
     // whatever it currently points at — a temporary IP/nip.io host during
-    // early deployment, or the real api.cosmory.app domain later — so this
+    // early deployment, or the real api.cosonova.com domain later — so this
     // never needs another code change when the backend's address changes.
     const apiOrigin = (process.env.NEXT_PUBLIC_API_URL || '').replace(/\/$/, '');
     const apiWsOrigin = apiOrigin.replace(/^http/, 'ws');
@@ -69,14 +69,14 @@ const nextConfig = {
       "connect-src 'self'",
       apiOrigin,
       apiWsOrigin,
-      'https://api.cosmory.app',
-      'https://cosmory.app',
+      'https://api.cosonova.com',
+      'https://cosonova.com',
       'https://fonts.googleapis.com',
       'https://fonts.gstatic.com',
       'https://www.google-analytics.com',
       'https://accounts.google.com',
       'https://nominatim.openstreetmap.org',
-      'wss://*.cosmory.app',
+      'wss://*.cosonova.com',
       devConnectSrc.trim(),
     ].filter(Boolean).join(' ');
     const scriptSrc =
@@ -132,8 +132,8 @@ const nextConfig = {
   },
   async redirects() {
     return [
-      { source: '/favicon.ico', destination: '/cosmory-icon.svg', permanent: false },
-      { source: '/outverse-icon.svg', destination: '/cosmory-icon.svg', permanent: false },
+      { source: '/favicon.ico', destination: '/cosonova-icon.svg', permanent: false },
+      { source: '/outverse-icon.svg', destination: '/cosonova-icon.svg', permanent: false },
     ];
   },
   images: {

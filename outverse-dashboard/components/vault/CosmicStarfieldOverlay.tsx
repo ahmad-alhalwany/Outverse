@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Cosmory-exclusive cosmic layer: nebulae, galaxies, and orbiting planets
+ * Cosonova-exclusive cosmic layer: nebulae, galaxies, and orbiting planets
  * sit above the Leaflet basemap without blocking map interaction.
  */
 export default function CosmicStarfieldOverlay() {
@@ -20,26 +20,26 @@ export default function CosmicStarfieldOverlay() {
 
       <svg className="vault-cosmic-bodies" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid slice">
         <defs>
-          <radialGradient id="cosmoryPlanetA" cx="35%" cy="30%" r="70%">
+          <radialGradient id="cosonovaPlanetA" cx="35%" cy="30%" r="70%">
             <stop offset="0%" stopColor="#e9d5ff" />
             <stop offset="45%" stopColor="#a78bfa" />
             <stop offset="100%" stopColor="#4c1d95" />
           </radialGradient>
-          <radialGradient id="cosmoryPlanetB" cx="40%" cy="35%" r="65%">
+          <radialGradient id="cosonovaPlanetB" cx="40%" cy="35%" r="65%">
             <stop offset="0%" stopColor="#bae6fd" />
             <stop offset="50%" stopColor="#38bdf8" />
             <stop offset="100%" stopColor="#0c4a6e" />
           </radialGradient>
-          <radialGradient id="cosmoryPlanetC" cx="38%" cy="32%" r="68%">
+          <radialGradient id="cosonovaPlanetC" cx="38%" cy="32%" r="68%">
             <stop offset="0%" stopColor="#fde68a" />
             <stop offset="55%" stopColor="#f59e0b" />
             <stop offset="100%" stopColor="#7c2d12" />
           </radialGradient>
-          <radialGradient id="cosmoryGlow" cx="50%" cy="50%" r="50%">
+          <radialGradient id="cosonovaGlow" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="rgba(196,181,253,0.55)" />
             <stop offset="100%" stopColor="rgba(196,181,253,0)" />
           </radialGradient>
-          <linearGradient id="cosmoryRing" x1="0%" y1="0%" x2="100%" y2="0%">
+          <linearGradient id="cosonovaRing" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="rgba(255,255,255,0)" />
             <stop offset="50%" stopColor="rgba(233,213,255,0.85)" />
             <stop offset="100%" stopColor="rgba(255,255,255,0)" />
@@ -50,26 +50,26 @@ export default function CosmicStarfieldOverlay() {
         <g className="vault-cosmic-spiral" opacity="0.35">
           <ellipse cx="820" cy="120" rx="90" ry="28" fill="none" stroke="rgba(196,181,253,0.45)" strokeWidth="2" />
           <ellipse cx="820" cy="120" rx="60" ry="18" fill="none" stroke="rgba(125,211,252,0.4)" strokeWidth="1.5" />
-          <circle cx="820" cy="120" r="8" fill="url(#cosmoryGlow)" />
+          <circle cx="820" cy="120" r="8" fill="url(#cosonovaGlow)" />
         </g>
 
         {/* Soft planet — top left */}
         <g className="vault-cosmic-planet vault-cosmic-planet--a">
-          <circle cx="140" cy="150" r="42" fill="url(#cosmoryGlow)" opacity="0.7" />
-          <circle cx="140" cy="150" r="26" fill="url(#cosmoryPlanetA)" />
-          <ellipse cx="140" cy="150" rx="38" ry="8" fill="none" stroke="url(#cosmoryRing)" strokeWidth="2" transform="rotate(-18 140 150)" />
+          <circle cx="140" cy="150" r="42" fill="url(#cosonovaGlow)" opacity="0.7" />
+          <circle cx="140" cy="150" r="26" fill="url(#cosonovaPlanetA)" />
+          <ellipse cx="140" cy="150" rx="38" ry="8" fill="none" stroke="url(#cosonovaRing)" strokeWidth="2" transform="rotate(-18 140 150)" />
         </g>
 
         {/* Ice planet — mid right */}
         <g className="vault-cosmic-planet vault-cosmic-planet--b">
-          <circle cx="860" cy="380" r="34" fill="url(#cosmoryGlow)" opacity="0.55" />
-          <circle cx="860" cy="380" r="18" fill="url(#cosmoryPlanetB)" />
+          <circle cx="860" cy="380" r="34" fill="url(#cosonovaGlow)" opacity="0.55" />
+          <circle cx="860" cy="380" r="18" fill="url(#cosonovaPlanetB)" />
         </g>
 
         {/* Warm planet — bottom left */}
         <g className="vault-cosmic-planet vault-cosmic-planet--c">
-          <circle cx="220" cy="480" r="28" fill="url(#cosmoryGlow)" opacity="0.5" />
-          <circle cx="220" cy="480" r="14" fill="url(#cosmoryPlanetC)" />
+          <circle cx="220" cy="480" r="28" fill="url(#cosonovaGlow)" opacity="0.5" />
+          <circle cx="220" cy="480" r="14" fill="url(#cosonovaPlanetC)" />
         </g>
 
         {/* Brand watermark constellation */}
@@ -81,7 +81,7 @@ export default function CosmicStarfieldOverlay() {
         </g>
       </svg>
 
-      <div className="vault-cosmic-brand">Cosmory Vault</div>
+      <div className="vault-cosmic-brand">Cosonova Vault</div>
     </div>
   );
 }

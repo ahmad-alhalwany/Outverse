@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test.describe('Authentication Flow', () => {
   test('should allow user to register', async ({ page }) => {
     await page.goto('/register');
-    await expect(page).toHaveTitle(/Cosmory/);
+    await expect(page).toHaveTitle(/Cosonova/);
     
     // Check page loaded
     await expect(page.locator('h1')).toContainText('Sign up');
@@ -11,7 +11,7 @@ test.describe('Authentication Flow', () => {
 
   test('should allow user to login', async ({ page }) => {
     await page.goto('/login');
-    await expect(page).toHaveTitle(/Cosmory/);
+    await expect(page).toHaveTitle(/Cosonova/);
     
     // Check page loaded
     await expect(page.locator('h1')).toContainText('Sign in');
@@ -26,7 +26,7 @@ test.describe('Authentication Flow', () => {
 test.describe('Home Feed', () => {
   test('should load home page', async ({ page }) => {
     await page.goto('/');
-    await expect(page).toHaveTitle(/Cosmory/);
+    await expect(page).toHaveTitle(/Cosonova/);
     
     // Check main content loads
     await expect(page.locator('#main-content')).toBeVisible();

@@ -3,7 +3,7 @@ import DiscoverPageClient from '@/components/discover/DiscoverPageClient';
 
 export const metadata: Metadata = {
   title: 'Discover',
-  description: 'Explore trending posts, topics, communities, creators, and signals across Cosmory.',
+  description: 'Explore trending posts, topics, communities, creators, and signals across Cosonova.',
 };
 
 export default function DiscoverPage() {

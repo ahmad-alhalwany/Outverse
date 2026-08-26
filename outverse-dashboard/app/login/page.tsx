@@ -439,7 +439,7 @@ function LoginForm() {
           )}
 
           <p className="mt-8 text-center text-lg" style={{ color: COLORS.muted }}>
-            {t('auth.newToCosmory')}{' '}
+            {t('auth.newToCosonova')}{' '}
             <Link href="/register" className="font-semibold" style={{ color: COLORS.primary }}>
               {t('auth.signUp')}
             </Link>

@@ -6,7 +6,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { getUser } from '@/lib/auth';
 import { useLocale } from '@/components/LocaleProvider';
 
-const THEME_KEY = 'cosmory-admin-theme';
+const THEME_KEY = 'cosonova-admin-theme';
 
 const NAV = [
   { href: '/admin/posts', labelKey: 'admin.navPosts', icon: '📝' },
@@ -50,7 +50,7 @@ export default function AdminShell({
 
   useEffect(() => {
     setLightTheme(localStorage.getItem(THEME_KEY) === 'light');
-    setAlertDismissed(sessionStorage.getItem('cosmory-admin-alert-dismissed') === '1');
+    setAlertDismissed(sessionStorage.getItem('cosonova-admin-alert-dismissed') === '1');
   }, []);
 
   function toggleTheme() {
@@ -61,7 +61,7 @@ export default function AdminShell({
 
   function dismissAlert() {
     setAlertDismissed(true);
-    sessionStorage.setItem('cosmory-admin-alert-dismissed', '1');
+    sessionStorage.setItem('cosonova-admin-alert-dismissed', '1');
   }
 
   return (

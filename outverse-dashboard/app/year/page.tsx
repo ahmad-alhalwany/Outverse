@@ -74,7 +74,7 @@ export default function YearPage() {
           style={{ background: C.chipBg, color: C.accent }}
         >
           <SparklesIcon className="h-3.5 w-3.5" />
-          Cosmory
+          Cosonova
         </div>
         <h1
           className="text-3xl md:text-5xl font-bold leading-tight"

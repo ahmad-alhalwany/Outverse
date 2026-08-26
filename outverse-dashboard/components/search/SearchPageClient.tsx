@@ -353,7 +353,7 @@ function SearchContent() {
                       : t('search.resultCountPlural', { count: String(totalResults) }),
                   query,
                 })
-              : t('search.exploreCosmory')}
+              : t('search.exploreCosonova')}
           </p>
         </div>
 

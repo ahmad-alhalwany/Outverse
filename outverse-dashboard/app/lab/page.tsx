@@ -823,7 +823,7 @@ function ChallengeViewModal({
           <p className="text-xs mt-1" style={{ color: C.text2 }}>
             By{' '}
             {ch.is_daily || ch.is_ai_generated
-              ? t('lab.byCosmoryAI')
+              ? t('lab.byCosonovaAI')
               : ch.created_by
                 ? displayName(ch.created_by, t('lab.anonymous'))
                 : t('lab.byCommunity')}

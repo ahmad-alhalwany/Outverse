@@ -15,7 +15,7 @@ type AppShellProps = {
 };
 
 /**
- * Standard Cosmory layout: Header + optional Sidebar (lg+) + content.
+ * Standard Cosonova layout: Header + optional Sidebar (lg+) + content.
  * No fixed marginLeft — on mobile the sidebar is hidden and content is full width.
  */
 export default function AppShell({

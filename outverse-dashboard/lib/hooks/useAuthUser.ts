@@ -10,8 +10,8 @@ export function useAuthUser(): AuthUser | null {
   useEffect(() => {
     setUser(getUser());
     const onUpdate = () => setUser(getUser());
-    window.addEventListener('cosmory:user-updated', onUpdate);
-    return () => window.removeEventListener('cosmory:user-updated', onUpdate);
+    window.addEventListener('cosonova:user-updated', onUpdate);
+    return () => window.removeEventListener('cosonova:user-updated', onUpdate);
   }, []);
 
   return user;

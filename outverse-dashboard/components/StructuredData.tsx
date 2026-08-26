@@ -34,13 +34,13 @@ export function getWebsiteSchema() {
   return {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
-    name: 'Cosmory',
-    url: 'https://cosmory.app',
+    name: 'Cosonova',
+    url: 'https://cosonova.com',
     potentialAction: {
       '@type': 'SearchAction',
       target: {
         '@type': 'EntryPoint',
-        urlTemplate: 'https://cosmory.app/search?q={search_term_string}',
+        urlTemplate: 'https://cosonova.com/search?q={search_term_string}',
       },
       'query-input': 'required name=search_term_string',
     },
@@ -81,8 +81,8 @@ export function getSocialMediaPostingSchema(post: {
     url: post.url,
     publisher: {
       '@type': 'Organization',
-      name: 'Cosmory',
-      url: 'https://cosmory.app',
+      name: 'Cosonova',
+      url: 'https://cosonova.com',
     },
   };
 }
@@ -114,8 +114,8 @@ export function getVideoObjectSchema(reel: {
     },
     publisher: {
       '@type': 'Organization',
-      name: 'Cosmory',
-      url: 'https://cosmory.app',
+      name: 'Cosonova',
+      url: 'https://cosonova.com',
     },
   };
 }
@@ -147,8 +147,8 @@ export function getArticleSchema(article: {
     url: article.url,
     publisher: {
       '@type': 'Organization',
-      name: 'Cosmory',
-      url: 'https://cosmory.app',
+      name: 'Cosonova',
+      url: 'https://cosonova.com',
     },
   };
 }

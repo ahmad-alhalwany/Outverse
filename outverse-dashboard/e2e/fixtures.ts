@@ -1,7 +1,7 @@
 import { test as base, expect, request as playwrightRequest, APIRequestContext } from '@playwright/test';
 
 /**
- * Shared fixtures for Cosmory E2E tests.
+ * Shared fixtures for Cosonova E2E tests.
  */
 export type TestFixtures = {
   apiUrl: string;

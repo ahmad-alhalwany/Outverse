@@ -3,7 +3,7 @@
  *
  * Used by the InspirationPicker's "Share as image" button so users can
  * post a question to WhatsApp / Instagram / X — each share is free
- * marketing for Cosmory. All rendering is client-side (canvas 2D),
+ * marketing for Cosonova. All rendering is client-side (canvas 2D),
  * no backend round-trip needed.
  */
 
@@ -124,7 +124,7 @@ export async function shareQuestionAsImage(
   ctx.direction = 'ltr';
   ctx.fillStyle = 'rgba(255,255,255,0.7)';
   ctx.font = '600 36px system-ui, sans-serif';
-  ctx.fillText('✦ Cosmory', W / 2, H - 120);
+  ctx.fillText('✦ Cosonova', W / 2, H - 120);
   ctx.font = '400 26px system-ui, sans-serif';
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.fillText(
@@ -137,7 +137,7 @@ export async function shareQuestionAsImage(
   const url = canvas.toDataURL('image/png');
   const a = document.createElement('a');
   a.href = url;
-  a.download = `cosmory-prompt-${question.id}.png`;
+  a.download = `cosonova-prompt-${question.id}.png`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

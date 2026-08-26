@@ -1,6 +1,6 @@
-# Cosmory
+# Cosonova
 
-> Cosmory is a creative social platform: a single space to post ideas, join
+> Cosonova is a creative social platform: a single space to post ideas, join
 > communities, share short-form video signals, publish stories, and buy or
 > sell creative work.
 
@@ -10,14 +10,14 @@
 - [Discover](https://outverse-six.vercel.app/discover): Trending posts, topics, communities, creators, and signals.
 - [Bazaar](https://outverse-six.vercel.app/bazaar): Post ideas and back other people's ideas.
 - [Communities](https://outverse-six.vercel.app/communities): Public and private groups organized around shared interests.
-- [Shop](https://outverse-six.vercel.app/shop): Marketplace for digital and physical creative goods made by Cosmory creators.
+- [Shop](https://outverse-six.vercel.app/shop): Marketplace for digital and physical creative goods made by Cosonova creators.
 - [Reels / Signals](https://outverse-six.vercel.app/reels): Short-form video feed.
 - [Forge](https://outverse-six.vercel.app/forge): Collaborative story-building tool.
 - [Museum](https://outverse-six.vercel.app/museum): Exhibition of abandoned or failed ideas and challenges from the Bazaar.
 - [Characters](https://outverse-six.vercel.app/characters): Gallery of AI-generated character cards.
 - [Simulator](https://outverse-six.vercel.app/simulator): Tool for exploring creative-persona traits.
 - [Garden](https://outverse-six.vercel.app/garden): Visualizes Bazaar ideas' growth as they gain backers and funding.
-- [About](https://outverse-six.vercel.app/about): What Cosmory is and what you can do here.
+- [About](https://outverse-six.vercel.app/about): What Cosonova is and what you can do here.
 - [FAQ](https://outverse-six.vercel.app/faq): Answers to common questions about coins, the Bazaar, the Shop, and subscriptions.
 
 ## Notes for automated agents and crawlers

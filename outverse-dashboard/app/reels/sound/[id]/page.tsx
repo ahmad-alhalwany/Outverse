@@ -62,7 +62,7 @@ export default function ReelSoundPage() {
           </span>
           <div className="min-w-0 flex-1">
             <h1 className="text-xl font-bold truncate">{track?.title || t('reels.soundTitle')}</h1>
-            <p className="text-sm text-text-secondary truncate">{track?.artist_label || 'Cosmory'}</p>
+            <p className="text-sm text-text-secondary truncate">{track?.artist_label || 'Cosonova'}</p>
             <p className="text-xs text-text-secondary mt-0.5">{signalsLabel}</p>
           </div>
         </div>

@@ -1,6 +1,6 @@
 {
-  "name": "Cosmory",
-  "short_name": "Cosmory",
+  "name": "Cosonova",
+  "short_name": "Cosonova",
   "description": "Your creative social space where ideas come to life",
   "start_url": "/",
   "scope": "/",
@@ -13,7 +13,7 @@
   "dir": "auto",
   "icons": [
     {
-      "src": "/cosmory-icon.svg",
+      "src": "/cosonova-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"

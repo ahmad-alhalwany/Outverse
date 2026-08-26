@@ -193,7 +193,7 @@ export default function AccountSecuritySettings({ palette }: { palette: Palette 
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'cosmory-export.json';
+            a.download = 'cosonova-export.json';
             a.click();
             URL.revokeObjectURL(url);
           }}

@@ -13,13 +13,15 @@ export type AuthUser = {
   onboarding_completed?: boolean;
   interests?: string[];
 };
-const USER_KEY = 'cosmory_user';
-const TOKEN_KEY = 'cosmory_token';
-/** Pre-rebrand keys — migrate so existing local logins keep working. */
-const LEGACY_USER_KEY = 'outverse_user';
-const LEGACY_TOKEN_KEY = 'outverse_token';
+const USER_KEY = 'cosonova_user';
+const TOKEN_KEY = 'cosonova_token';
+/** Pre-rebrand keys (oldest first) — migrate so existing local logins keep working. */
+const LEGACY_KEY_PAIRS: [user: string, token: string][] = [
+  ['outverse_user', 'outverse_token'],
+  ['cosmory_user', 'cosmory_token'],
+];
 const CSRF_COOKIE_KEY = 'csrftoken';
-const SESSION_COOKIE_KEYS = ['sessionid', 'cosmory_session', 'authjs.session-token', '__Secure-authjs.session-token'];
+const SESSION_COOKIE_KEYS = ['sessionid', 'cosonova_session', 'authjs.session-token', '__Secure-authjs.session-token'];
 
 function readCookie(name: string): string | null {
   if (typeof document === 'undefined') return null;
@@ -31,21 +33,23 @@ function hasSessionCookie(): boolean {
   return SESSION_COOKIE_KEYS.some((key) => !!readCookie(key));
 }
 
-/** Move Outverse → Cosmory localStorage keys once per tab. */
+/** Move each prior brand's localStorage keys onto the current ones, once per tab. */
 function migrateLegacyAuth() {
   if (typeof window === 'undefined') return;
   try {
-    const legacyToken = localStorage.getItem(LEGACY_TOKEN_KEY);
-    if (legacyToken && !localStorage.getItem(TOKEN_KEY)) {
-      localStorage.setItem(TOKEN_KEY, legacyToken);
-    }
-    if (legacyToken) localStorage.removeItem(LEGACY_TOKEN_KEY);
+    for (const [legacyUserKey, legacyTokenKey] of LEGACY_KEY_PAIRS) {
+      const legacyToken = localStorage.getItem(legacyTokenKey);
+      if (legacyToken && !localStorage.getItem(TOKEN_KEY)) {
+        localStorage.setItem(TOKEN_KEY, legacyToken);
+      }
+      if (legacyToken) localStorage.removeItem(legacyTokenKey);
 
-    const legacyUser = localStorage.getItem(LEGACY_USER_KEY);
-    if (legacyUser && !localStorage.getItem(USER_KEY)) {
-      localStorage.setItem(USER_KEY, legacyUser);
+      const legacyUser = localStorage.getItem(legacyUserKey);
+      if (legacyUser && !localStorage.getItem(USER_KEY)) {
+        localStorage.setItem(USER_KEY, legacyUser);
+      }
+      if (legacyUser) localStorage.removeItem(legacyUserKey);
     }
-    if (legacyUser) localStorage.removeItem(LEGACY_USER_KEY);
   } catch {
     /* private mode / blocked storage */
   }
@@ -97,29 +101,25 @@ export function setAuth(token: string | null, user: AuthUser | null) {
   // (used by refreshSession). Clearing auth requires clearAuth() / user=null.
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
-    localStorage.removeItem(LEGACY_TOKEN_KEY);
   }
   if (user) {
     localStorage.setItem(USER_KEY, JSON.stringify(user));
-    localStorage.removeItem(LEGACY_USER_KEY);
     // Components that cached the user on mount (Header's nav avatar,
     // useAuthUser() consumers) otherwise stay stale until a full reload —
     // this lets them re-read localStorage without a page refresh.
-    window.dispatchEvent(new Event('cosmory:user-updated'));
+    window.dispatchEvent(new Event('cosonova:user-updated'));
     return;
   }
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(LEGACY_USER_KEY);
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  LEGACY_KEY_PAIRS.flat().forEach((key) => localStorage.removeItem(key));
 }
 
 export function clearAuth() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(LEGACY_USER_KEY);
-  localStorage.removeItem(LEGACY_TOKEN_KEY);
+  LEGACY_KEY_PAIRS.flat().forEach((key) => localStorage.removeItem(key));
 }
 
 export function authHeaders(): Record<string, string> {

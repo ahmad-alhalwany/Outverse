@@ -13,7 +13,7 @@ import {
 import { StoryModal } from '@/components/StoriesSidebar';
 import { useLocale } from '@/components/LocaleProvider';
 
-/** Permanent story collections — Cosmory Constellations (manual Highlights). */
+/** Permanent story collections — Cosonova Constellations (manual Highlights). */
 export default function ProfileStoryConstellations({
   userId,
   isOwner = false,

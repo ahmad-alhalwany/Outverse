@@ -41,7 +41,7 @@ const groups: NavGroup[] = [
 /** Always visible, pinned at the bottom. */
 const bottomLinks: NavLink[] = [SETTINGS_NAV_LINK];
 
-const OPEN_GROUPS_KEY = 'cosmory-sidebar-open-groups';
+const OPEN_GROUPS_KEY = 'cosonova-sidebar-open-groups';
 const FALLBACK_TAGS = ['DigitalArt', 'CreativeWriting', 'Photography', 'Illustration', 'Animation'];
 
 function isNavActive(href: string, pathname: string, feed: string | null) {

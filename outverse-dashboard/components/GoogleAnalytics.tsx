@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Script from 'next/script';
 
 const GA_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-const STORAGE_KEY = 'cosmory-cookie-consent';
+const STORAGE_KEY = 'cosonova-cookie-consent';
 
 function hasAnalyticsConsent(): boolean {
   try {
@@ -26,8 +26,8 @@ export default function GoogleAnalytics() {
   useEffect(() => {
     setConsented(hasAnalyticsConsent());
     const onUpdate = () => setConsented(hasAnalyticsConsent());
-    window.addEventListener('cosmory:cookie-consent-updated', onUpdate);
-    return () => window.removeEventListener('cosmory:cookie-consent-updated', onUpdate);
+    window.addEventListener('cosonova:cookie-consent-updated', onUpdate);
+    return () => window.removeEventListener('cosonova:cookie-consent-updated', onUpdate);
   }, []);
 
   if (!GA_ID || !consented) return null;

@@ -210,7 +210,7 @@ const Header = () => {
   useEffect(() => {
     let cancelled = false;
     const boot = async () => {
-      // Migrates legacy outverse_* keys → cosmory_* before reading.
+      // Migrates prior brands' legacy localStorage keys → cosonova_* before reading.
       const cached = getUser();
       if (cached && getToken()) setUser(cached);
       if (!isAuthenticated()) return;
@@ -226,11 +226,11 @@ const Header = () => {
       if (isAuthenticated()) void fetchNotifications();
     }, 120000);
     const onUserUpdated = () => setUser(getUser());
-    window.addEventListener('cosmory:user-updated', onUserUpdated);
+    window.addEventListener('cosonova:user-updated', onUserUpdated);
     return () => {
       cancelled = true;
       clearInterval(interval);
-      window.removeEventListener('cosmory:user-updated', onUserUpdated);
+      window.removeEventListener('cosonova:user-updated', onUserUpdated);
     };
   }, []);
 
@@ -364,8 +364,8 @@ const Header = () => {
           <div className="flex-shrink-0">
             <Link href="/" className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-text hover:opacity-90 transition">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/cosmory-icon.svg" alt="Cosmory" width={36} height={36} className="h-9 w-9 rounded-xl shadow-[0_0_20px_rgba(124,58,237,0.35)]" />
-              <span className="text-text">Cosmory</span>
+              <img src="/cosonova-icon.svg" alt="Cosonova" width={36} height={36} className="h-9 w-9 rounded-xl shadow-[0_0_20px_rgba(124,58,237,0.35)]" />
+              <span className="text-text">Cosonova</span>
             </Link>
           </div>
 

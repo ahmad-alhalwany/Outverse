@@ -7,7 +7,7 @@ import { isAuthenticated } from '@/lib/auth';
 import { useLocale } from '@/components/LocaleProvider';
 
 /**
- * Standalone web chat (responsive). Not a separate native app — links back to Cosmory only.
+ * Standalone web chat (responsive). Not a separate native app — links back to Cosonova only.
  * Height is locked to the viewport so the message composer stays visible.
  */
 export default function ChatLayout({ children }: { children: React.ReactNode }) {
@@ -45,7 +45,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <Link href="/" className="font-semibold hover:underline" style={{ color: 'var(--cc-text, #211B3D)' }}>
-          {t('chat.backToCosmory')}
+          {t('chat.backToCosonova')}
         </Link>
         <span>{t('chat.standaloneChat')}</span>
       </div>

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Join Cosmory',
+  title: 'Join Cosonova',
   description: 'Create your account and start your corner of the universe.',
 };
 

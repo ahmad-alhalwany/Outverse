@@ -3,7 +3,7 @@ import CommunitiesPageClient from '@/components/communities/CommunitiesPageClien
 
 export const metadata: Metadata = {
   title: 'Communities',
-  description: 'Find and join communities of creators building around shared ideas on Cosmory.',
+  description: 'Find and join communities of creators building around shared ideas on Cosonova.',
 };
 
 export default function CommunitiesPage() {

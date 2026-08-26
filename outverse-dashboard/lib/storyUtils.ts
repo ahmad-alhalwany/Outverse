@@ -114,7 +114,7 @@ export function groupStoriesByUser(stories: StoryItem[]): { rings: StoryRing[]; 
   return { rings, flat };
 }
 
-const MUTED_STORY_USERS_KEY = 'cosmory_muted_story_users';
+const MUTED_STORY_USERS_KEY = 'cosonova_muted_story_users';
 
 export function getMutedStoryUserIds(): number[] {
   if (typeof window === 'undefined') return [];

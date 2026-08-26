@@ -15,16 +15,16 @@ test.describe('New feature pages render their shell', () => {
     await expect(page.locator('body')).toContainText(/capsule/i, { timeout: 10000 });
   });
 
-  test('year page renders the Cosmory header', async ({ page }) => {
+  test('year page renders the Cosonova header', async ({ page }) => {
     await page.goto('/year');
-    await expect(page.locator('body')).toContainText(/cosmory|year/i, { timeout: 10000 });
+    await expect(page.locator('body')).toContainText(/cosonova|year/i, { timeout: 10000 });
   });
 
   test('legal pages are reachable', async ({ page }) => {
     await page.goto('/terms');
-    await expect(page.locator('body')).toContainText(/terms|cosmory/i, { timeout: 10000 });
+    await expect(page.locator('body')).toContainText(/terms|cosonova/i, { timeout: 10000 });
     await page.goto('/privacy');
-    await expect(page.locator('body')).toContainText(/privacy|cosmory/i, { timeout: 10000 });
+    await expect(page.locator('body')).toContainText(/privacy|cosonova/i, { timeout: 10000 });
   });
 
   test('PWA manifest is served with correct type', async ({ request }) => {
@@ -32,7 +32,7 @@ test.describe('New feature pages render their shell', () => {
     expect(res.ok(), 'manifest.json should be served').toBeTruthy();
     expect(res.headers()['content-type'] || '').toMatch(/application\/manifest\+json|application\/json/);
     const body = await res.json();
-    expect(body.name).toMatch(/cosmory/i);
+    expect(body.name).toMatch(/cosonova/i);
     expect(body.icons.length).toBeGreaterThan(0);
   });
 

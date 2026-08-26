@@ -65,7 +65,7 @@ export default function NotFound() {
       >
         404
       </h1>
-      <h2 className="text-2xl font-semibold mt-3 relative z-10">Lost in the Cosmory</h2>
+      <h2 className="text-2xl font-semibold mt-3 relative z-10">Lost in the Cosonova</h2>
       <p className="mt-2 max-w-md relative z-10" style={{ color: '#aab2e0' }}>
         Looks like you&apos;ve drifted into unknown territory. Let&apos;s guide you back to a familiar galaxy.
       </p>

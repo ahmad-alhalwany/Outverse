@@ -64,13 +64,13 @@ export function reelShareUrl(id: number | string, source?: ShareChannel): string
   return buildShareUrl(`/reels/${id}`, { source, campaign: 'reel_signal' });
 }
 
-/** Cosmory-flavored default share copy (Instagram/TikTok-style hooks). */
+/** Cosonova-flavored default share copy (Instagram/TikTok-style hooks). */
 export function cosmicShareText(title: string, contentType: ShareContentType): string {
   const trimmed = title.trim().slice(0, 140);
   if (contentType === 'reel') {
-    return trimmed ? `🛸 Signal: ${trimmed}` : '🛸 A cosmic signal from Cosmory';
+    return trimmed ? `🛸 Signal: ${trimmed}` : '🛸 A cosmic signal from Cosonova';
   }
-  return trimmed ? `✨ ${trimmed}` : '✨ A transmission from Cosmory';
+  return trimmed ? `✨ ${trimmed}` : '✨ A transmission from Cosonova';
 }
 
 export function buildPlatformLinks(url: string, text: string): SharePlatform[] {
@@ -89,8 +89,8 @@ export function buildPlatformLinks(url: string, text: string): SharePlatform[] {
   ];
 }
 
-export function buildEmbedCode(url: string, label = 'View on Cosmory'): string {
-  return `<blockquote class="cosmory-embed" cite="${url}">
+export function buildEmbedCode(url: string, label = 'View on Cosonova'): string {
+  return `<blockquote class="cosonova-embed" cite="${url}">
   <a href="${url}">${label}</a>
 </blockquote>`;
 }
@@ -130,7 +130,7 @@ export async function downloadShareCard(filename: string, opts: ShareCardOptions
 
   ctx.fillStyle = '#fde047';
   ctx.font = 'bold 48px system-ui, sans-serif';
-  ctx.fillText('COSMORY', 72, 120);
+  ctx.fillText('COSONOVA', 72, 120);
 
   ctx.fillStyle = '#e9d5ff';
   ctx.font = '600 36px system-ui, sans-serif';
@@ -154,7 +154,7 @@ export async function downloadShareCard(filename: string, opts: ShareCardOptions
 
   ctx.fillStyle = 'rgba(255,255,255,0.55)';
   ctx.font = '400 26px system-ui, sans-serif';
-  ctx.fillText('cosmory · open the portal', 72, 1280);
+  ctx.fillText('cosonova · open the portal', 72, 1280);
 
   return new Promise((resolve) => {
     canvas.toBlob((blob) => {
@@ -222,7 +222,7 @@ export function profileOgMeta(profile: PublicProfileMeta) {
   const pageUrl = buildShareUrl(`/profile/${profile.id}`, { campaign: 'profile_share' });
   const description = profile.bio?.trim()
     ? profile.bio.slice(0, 160)
-    : `@${profile.username || 'creator'} on Cosmory`;
+    : `@${profile.username || 'creator'} on Cosonova`;
   const imageUrl = profile.avatar ? mediaUrl(profile.avatar) || profile.avatar : `${SITE_ORIGIN}/vercel.svg`;
 
   return {
@@ -230,16 +230,16 @@ export function profileOgMeta(profile: PublicProfileMeta) {
     description,
     pageUrl,
     openGraph: {
-      title: `${name} on Cosmory`,
+      title: `${name} on Cosonova`,
       description,
       url: pageUrl,
-      siteName: 'Cosmory',
+      siteName: 'Cosonova',
       type: 'profile' as const,
       images: [{ url: imageUrl, width: 1200, height: 630, alt: name }],
     },
     twitter: {
       card: 'summary_large_image' as const,
-      title: `${name} — Cosmory`,
+      title: `${name} — Cosonova`,
       description,
       images: [imageUrl],
     },
@@ -269,7 +269,7 @@ export function communityOgMeta(community: PublicCommunityMeta) {
   const pageUrl = buildShareUrl(`/communities/${community.slug}`, { campaign: 'community_share' });
   const description = community.description?.trim()
     ? community.description.slice(0, 160)
-    : `${community.members_count ?? 0} members on Cosmory`;
+    : `${community.members_count ?? 0} members on Cosonova`;
   const imageUrl = community.cover_url ? mediaUrl(community.cover_url) || community.cover_url : `${SITE_ORIGIN}/vercel.svg`;
 
   return {
@@ -277,16 +277,16 @@ export function communityOgMeta(community: PublicCommunityMeta) {
     description,
     pageUrl,
     openGraph: {
-      title: `${name} on Cosmory`,
+      title: `${name} on Cosonova`,
       description,
       url: pageUrl,
-      siteName: 'Cosmory',
+      siteName: 'Cosonova',
       type: 'website' as const,
       images: [{ url: imageUrl, width: 1200, height: 630, alt: name }],
     },
     twitter: {
       card: 'summary_large_image' as const,
-      title: `${name} — Cosmory`,
+      title: `${name} — Cosonova`,
       description,
       images: [imageUrl],
     },
@@ -316,7 +316,7 @@ export function postOgMeta(post: PublicPostMeta & { media?: { file?: string; med
     post.user?.username ||
     [post.user?.first_name, post.user?.last_name].filter(Boolean).join(' ') ||
     'creator';
-  const text = (post.text || 'A transmission from Cosmory').slice(0, 160);
+  const text = (post.text || 'A transmission from Cosonova').slice(0, 160);
   const pageUrl = postShareUrl(post.id);
   const imageField =
     post.images?.[0]?.url ||
@@ -327,19 +327,19 @@ export function postOgMeta(post: PublicPostMeta & { media?: { file?: string; med
 
   return {
     title: `${text.slice(0, 57)}${text.length > 57 ? '…' : ''}`,
-    description: `@${author} · Cosmory`,
+    description: `@${author} · Cosonova`,
     pageUrl,
     openGraph: {
-      title: `${author} on Cosmory`,
+      title: `${author} on Cosonova`,
       description: text,
       url: pageUrl,
-      siteName: 'Cosmory',
+      siteName: 'Cosonova',
       type: 'article' as const,
       images: [{ url: imageUrl, width: 1200, height: 630, alt: text.slice(0, 80) }],
     },
     twitter: {
       card: 'summary_large_image' as const,
-      title: `${author} — Cosmory`,
+      title: `${author} — Cosonova`,
       description: text,
       images: [imageUrl],
     },

@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useTheme } from '@/components/ThemeProvider';
 import { useLocale } from '@/components/LocaleProvider';
 
-const STORAGE_KEY = 'cosmory-cookie-consent';
+const STORAGE_KEY = 'cosonova-cookie-consent';
 
 type Consent = 'all' | 'essential' | null;
 
@@ -32,7 +32,7 @@ export default function CookieConsent() {
     } catch {
       /* ignore */
     }
-    window.dispatchEvent(new Event('cosmory:cookie-consent-updated'));
+    window.dispatchEvent(new Event('cosonova:cookie-consent-updated'));
   }
 
   if (!mounted || consent !== null) return null;

@@ -9,7 +9,7 @@ export type InspirationQuestion = {
   tags: string[];
 };
 
-const CACHE_KEY = 'cosmory-inspiration-cache';
+const CACHE_KEY = 'cosonova-inspiration-cache';
 const MAX_CACHE = 8;
 
 type CacheEntry = {

@@ -56,7 +56,7 @@ interface ShareCosmicPanelProps {
 export default function ShareCosmicPanel({
   postId,
   postUrl,
-  postTitle = 'Check this on Cosmory',
+  postTitle = 'Check this on Cosonova',
   shareCount = 0,
   contentType = 'post',
   authorName,
@@ -252,7 +252,7 @@ export default function ShareCosmicPanel({
     if (cardBusy) return;
     setCardBusy(true);
     try {
-      const ok = await downloadShareCard(`cosmory-${contentType}.png`, {
+      const ok = await downloadShareCard(`cosonova-${contentType}.png`, {
         title: postTitle,
         subtitle: shareText,
         author: authorName,

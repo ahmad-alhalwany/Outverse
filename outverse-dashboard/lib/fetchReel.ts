@@ -31,9 +31,9 @@ export async function fetchReelPublic(id: string): Promise<ReelItem | null> {
 
 export function reelOgMeta(reel: ReelItem) {
   const author = reelAuthorName(reel.user);
-  const caption = (reel.caption || 'Cosmic signal on Cosmory').slice(0, 160);
+  const caption = (reel.caption || 'Cosmic signal on Cosonova').slice(0, 160);
   const title = caption.length > 60 ? `${caption.slice(0, 57)}…` : caption;
-  const description = `@${author} · ${reel.views} views · Cosmory Signals`;
+  const description = `@${author} · ${reel.views} views · Cosonova Signals`;
   const pageUrl = reelPageUrl(reel.id);
   const videoUrl = mediaUrl(reel.video) || reel.video;
   const imageUrl = videoUrl || `${SITE_ORIGIN}/vercel.svg`;
@@ -43,19 +43,19 @@ export function reelOgMeta(reel: ReelItem) {
     description,
     pageUrl,
     openGraph: {
-      title: `${author} on Cosmory Signals`,
+      title: `${author} on Cosonova Signals`,
       description: caption,
       url: pageUrl,
-      siteName: 'Cosmory',
+      siteName: 'Cosonova',
       type: 'video.other' as const,
       videos: videoUrl
         ? [{ url: videoUrl, secureUrl: videoUrl, type: 'video/mp4', width: 720, height: 1280 }]
         : undefined,
-      images: [{ url: imageUrl, width: 720, height: 1280, alt: 'Cosmory Signal' }],
+      images: [{ url: imageUrl, width: 720, height: 1280, alt: 'Cosonova Signal' }],
     },
     twitter: {
       card: 'summary_large_image' as const,
-      title: `${author} — Cosmory Signal`,
+      title: `${author} — Cosonova Signal`,
       description: caption,
       images: [imageUrl],
     },
