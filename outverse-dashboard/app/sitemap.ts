@@ -16,6 +16,8 @@ const staticPages = [
   '/characters',
   '/simulator',
   '/garden',
+  '/about',
+  '/faq',
   '/terms',
   '/privacy',
 ];

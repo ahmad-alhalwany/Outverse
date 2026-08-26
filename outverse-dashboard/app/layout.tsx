@@ -142,6 +142,10 @@ export default function RootLayout({
               <footer className="border-t border-white/5 px-4 py-3 text-center text-[11px] text-text-secondary">
                 <span>&copy; {new Date().getFullYear()} Cosmory</span>
                 <span className="mx-2">&middot;</span>
+                <Link href="/about" className="hover:underline">About</Link>
+                <span className="mx-2">&middot;</span>
+                <Link href="/faq" className="hover:underline">FAQ</Link>
+                <span className="mx-2">&middot;</span>
                 <Link href="/privacy" className="hover:underline">Privacy</Link>
                 <span className="mx-2">&middot;</span>
                 <Link href="/terms" className="hover:underline">Terms</Link>

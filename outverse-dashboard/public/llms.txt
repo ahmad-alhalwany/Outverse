@@ -17,6 +17,8 @@
 - [Characters](https://outverse-six.vercel.app/characters): Gallery of AI-generated character cards.
 - [Simulator](https://outverse-six.vercel.app/simulator): Tool for exploring creative-persona traits.
 - [Garden](https://outverse-six.vercel.app/garden): Visualizes Bazaar ideas' growth as they gain backers and funding.
+- [About](https://outverse-six.vercel.app/about): What Cosmory is and what you can do here.
+- [FAQ](https://outverse-six.vercel.app/faq): Answers to common questions about coins, the Bazaar, the Shop, and subscriptions.
 
 ## Notes for automated agents and crawlers
 
