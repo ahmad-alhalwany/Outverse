@@ -68,6 +68,12 @@ export const en = {
     popularTags: 'Signal Trends',
     mainNavigation: 'Main navigation',
     groupMore: 'More',
+    sectionCreate: 'Create',
+    sectionExplore: 'Explore',
+    sectionSocial: 'Social',
+    sectionCommerce: 'Shop & Earn',
+    sectionLibrary: 'Your Library',
+    sectionStats: 'Stats',
   },
   reels: {
     title: 'Signal Reels',

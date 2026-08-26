@@ -70,6 +70,12 @@ export const ar = {
     popularTags: 'اتجاهات الإشارة',
     mainNavigation: 'التنقل الرئيسي',
     groupMore: 'المزيد',
+    sectionCreate: 'إنشاء',
+    sectionExplore: 'استكشاف',
+    sectionSocial: 'تواصل',
+    sectionCommerce: 'تسوّق واربح',
+    sectionLibrary: 'مكتبتك',
+    sectionStats: 'إحصائيات',
   },
   reels: {
     title: 'ريلز الإشارة',
