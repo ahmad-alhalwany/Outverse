@@ -6,7 +6,7 @@ import { reelAuthorName, type ReelItem } from './reelTypes';
 // missing NEXT_PUBLIC_SITE_URL must not silently break them in production.
 const SITE_ORIGIN =
   process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '')
-  ?? (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://outverse-six.vercel.app');
+  ?? (process.env.NODE_ENV === 'development' ? 'http://localhost:3000' : 'https://cosonova.com');
 
 export function reelPagePath(id: number | string): string {
   return `/reels/${id}`;

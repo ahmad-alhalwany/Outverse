@@ -37,7 +37,7 @@ const apiOrigin = (() => {
 // total absence of schema markup). No SearchAction here — /search is
 // disallowed in robots.ts, and Google requires that page to be
 // crawlable for the sitelinks searchbox feature to apply.
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://outverse-six.vercel.app';
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://cosonova.com';
 const structuredData = {
   '@context': 'https://schema.org',
   '@graph': [

@@ -6,19 +6,19 @@
 
 ## Core areas
 
-- [Home](https://outverse-six.vercel.app/): Personalized feed of posts from people and communities you follow.
-- [Discover](https://outverse-six.vercel.app/discover): Trending posts, topics, communities, creators, and signals.
-- [Bazaar](https://outverse-six.vercel.app/bazaar): Post ideas and back other people's ideas.
-- [Communities](https://outverse-six.vercel.app/communities): Public and private groups organized around shared interests.
-- [Shop](https://outverse-six.vercel.app/shop): Marketplace for digital and physical creative goods made by Cosonova creators.
-- [Reels / Signals](https://outverse-six.vercel.app/reels): Short-form video feed.
-- [Forge](https://outverse-six.vercel.app/forge): Collaborative story-building tool.
-- [Museum](https://outverse-six.vercel.app/museum): Exhibition of abandoned or failed ideas and challenges from the Bazaar.
-- [Characters](https://outverse-six.vercel.app/characters): Gallery of AI-generated character cards.
-- [Simulator](https://outverse-six.vercel.app/simulator): Tool for exploring creative-persona traits.
-- [Garden](https://outverse-six.vercel.app/garden): Visualizes Bazaar ideas' growth as they gain backers and funding.
-- [About](https://outverse-six.vercel.app/about): What Cosonova is and what you can do here.
-- [FAQ](https://outverse-six.vercel.app/faq): Answers to common questions about coins, the Bazaar, the Shop, and subscriptions.
+- [Home](https://cosonova.com/): Personalized feed of posts from people and communities you follow.
+- [Discover](https://cosonova.com/discover): Trending posts, topics, communities, creators, and signals.
+- [Bazaar](https://cosonova.com/bazaar): Post ideas and back other people's ideas.
+- [Communities](https://cosonova.com/communities): Public and private groups organized around shared interests.
+- [Shop](https://cosonova.com/shop): Marketplace for digital and physical creative goods made by Cosonova creators.
+- [Reels / Signals](https://cosonova.com/reels): Short-form video feed.
+- [Forge](https://cosonova.com/forge): Collaborative story-building tool.
+- [Museum](https://cosonova.com/museum): Exhibition of abandoned or failed ideas and challenges from the Bazaar.
+- [Characters](https://cosonova.com/characters): Gallery of AI-generated character cards.
+- [Simulator](https://cosonova.com/simulator): Tool for exploring creative-persona traits.
+- [Garden](https://cosonova.com/garden): Visualizes Bazaar ideas' growth as they gain backers and funding.
+- [About](https://cosonova.com/about): What Cosonova is and what you can do here.
+- [FAQ](https://cosonova.com/faq): Answers to common questions about coins, the Bazaar, the Shop, and subscriptions.
 
 ## Notes for automated agents and crawlers
 

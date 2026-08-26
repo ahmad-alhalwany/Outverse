@@ -1,6 +1,6 @@
 import { MetadataRoute } from 'next';
 
-const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://outverse-six.vercel.app';
+const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://cosonova.com';
 
 // Only real, public, unauthenticated pages belong here — no placeholder
 // [id]/[slug] paths (those 404 for crawlers) and nothing robots.ts disallows.
