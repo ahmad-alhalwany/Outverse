@@ -235,7 +235,7 @@ function StoryForgeContent() {
           </div>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.9fr)]">
-            <div className="rounded-[24px] border p-4 md:p-5" style={{ background: C.panel, borderColor: C.line, backdropFilter: 'blur(10px)' }}>
+            <div className="min-w-0 rounded-[24px] border p-4 md:p-5" style={{ background: C.panel, borderColor: C.line, backdropFilter: 'blur(10px)' }}>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold" style={{ color: C.text }}>
@@ -315,7 +315,7 @@ function StoryForgeContent() {
             </div>
 
             {spotlightStory ? (
-              <div className="rounded-[24px] border p-4 md:p-5" style={{ background: C.panel, borderColor: C.line, backdropFilter: 'blur(10px)' }}>
+              <div className="min-w-0 rounded-[24px] border p-4 md:p-5" style={{ background: C.panel, borderColor: C.line, backdropFilter: 'blur(10px)' }}>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em]" style={{ color: C.text2 }}>
                   {t('forge.spotlight')}
                 </p>
