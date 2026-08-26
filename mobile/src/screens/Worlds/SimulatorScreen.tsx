@@ -127,7 +127,7 @@ export default function SimulatorScreen() {
           <WorldHero
             tone="lab"
             eyebrow="What-if model"
-            title="Your current Cosmory model"
+            title="Your current Cosonova model"
             body="Tune creativity, abstractness, and stability to preview an alternate analytics reality."
           />
           {!user ? (

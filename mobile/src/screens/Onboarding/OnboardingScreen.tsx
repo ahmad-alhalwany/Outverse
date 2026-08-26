@@ -153,7 +153,7 @@ export default function OnboardingScreen() {
     <SafeAreaView style={styles.safe}>
       <View style={styles.top}>
         <Image source={require('../../../assets/icon.png')} style={styles.logo} />
-        <Text style={styles.brand}>Welcome to Cosmory</Text>
+        <Text style={styles.brand}>Welcome to Cosonova</Text>
         <Text style={styles.sub}>Step {step + 1} of 3</Text>
       </View>
 
@@ -271,7 +271,7 @@ export default function OnboardingScreen() {
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.nextText}>Enter Cosmory</Text>
+              <Text style={styles.nextText}>Enter Cosonova</Text>
             )}
           </TouchableOpacity>
         )}

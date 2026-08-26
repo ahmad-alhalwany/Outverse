@@ -1,6 +1,6 @@
 {
-  "name": "Cosmory",
-  "slug": "cosmory-mobile",
+  "name": "Cosonova",
+  "slug": "cosonova-mobile",
   "version": "1.0.0",
   "orientation": "portrait",
   "icon": "./assets/icon.png",
@@ -13,12 +13,12 @@
   "assetBundlePatterns": ["**/*"],
   "ios": {
     "supportsTablet": true,
-    "bundleIdentifier": "com.cosmory.mobile",
+    "bundleIdentifier": "com.cosonova.mobile",
     "infoPlist": {
       "NSCameraUsageDescription": "This app uses camera for creating posts and stories",
       "NSPhotoLibraryUsageDescription": "This app accesses photo library for media uploads",
       "NSMicrophoneUsageDescription": "This app uses microphone for video recording",
-      "NSLocationWhenInUseUsageDescription": "Cosmory uses your location to center the Story Map and show nearby pins."
+      "NSLocationWhenInUseUsageDescription": "Cosonova uses your location to center the Story Map and show nearby pins."
     }
   },
   "android": {
@@ -26,7 +26,7 @@
       "foregroundImage": "./assets/adaptive-icon.png",
       "backgroundColor": "#0A0A0F"
     },
-    "package": "com.cosmory.mobile",
+    "package": "com.cosonova.mobile",
     "permissions": [
       "CAMERA",
       "READ_EXTERNAL_STORAGE",

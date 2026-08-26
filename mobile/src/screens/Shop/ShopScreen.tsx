@@ -118,7 +118,7 @@ export default function ShopScreen() {
               <>
                 <WorldHero
                   tone="shop"
-                  eyebrow="Cosmory market"
+                  eyebrow="Cosonova market"
                   title="Curated items for your journey"
                   body="Spend coins on boosts, flair, and creative tools."
                 />

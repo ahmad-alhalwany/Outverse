@@ -1,4 +1,4 @@
-// Cosmory Mobile App — Core Types
+// Cosonova Mobile App — Core Types
 
 export interface User {
   id: string | number;

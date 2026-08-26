@@ -24,7 +24,7 @@ type Constellation = {
   stories_count?: number;
 };
 
-/** Manual Highlights manager — Cosmory “Constellations”. */
+/** Manual Highlights manager — Cosonova “Constellations”. */
 export default function HighlightsManagerScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();

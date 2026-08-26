@@ -538,7 +538,7 @@ export default function CreateScreen({ navigation }: any) {
         </View>
         <View style={{ padding: 20, gap: 12 }}>
           <Text style={{ color: colors.textSecondary, fontSize: 14, marginBottom: 8, lineHeight: 20 }}>
-            Choose how your signal enters the Cosmory — not just another post.
+            Choose how your signal enters the Cosonova — not just another post.
           </Text>
           {[
             { key: 'post' as const, title: 'Post', desc: 'Share text, photos & polls to the feed', mark: '✦' },

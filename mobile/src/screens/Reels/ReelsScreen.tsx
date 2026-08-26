@@ -118,7 +118,7 @@ export default function ReelsScreen() {
               await Share.share({
                 message: `Check out this signal by @${username}\n${url}`,
                 url,
-                title: reel.caption || 'Cosmory Signal',
+                title: reel.caption || 'Cosonova Signal',
               });
               await shareReel(String(reel.id));
             } catch {

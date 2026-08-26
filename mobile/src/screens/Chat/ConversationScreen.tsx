@@ -250,7 +250,7 @@ export default function ConversationScreen({ route, navigation }: ConversationSc
       Alert.alert('Call unavailable', 'Realtime signaling is still connecting.');
       return;
     }
-    const displayName = user.display_name || user.username || 'Cosmory';
+    const displayName = user.display_name || user.username || 'Cosonova';
     void call.startCall(peerId, kind, displayName, user.avatar || null).catch((error) => {
       Alert.alert('Call unavailable', error?.message || 'Could not start this call.');
     });

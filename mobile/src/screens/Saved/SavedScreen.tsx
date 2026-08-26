@@ -229,7 +229,7 @@ export default function SavedScreen() {
       <SafeAreaView style={{ flex: 1 }}>
         <WorldHeader
           title="Saved"
-          subtitle="Bookmarks across Cosmory"
+          subtitle="Bookmarks across Cosonova"
           tone="vault"
           onBack={() => navigation.goBack()}
         />

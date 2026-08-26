@@ -1,6 +1,6 @@
-# Cosmory Mobile App
+# Cosonova Mobile App
 
-React Native / Expo client for the Cosmory Django API.
+React Native / Expo client for the Cosonova Django API.
 
 ## API contract (aligned with web)
 

@@ -69,7 +69,7 @@ export default function SoundScreen() {
   }, [trackId]);
 
   const title = track?.title || 'Signal track';
-  const artist = track?.artist || track?.artist_label || 'Cosmory';
+  const artist = track?.artist || track?.artist_label || 'Cosonova';
   const coverUrl = track?.cover_url || track?.cover_art_url;
 
   return (

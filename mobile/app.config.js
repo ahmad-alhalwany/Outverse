@@ -6,7 +6,7 @@ module.exports = ({ config }) => ({
       ...config.ios.infoPlist,
       NSLocationWhenInUseUsageDescription:
         config.ios?.infoPlist?.NSLocationWhenInUseUsageDescription ||
-        'Cosmory uses your location to center the Story Map and show nearby pins.',
+        'Cosonova uses your location to center the Story Map and show nearby pins.',
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
         NSExceptionDomains: {
@@ -33,7 +33,7 @@ module.exports = ({ config }) => ({
       'expo-location',
       {
         locationWhenInUsePermission:
-          'Cosmory uses your location to center the Story Map and show nearby pins.',
+          'Cosonova uses your location to center the Story Map and show nearby pins.',
       },
     ],
   ],

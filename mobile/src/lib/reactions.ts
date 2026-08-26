@@ -1,4 +1,4 @@
-// Mirrors cosmory-dashboard/lib/reactions.ts — same 5 types/emoji/colors
+// Mirrors cosonova-dashboard/lib/reactions.ts — same 5 types/emoji/colors
 // so mobile and web reactions stay visually and semantically identical.
 export type ReactionType = 'inspired' | 'cosmic' | 'mindbending' | 'growing' | 'spark';
 

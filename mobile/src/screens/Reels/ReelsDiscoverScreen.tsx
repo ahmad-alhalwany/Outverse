@@ -20,7 +20,7 @@ type DiscoverPayload = {
   fresh?: any[];
 };
 
-/** TikTok Discover → Cosmory Signal Map for reels. */
+/** TikTok Discover → Cosonova Signal Map for reels. */
 export default function ReelsDiscoverScreen() {
   const { colors } = useTheme();
   const navigation = useNavigation<any>();
@@ -110,7 +110,7 @@ export default function ReelsDiscoverScreen() {
                   <View style={{ marginLeft: 8 }}>
                     <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>{t.title}</Text>
                     <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                      {t.artist_label || 'Cosmory'} · View sound
+                      {t.artist_label || 'Cosonova'} · View sound
                     </Text>
                   </View>
                 </Pressable>

@@ -8,7 +8,7 @@ export default function PremiumScreen() {
       title="Premium"
       subtitle="Subscriptions"
       tone="shop"
-      heroTitle="Choose a Cosmory plan"
+      heroTitle="Choose a Cosonova plan"
       heroBody="Browse subscription plans and launch checkout when available."
       load={() => api.getSubscriptionPlans()}
       emptyText="No plans available"

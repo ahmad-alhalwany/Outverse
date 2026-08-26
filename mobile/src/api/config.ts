@@ -8,7 +8,7 @@ function resolveApiOrigin(): string {
   const raw =
     Constants.expoConfig?.extra?.apiUrl ||
     process.env.EXPO_PUBLIC_API_URL ||
-    (__DEV__ ? 'http://10.0.2.2:8000/api' : 'https://api.cosmory.example.com/api');
+    (__DEV__ ? 'http://10.0.2.2:8000/api' : 'https://api.cosonova.example.com/api');
 
   const trimmed = String(raw).replace(/\/$/, '');
   return trimmed.replace(/\/api$/i, '');

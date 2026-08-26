@@ -8,7 +8,7 @@ export default function YearScreen() {
       title="Year"
       subtitle="Annual stats"
       tone="vault"
-      heroTitle="Your year in Cosmory"
+      heroTitle="Your year in Cosonova"
       heroBody="A lightweight mobile view of your annual activity, worlds, and milestones."
       load={() => api.getYearStats()}
     />

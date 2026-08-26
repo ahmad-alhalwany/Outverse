@@ -314,7 +314,7 @@ export default function SearchScreen() {
             style={[styles.input, { color: colors.text }]}
             value={draft}
             onChangeText={setDraft}
-            placeholder="Search Cosmory…"
+            placeholder="Search Cosonova…"
             placeholderTextColor={colors.textSecondary}
             autoCapitalize="none"
             autoCorrect={false}
@@ -388,7 +388,7 @@ export default function SearchScreen() {
             ListEmptyComponent={
               <View style={styles.center}>
                 <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
-                  {query ? 'No results for this query.' : 'Search for inspiration across Cosmory.'}
+                  {query ? 'No results for this query.' : 'Search for inspiration across Cosonova.'}
                 </Text>
               </View>
             }

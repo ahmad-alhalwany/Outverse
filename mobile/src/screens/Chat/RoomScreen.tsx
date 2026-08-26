@@ -119,7 +119,7 @@ export default function RoomScreen({ route, navigation }: RoomScreenProps) {
   });
   const groupCall = useGroupCall(
     Number(user?.id || 0),
-    user?.display_name || user?.username || 'Cosmory',
+    user?.display_name || user?.username || 'Cosonova',
     sendSignal,
   );
 

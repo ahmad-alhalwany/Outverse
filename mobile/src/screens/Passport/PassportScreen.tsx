@@ -93,7 +93,7 @@ export default function PassportScreen() {
           <WorldHero
             tone="bazaar"
             eyebrow="Travel log"
-            title="Stamps across Cosmory"
+            title="Stamps across Cosonova"
             body="Earned across Lab, Vault, Bazaar, and Communities."
           />
 

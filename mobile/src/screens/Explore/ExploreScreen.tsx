@@ -329,7 +329,7 @@ export default function ExploreScreen({ navigation }: any) {
                 <WorldCard onPress={() => navigation.navigate('WorldsHub')} style={styles.worldsCard}>
                   <Text style={[styles.worldsTitle, { color: colors.text }]}>Explore More Worlds</Text>
                   <Text style={[styles.worldsBody, { color: colors.textSecondary }]}>
-                    Open the full Cosmory world map.
+                    Open the full Cosonova world map.
                   </Text>
                 </WorldCard>
                 {activeTab === 'users' && !query.trim() && suggestedUsers.length ? (

@@ -73,7 +73,7 @@ export default function RegisterScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.logoText}>Cosmory</Text>
+            <Text style={styles.logoText}>Cosonova</Text>
             <Text style={styles.tagline}>أنشئ حسابك الجديد</Text>
           </View>
 

@@ -20,7 +20,7 @@ export default function SplashScreen() {
             resizeMode="contain"
           />
         </View>
-        <Text style={[styles.appName, { color: isDark ? '#F0F6FC' : '#1F2937' }]}>Cosmory</Text>
+        <Text style={[styles.appName, { color: isDark ? '#F0F6FC' : '#1F2937' }]}>Cosonova</Text>
         <Text style={[styles.tagline, { color: isDark ? '#8B949E' : '#6B7280' }]}>Your universe, your voice</Text>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={primaryColor} />

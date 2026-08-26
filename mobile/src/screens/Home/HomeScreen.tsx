@@ -279,7 +279,7 @@ export default function HomeScreen() {
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
           <Image source={require('../../../assets/icon.png')} style={styles.brandLogo} />
-          <Text style={styles.brand}>Cosmory</Text>
+          <Text style={styles.brand}>Cosonova</Text>
         </View>
         <View style={styles.topActions}>
           <TouchableOpacity onPress={() => (navigation as any).navigate('StoryMap')} style={styles.mapBtn}>

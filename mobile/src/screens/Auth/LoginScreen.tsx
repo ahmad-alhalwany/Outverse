@@ -128,7 +128,7 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.header}>
-            <Text style={styles.logoText}>Cosmory</Text>
+            <Text style={styles.logoText}>Cosonova</Text>
             <Text style={styles.tagline}>انضم إلى مجتمع الإبداع</Text>
           </View>
 

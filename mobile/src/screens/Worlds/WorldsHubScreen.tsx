@@ -10,7 +10,7 @@ import {
 } from '@/components/world/WorldChrome';
 
 const WORLDS = [
-  ['Year', 'Year in Cosmory', 'Annual stats'],
+  ['Year', 'Year in Cosonova', 'Annual stats'],
   ['Library', 'Library', 'Resources and downloads'],
   ['Museum', 'Museum', 'Failed ideas archive'],
   ['Garden', 'Garden', 'Fresh ideas'],
@@ -42,7 +42,7 @@ export default function WorldsHubScreen() {
       <SafeAreaView style={{ flex: 1 }}>
         <WorldHeader
           title="Worlds"
-          subtitle="Cosmory map"
+          subtitle="Cosonova map"
           tone="default"
           onBack={() => navigation.goBack()}
         />
@@ -51,7 +51,7 @@ export default function WorldsHubScreen() {
             tone="default"
             eyebrow="Mobile parity"
             title="Every web world in your pocket"
-            body="Jump into the same Cosmory worlds from mobile."
+            body="Jump into the same Cosonova worlds from mobile."
           />
           <View style={styles.grid}>
             {WORLDS.map(([route, label, body]) => (

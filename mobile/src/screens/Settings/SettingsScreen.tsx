@@ -97,7 +97,7 @@ export default function SettingsScreen() {
     try {
       const result = await registerForPushNotifications();
       if (result.ok) {
-        Alert.alert('Push enabled', 'This device is now subscribed to Cosmory notifications.');
+        Alert.alert('Push enabled', 'This device is now subscribed to Cosonova notifications.');
       } else {
         Alert.alert('Push unavailable', result.reason || 'Could not enable push notifications.');
       }

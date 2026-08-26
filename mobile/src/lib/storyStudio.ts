@@ -1,4 +1,4 @@
-/** Cosmory story studio tokens — mobile mirror of web storyStudio. */
+/** Cosonova story studio tokens — mobile mirror of web storyStudio. */
 
 export const STORY_STICKERS = [
   '✨', '🌌', '💫', '🔥', '💜', '🌙', '⭐', '🚀',

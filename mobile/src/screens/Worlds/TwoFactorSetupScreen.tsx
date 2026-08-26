@@ -56,7 +56,7 @@ export default function TwoFactorSetupScreen() {
           <WorldHero
             tone="vault"
             eyebrow="Account security"
-            title="Protect your Cosmory account"
+            title="Protect your Cosonova account"
             body="Check 2FA status and enable setup with your password. QR or secret values are shown when returned."
           />
           {loading ? (
