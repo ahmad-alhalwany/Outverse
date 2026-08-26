@@ -257,7 +257,7 @@ function StoryForgeContent() {
                 </div>
               </div>
 
-              <div className="mt-4 flex gap-1 overflow-x-auto border-b pb-1" style={{ borderColor: C.line }}>
+              <div className="feed-tabs__scroll mt-4 flex gap-1 overflow-x-auto border-b pb-1" style={{ borderColor: C.line }}>
                 {TABS.map((tabDef) => (
                   <button
                     key={tabDef.key}
@@ -272,7 +272,7 @@ function StoryForgeContent() {
               </div>
 
               {tab === 'my' && (
-                <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                <div className="feed-tabs__scroll mt-3 flex gap-2 overflow-x-auto pb-1">
                   {([
                     ['all', 'forge.myAll'],
                     ['owned', 'forge.myOwned'],
@@ -296,7 +296,7 @@ function StoryForgeContent() {
                 </div>
               )}
 
-              <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+              <div className="feed-tabs__scroll mt-4 flex gap-2 overflow-x-auto pb-1">
                 {GENRES.map((g) => (
                   <button
                     key={g.key}
@@ -364,7 +364,7 @@ function StoryForgeContent() {
               {t('forge.curatedPicks')}
             </span>
           </div>
-          <div className="flex gap-4 overflow-x-auto pb-2">
+          <div className="feed-tabs__scroll flex gap-4 overflow-x-auto pb-2">
             {featured.map((s) => (
               <motion.button
                 key={s.id}
