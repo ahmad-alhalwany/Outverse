@@ -7,26 +7,18 @@ import { AnimatePresence, motion } from 'framer-motion';
 import {
   HomeIcon,
   BeakerIcon,
-  ShoppingBagIcon,
   UserCircleIcon,
   RectangleStackIcon,
-  ArchiveBoxIcon,
-  BookOpenIcon,
-  ShoppingCartIcon,
-  ChatBubbleLeftRightIcon,
-  SparklesIcon,
-  BookmarkIcon,
-  Cog6ToothIcon,
   XMarkIcon,
   Squares2X2Icon,
   BellIcon,
   MagnifyingGlassIcon,
-  UserGroupIcon,
 } from '@heroicons/react/24/outline';
 import ReelsIcon from '@/components/icons/ReelsIcon';
 import { useProfileHref } from '@/lib/hooks/useAuthUser';
 import { useDialogA11y } from '@/lib/hooks/useDialogA11y';
 import { useLocale } from '@/components/LocaleProvider';
+import { MORE_NAV_LINKS, SETTINGS_NAV_LINK } from '@/lib/navLinks';
 
 type NavItem = {
   href: string;
@@ -36,18 +28,13 @@ type NavItem = {
   reelsIcon?: boolean;
 };
 
+// Discover isn't in the shared "More" list (it's a top-level tab on desktop),
+// but mobile has no room for it as its own tab, so it leads the sheet here.
 const MORE_LINKS = [
-  { key: 'nav.discover', href: '/discover', icon: MagnifyingGlassIcon },
-  { key: 'nav.bazaar', href: '/bazaar', icon: ShoppingBagIcon },
-  { key: 'nav.vault', href: '/bottles', icon: ArchiveBoxIcon },
-  { key: 'nav.story', href: '/forge', icon: BookOpenIcon },
-  { key: 'nav.shop', href: '/shop', icon: ShoppingCartIcon },
-  { key: 'nav.chat', href: '/chat', icon: ChatBubbleLeftRightIcon },
-  { key: 'nav.wallet', href: '/wallet', icon: SparklesIcon },
-  { key: 'nav.saved', href: '/saved', icon: BookmarkIcon },
-  { key: 'nav.communities', href: '/communities', icon: UserGroupIcon },
-  { key: 'nav.settings', href: '/settings', icon: Cog6ToothIcon },
-] as const;
+  { nameKey: 'nav.discover', href: '/discover', icon: MagnifyingGlassIcon },
+  ...MORE_NAV_LINKS,
+  SETTINGS_NAV_LINK,
+];
 
 export default function HomeMobileNav() {
   const pathname = usePathname();
@@ -189,20 +176,22 @@ export default function HomeMobileNav() {
                   const active = pathname.startsWith(link.href);
                   return (
                     <Link
-                      key={link.key}
+                      key={link.nameKey}
                       href={link.href}
                       className="flex flex-col items-center gap-1.5 p-3 rounded-2xl transition active:scale-95 focus-visible:ring-2 focus-visible:ring-vault outline-none"
                       style={{
                         background: active ? 'rgba(124, 58, 237, 0.12)' : 'rgba(255,255,255,0.03)',
                       }}
                     >
-                      <Icon
-                        className="h-6 w-6"
-                        strokeWidth={1.8}
-                        style={{ color: active ? 'var(--c-icon-hover)' : 'var(--c-icon)' }}
-                      />
+                      {Icon && (
+                        <Icon
+                          className="h-6 w-6"
+                          strokeWidth={1.8}
+                          style={{ color: active ? 'var(--c-icon-hover)' : 'var(--c-icon)' }}
+                        />
+                      )}
                       <span className="text-[10px] font-medium text-center leading-tight" style={{ color: 'var(--c-text)' }}>
-                        {t(link.key)}
+                        {t(link.nameKey)}
                       </span>
                     </Link>
                   );
