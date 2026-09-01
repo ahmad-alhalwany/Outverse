@@ -73,7 +73,7 @@ export function useWebRTCCall(
   const cleanup = useCallback(() => {
     pcRef.current?.close();
     pcRef.current = null;
-    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    localStreamRef.current?.getTracks().forEach((track: any) => track.stop());
     localStreamRef.current = null;
     callIdRef.current = null;
     peerIdRef.current = null;
@@ -117,7 +117,7 @@ export function useWebRTCCall(
       };
 
       const stream = await getMedia(kind);
-      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      stream.getTracks().forEach((track: any) => pc.addTrack(track, stream));
       return pc;
     },
     [getMedia, sendSignal],
@@ -144,8 +144,12 @@ export function useWebRTCCall(
           sdp: offer,
         });
         setCallActive(true);
-      } catch {
+      } catch (error: any) {
         cleanup();
+        const raw = String(error?.message || '');
+        if (raw.includes('WEBRTC_NATIVE_BUILD_REQUIRED')) {
+          throw error;
+        }
         throw new Error('Could not access camera/microphone');
       }
     },
@@ -171,13 +175,16 @@ export function useWebRTCCall(
         sdp: answer,
       });
       setCallActive(true);
-    } catch {
+    } catch (error: any) {
       cleanup();
       sendSignal({
         type: 'call.reject',
         to_user_id: call.fromUserId,
         call_id: call.callId,
       });
+      if (String(error?.message || '').includes('WEBRTC_NATIVE_BUILD_REQUIRED')) {
+        throw error;
+      }
     }
   }, [incoming, createPeer, sendSignal, cleanup]);
 
@@ -255,7 +262,7 @@ export function useWebRTCCall(
   const toggleMute = useCallback(() => {
     const stream = localStreamRef.current;
     if (!stream) return;
-    stream.getAudioTracks().forEach((track) => {
+    stream.getAudioTracks().forEach((track: any) => {
       track.enabled = !track.enabled;
     });
     setMuted((value) => !value);

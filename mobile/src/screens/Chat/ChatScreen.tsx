@@ -1,433 +1,639 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  SafeAreaView,
   ActivityIndicator,
-  RefreshControl,
-  Image,
   Alert,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { api } from '@/api/client';
+import { mediaUrl } from '@/api/config';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/hooks/useTheme';
-import { api } from '@/api/client';
-import { User } from '@/types';
+import { useLocale } from '@/i18n/LocaleProvider';
+import {
+  asChatList,
+  moodEmoji,
+  previewText,
+  relativeChatTime,
+  useChatPalette,
+  type ChatConversation,
+  type ChatFriend,
+  type ChatPalette,
+  type ChatRoomRow,
+} from '@/lib/chat';
+import { formatRoomExpires } from '@/lib/rooms';
 
-type ChatTab = 'dms' | 'rooms';
-
-interface ConversationItem {
-  id: string | number;
-  participant: User;
-  last_message?: {
-    id: string | number;
-    sender: User;
-    content: string;
-    created_at: string;
-    is_read: boolean;
-  };
-  unread_count: number;
-  updated_at: string;
-  is_muted?: boolean;
-  is_archived?: boolean;
-}
-
-interface RoomItem {
-  id: string | number;
-  name: string;
-  member_count: number;
-  last_message?: {
-    text: string;
-    sender_name?: string;
-    created_at: string;
-  };
-  created_at: string;
-  is_expired?: boolean;
-  question_text?: string | null;
-}
-
-export default function ChatScreen({ navigation }: any) {
-  const { colors } = useTheme();
+export default function ChatScreen() {
+  const navigation = useNavigation<any>();
+  const { isDark } = useTheme();
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<ChatTab>('dms');
-  const [conversations, setConversations] = useState<ConversationItem[]>([]);
-  const [rooms, setRooms] = useState<RoomItem[]>([]);
+  const C = useChatPalette(isDark);
+  const { t } = useLocale();
+
+  const [friends, setFriends] = useState<ChatFriend[]>([]);
+  const [me, setMe] = useState<ChatFriend | null>(null);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [requests, setRequests] = useState<ChatConversation[]>([]);
+  const [rooms, setRooms] = useState<ChatRoomRow[]>([]);
+  const [promptRooms, setPromptRooms] = useState<ChatRoomRow[]>([]);
+  const [search, setSearch] = useState('');
+  const [requestsOpen, setRequestsOpen] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [roomName, setRoomName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
 
-  const fetchConversations = useCallback(async () => {
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
+    else setLoading(true);
     try {
-      const response = await api.getConversations();
-      const rows = (Array.isArray(response) ? response : []).map((c: any) => ({
-        id: c.id,
-        participant: {
-          ...(c.peer || c.participant),
-          display_name: c.peer?.name || c.peer?.display_name || c.participant?.display_name,
-        },
-        last_message: c.last_message
-          ? {
-              ...c.last_message,
-              content: c.last_message.content ?? c.last_message.text ?? '',
-            }
-          : undefined,
-        unread_count: c.unread_count ?? 0,
-        updated_at: c.updated_at,
-        is_muted: Boolean(c.is_muted),
-        is_archived: Boolean(c.is_archived),
-      }));
-      setConversations(rows as ConversationItem[]);
-    } catch (error) {
-      console.error('Failed to fetch conversations:', error);
-    }
-  }, []);
-
-  const fetchRooms = useCallback(async () => {
-    try {
-      const response = await api.getRooms();
-      const rows = (Array.isArray(response) ? response : []).map((r: any) => ({
-        id: r.id,
-        name: r.name,
-        member_count: r.member_count ?? 0,
-        last_message: r.last_message
-          ? {
-              text: r.last_message.text ?? '',
-              sender_name: r.last_message.sender_name,
-              created_at: r.last_message.created_at,
-            }
-          : undefined,
-        created_at: r.created_at,
-        is_expired: Boolean(r.is_expired),
-        question_text: r.question_text,
-      }));
-      setRooms(rows as RoomItem[]);
-    } catch (error) {
-      console.error('Failed to fetch rooms:', error);
-    }
-  }, []);
-
-  const fetchAll = useCallback(
-    async (isRefresh = false) => {
-      if (!isRefresh) setLoading(true);
-      await Promise.all([fetchConversations(), fetchRooms()]);
+      const [friendsRes, convs, reqs, roomRows, promptRows] = await Promise.all([
+        api.getChatFriends(),
+        api.getConversations({ type: 'primary' }),
+        api.getConversations({ type: 'requests' }),
+        api.getRooms(),
+        api.getPromptRooms(),
+      ]);
+      setFriends(asChatList<ChatFriend>(friendsRes.friends));
+      if (friendsRes.me) setMe(friendsRes.me as ChatFriend);
+      setConversations(asChatList<ChatConversation>(convs));
+      setRequests(asChatList<ChatConversation>(reqs));
+      setRooms(asChatList<ChatRoomRow>(roomRows));
+      setPromptRooms(asChatList<ChatRoomRow>(promptRows));
+      void api.pingChatPresence();
+    } catch {
+      /* keep last known lists */
+    } finally {
       setLoading(false);
       setRefreshing(false);
-    },
-    [fetchConversations, fetchRooms],
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
   );
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    void fetchAll(true);
+  const visibleConversations = useMemo(
+    () => conversations.filter((c) => !c.is_archived),
+    [conversations],
+  );
+  const archivedConversations = useMemo(
+    () => conversations.filter((c) => c.is_archived),
+    [conversations],
+  );
+  const groupRooms = useMemo(
+    () => rooms.filter((r) => !r.question_text && !r.is_expired),
+    [rooms],
+  );
+  const filteredFriends = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return friends;
+    return friends.filter(
+      (f) =>
+        f.name.toLowerCase().includes(q) ||
+        f.username.toLowerCase().includes(q) ||
+        (f.status_message || '').toLowerCase().includes(q),
+    );
+  }, [friends, search]);
+
+  const openConversation = async (peer: ChatFriend, conversationId?: number) => {
+    let cid = conversationId;
+    if (!cid) {
+      try {
+        const conv = await api.startConversation(peer.id);
+        cid = conv.id;
+      } catch {
+        Alert.alert(t('chat.title'), t('chat.loadConversationFailed'));
+        return;
+      }
+    }
+    navigation.navigate('Conversation', {
+      conversationId: cid,
+      otherUser: {
+        id: peer.id,
+        username: peer.username,
+        display_name: peer.name || peer.username,
+        avatar: peer.avatar || undefined,
+      },
+    });
   };
 
-  useEffect(() => {
-    void fetchAll();
-  }, [fetchAll]);
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const mins = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m`;
-    if (hours < 24) return `${hours}h`;
-    if (days < 7) return `${days}d`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const acceptRequest = async (conversation: ChatConversation) => {
+    try {
+      await api.acceptConversationRequest(conversation.id);
+      setRequests((prev) => prev.filter((c) => c.id !== conversation.id));
+      setConversations((prev) => (prev.some((c) => c.id === conversation.id) ? prev : [conversation, ...prev]));
+    } catch {
+      Alert.alert(t('chat.title'), t('chat.loadRequestsFailed'));
+    }
   };
 
-  const visibleConversations = conversations.filter((c) => !c.is_archived);
+  const createRoom = async () => {
+    if (!roomName.trim() || creating) return;
+    setCreating(true);
+    try {
+      const room = await api.createChatRoom(roomName.trim());
+      setCreateOpen(false);
+      setRoomName('');
+      navigation.navigate('Room', { roomId: room.id, roomName: room.name });
+    } catch {
+      Alert.alert(t('chat.title'), t('chat.createRoomFailed'));
+    } finally {
+      setCreating(false);
+    }
+  };
 
-  const showConversationActions = (item: ConversationItem) => {
-    const name = item.participant.display_name || item.participant.username;
+  const showConversationActions = (item: ChatConversation) => {
+    const name = item.peer?.name || item.peer?.username || t('chat.friendFallback');
     Alert.alert(name, undefined, [
       {
-        text: item.is_muted ? 'Unmute' : 'Mute',
-        onPress: () => void handleMute(item),
+        text: item.is_muted ? t('chat.unmute') : t('chat.muteConversation'),
+        onPress: () => void toggleMute(item),
       },
       {
-        text: item.is_archived ? 'Unarchive' : 'Archive',
-        onPress: () => void handleArchive(item),
+        text: item.is_archived ? t('chat.unarchive') : t('chat.archive'),
+        onPress: () => void toggleArchive(item),
       },
-      { text: 'Cancel', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   };
 
-  const handleMute = async (item: ConversationItem) => {
+  const toggleMute = async (item: ChatConversation) => {
     const next = !item.is_muted;
     try {
       await api.muteConversation(item.id, next);
-      setConversations((prev) =>
-        prev.map((c) => (String(c.id) === String(item.id) ? { ...c, is_muted: next } : c)),
-      );
-    } catch (error) {
-      console.error('Failed to mute conversation:', error);
+      setConversations((prev) => prev.map((c) => (c.id === item.id ? { ...c, is_muted: next } : c)));
+    } catch {
+      Alert.alert(t('chat.title'), t('chat.muteStateFailed'));
     }
   };
 
-  const handleArchive = async (item: ConversationItem) => {
+  const toggleArchive = async (item: ChatConversation) => {
     const next = !item.is_archived;
     try {
       await api.archiveConversation(item.id, next);
-      setConversations((prev) =>
-        prev.map((c) => (String(c.id) === String(item.id) ? { ...c, is_archived: next } : c)),
-      );
-    } catch (error) {
-      console.error('Failed to archive conversation:', error);
+      setConversations((prev) => prev.map((c) => (c.id === item.id ? { ...c, is_archived: next } : c)));
+    } catch {
+      Alert.alert(t('chat.title'), t('chat.archiveStateFailed'));
     }
   };
 
-  const renderConversation = ({ item }: { item: ConversationItem }) => (
-    <TouchableOpacity
-      style={[styles.listItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      onPress={() =>
-        navigation.navigate('Conversation', {
-          conversationId: item.id,
-          otherUser: item.participant,
-        })
+  const meName = me?.name || user?.display_name || user?.username || t('chat.cosmicExplorer');
+
+  const toggleMood = async () => {
+    const next = me?.mood_icon === 'cloud' ? 'sun' : 'cloud';
+    setMe((prev) => (prev ? { ...prev, mood_icon: next } : prev));
+    try {
+      const data = await api.pingChatPresence({ mood_icon: next });
+      if (data?.mood_icon) {
+        setMe((prev) => (prev ? { ...prev, mood_icon: data.mood_icon } : prev));
       }
-      onLongPress={() => showConversationActions(item)}
-      delayLongPress={400}
-      activeOpacity={0.95}
-    >
-      {item.participant.avatar ? (
-        <Image source={{ uri: item.participant.avatar }} style={styles.itemAvatar} />
-      ) : (
-        <View style={[styles.itemAvatar, styles.avatarPlaceholder, { backgroundColor: colors.primary }]}>
-          <Text style={styles.avatarText}>{item.participant.username[0].toUpperCase()}</Text>
-        </View>
-      )}
-      <View style={styles.itemInfo}>
-        <View style={styles.itemHeader}>
-          <View style={styles.itemTitleRow}>
-            <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-              {item.participant.display_name || item.participant.username}
-            </Text>
-            {item.is_muted && <Text style={styles.muteIcon}>🔇</Text>}
-          </View>
-          <Text style={[styles.itemTime, { color: colors.textSecondary }]}>
-            {item.last_message ? formatTime(item.last_message.created_at) : ''}
-          </Text>
-        </View>
-        <View style={styles.itemPreview}>
-          {!item.is_muted && item.unread_count > 0 && (
-            <View style={[styles.unreadBadge, { backgroundColor: colors.primary }]}>
-              <Text style={styles.unreadBadgeText}>
-                {item.unread_count > 9 ? '9+' : item.unread_count.toString()}
-              </Text>
-            </View>
-          )}
-          <Text
-            style={[
-              styles.itemSubtitle,
-              { color: item.unread_count > 0 && !item.is_muted ? colors.text : colors.textSecondary },
-            ]}
-            numberOfLines={1}
-          >
-            {item.last_message
-              ? (item.last_message.sender?.id === user?.id ? 'You: ' : '') + item.last_message.content
-              : 'No messages yet'}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderRoom = ({ item }: { item: RoomItem }) => (
-    <TouchableOpacity
-      style={[styles.listItem, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      onPress={() => navigation.navigate('Room', { roomId: item.id, roomName: item.name })}
-      activeOpacity={0.95}
-    >
-      <View style={[styles.itemAvatar, styles.roomAvatar, { backgroundColor: colors.primary }]}>
-        <Text style={styles.roomAvatarText}>👥</Text>
-      </View>
-      <View style={styles.itemInfo}>
-        <View style={styles.itemHeader}>
-          <Text style={[styles.itemTitle, { color: colors.text }]} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={[styles.itemTime, { color: colors.textSecondary }]}>
-            {item.last_message ? formatTime(item.last_message.created_at) : formatTime(item.created_at)}
-          </Text>
-        </View>
-        <View style={styles.itemPreview}>
-          <Text style={[styles.itemSubtitle, { color: colors.textSecondary }]} numberOfLines={1}>
-            {item.member_count} member{item.member_count === 1 ? '' : 's'}
-            {item.last_message
-              ? ` · ${item.last_message.sender_name ? `${item.last_message.sender_name}: ` : ''}${item.last_message.text}`
-              : ''}
-          </Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const EmptyDms = () => (
-    <View style={styles.emptyState}>
-      <Text style={{ fontSize: 48 }}>💬</Text>
-      <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: 16 }]}>No messages yet</Text>
-      <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>Start a conversation with someone</Text>
-      <TouchableOpacity
-        style={[styles.emptyActionButton, { backgroundColor: colors.primary }]}
-        onPress={() => navigation.navigate('Explore')}
-      >
-        <Text style={styles.emptyActionButtonText}>Find people</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const EmptyRooms = () => (
-    <View style={styles.emptyState}>
-      <Text style={{ fontSize: 48 }}>👥</Text>
-      <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: 16 }]}>No rooms yet</Text>
-      <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
-        Join or create a group room on the web
-      </Text>
-    </View>
-  );
+    } catch {
+      setMe((prev) => (prev ? { ...prev, mood_icon: next === 'sun' ? 'cloud' : 'sun' } : prev));
+    }
+  };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.border }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Messages</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => navigation.navigate('PromptRooms')} style={styles.newMessageButton}>
-            <Text style={{ fontSize: 18 }}>Prompts</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate('Explore')} style={styles.newMessageButton}>
-            <Text style={{ fontSize: 22 }}>✏️</Text>
-          </TouchableOpacity>
+    <View style={[styles.root, { backgroundColor: C.cream }]}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={[styles.header, { borderBottomColor: C.line, backgroundColor: C.cream }]}>
+          <Pressable onPress={() => navigation.goBack()} hitSlop={8} style={styles.backBtn}>
+            <Ionicons name="chevron-back" size={22} color={C.text} />
+          </Pressable>
+          <Text style={[styles.title, { color: C.brownDk }]}>{t('chat.title')}</Text>
+          <View style={styles.liveRow}>
+            <View style={[styles.liveDot, { backgroundColor: C.online }]} />
+            <Text style={[styles.liveText, { color: C.text2 }]}>{t('chat.liveStatus')}</Text>
+          </View>
         </View>
-      </View>
 
-      <View style={[styles.tabBar, { borderBottomColor: colors.border }]}>
-        {(['dms', 'rooms'] as ChatTab[]).map((tab) => {
-          const active = activeTab === tab;
-          return (
-            <TouchableOpacity
-              key={tab}
-              style={[styles.tab, active && { borderBottomColor: colors.primary }]}
-              onPress={() => setActiveTab(tab)}
-            >
-              <Text
-                style={[
-                  styles.tabLabel,
-                  { color: active ? colors.primary : colors.textSecondary },
-                  active && styles.tabLabelActive,
-                ]}
+        {loading && conversations.length === 0 && friends.length === 0 ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={C.brown} />
+            <Text style={{ color: C.text2, marginTop: 8 }}>{t('chat.loadingChat')}</Text>
+          </View>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={C.brown} />
+            }
+          >
+            <View style={styles.searchWrap}>
+              <Ionicons name="search" size={16} color={C.text2} style={styles.searchIcon} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder={t('chat.searchFriends')}
+                placeholderTextColor={C.text2}
+                style={[styles.search, { backgroundColor: C.white, borderColor: C.line, color: C.text }]}
+              />
+            </View>
+
+            {requests.length > 0 ? (
+              <View style={styles.section}>
+                <Pressable onPress={() => setRequestsOpen((v) => !v)} style={[styles.reqToggle, { backgroundColor: C.card }]}>
+                  <Text style={[styles.reqToggleText, { color: C.text2 }]}>
+                    {t('chat.requests')} ({requests.length})
+                  </Text>
+                  <Text style={{ color: C.text2 }}>{requestsOpen ? '▲' : '▼'}</Text>
+                </Pressable>
+                {requestsOpen
+                  ? requests.map((row) => (
+                      <Row
+                        key={`req-${row.id}`}
+                        C={C}
+                        title={row.peer?.name || t('chat.unknownUser')}
+                        subtitle={previewText(row.last_message)}
+                        avatar={row.peer?.avatar}
+                        online={row.peer?.is_online}
+                        onPress={() => row.peer && void openConversation(row.peer, row.id)}
+                        trailing={
+                          <Pressable onPress={() => void acceptRequest(row)} style={[styles.accept, { backgroundColor: C.brown }]}>
+                            <Text style={styles.acceptText}>{t('chat.acceptRequest')}</Text>
+                          </Pressable>
+                        }
+                      />
+                    ))
+                  : null}
+              </View>
+            ) : null}
+
+            <SectionLabel C={C} label={t('chat.conversationsLabel')} />
+            {visibleConversations.length === 0 ? (
+              <Text style={[styles.emptyHint, { color: C.text2 }]}>{t('chat.noMessagesYet')}</Text>
+            ) : (
+              visibleConversations.map((row) => (
+                <Row
+                  key={`dm-${row.id}`}
+                  C={C}
+                  title={row.peer?.name || t('chat.unknownUser')}
+                  subtitle={previewText(row.last_message) || t('chat.noMessagesYet')}
+                  avatar={row.peer?.avatar}
+                  online={row.peer?.is_online}
+                  muted={row.is_muted}
+                  time={row.last_message?.created_at ? relativeChatTime(row.last_message.created_at, t) : ''}
+                  unread={row.is_muted ? 0 : row.unread_count}
+                  onPress={() => row.peer && void openConversation(row.peer, row.id)}
+                  onLongPress={() => showConversationActions(row)}
+                />
+              ))
+            )}
+
+            <SectionLabel C={C} label={t('chat.promptRooms')} />
+            <Pressable onPress={() => navigation.navigate('PromptRooms')} style={[styles.ghostBtn, { backgroundColor: C.card }]}>
+              <Ionicons name="sparkles" size={14} color={C.brownDk} />
+              <Text style={[styles.ghostBtnText, { color: C.brownDk }]}>{t('chat.newPrompt')}</Text>
+            </Pressable>
+            {promptRooms.length === 0 ? (
+              <Text style={[styles.emptyHint, { color: C.text2 }]}>{t('chat.startPromptHint')}</Text>
+            ) : (
+              promptRooms.map((room) => (
+                <Row
+                  key={`pr-${room.id}`}
+                  C={C}
+                  emoji="✨"
+                  title={room.question_text || room.name}
+                  subtitle={`${t('chat.explorersCount', { count: room.member_count })} · ${formatRoomExpires(room.expires_at, t)}`}
+                  onPress={() =>
+                    navigation.navigate('Room', {
+                      roomId: room.id,
+                      roomName: room.question_text || room.name,
+                      isExpired: room.is_expired,
+                      questionText: room.question_text,
+                      questionCategory: room.question_category,
+                    })
+                  }
+                />
+              ))
+            )}
+
+            <SectionLabel C={C} label={t('chat.groupRooms')} />
+            <Pressable onPress={() => setCreateOpen(true)} style={[styles.ghostBtn, { backgroundColor: C.card }]}>
+              <Text style={[styles.ghostBtnText, { color: C.brownDk }]}>+ {t('chat.newRoom')}</Text>
+            </Pressable>
+            {groupRooms.map((room) => (
+              <Row
+                key={`rm-${room.id}`}
+                C={C}
+                emoji="👥"
+                title={room.name}
+                subtitle={t('chat.membersCount', { count: room.member_count })}
+                time={room.last_message?.created_at ? relativeChatTime(room.last_message.created_at, t) : ''}
+                onPress={() =>
+                  navigation.navigate('Room', {
+                    roomId: room.id,
+                    roomName: room.name,
+                    channelType: room.channel_type,
+                  })
+                }
+              />
+            ))}
+
+            {archivedConversations.length > 0 ? (
+              <View style={styles.section}>
+                <Pressable onPress={() => setArchivedOpen((v) => !v)} style={[styles.reqToggle, { backgroundColor: C.card }]}>
+                  <Text style={[styles.reqToggleText, { color: C.text2 }]}>
+                    {t('chat.archived')} ({archivedConversations.length})
+                  </Text>
+                  <Text style={{ color: C.text2 }}>{archivedOpen ? '▲' : '▼'}</Text>
+                </Pressable>
+                {archivedOpen
+                  ? archivedConversations.map((row) => (
+                      <Row
+                        key={`arch-${row.id}`}
+                        C={C}
+                        title={row.peer?.name || t('chat.unknownUser')}
+                        subtitle={previewText(row.last_message) || t('chat.noMessagesYet')}
+                        avatar={row.peer?.avatar}
+                        muted={row.is_muted}
+                        time={row.last_message?.created_at ? relativeChatTime(row.last_message.created_at, t) : ''}
+                        onPress={() => row.peer && void openConversation(row.peer, row.id)}
+                        onLongPress={() => showConversationActions(row)}
+                      />
+                    ))
+                  : null}
+              </View>
+            ) : null}
+
+            <SectionLabel C={C} label={t('chat.friendsLabel')} />
+            {filteredFriends.length === 0 ? (
+              <View style={styles.emptyFriends}>
+                <Text style={[styles.emptyHint, { color: C.text2 }]}>{t('chat.followToChat')}</Text>
+                <Pressable onPress={() => navigation.navigate('Explore')} style={[styles.accept, { backgroundColor: C.brownDk, alignSelf: 'center' }]}>
+                  <Text style={styles.acceptText}>{t('nav.discover')}</Text>
+                </Pressable>
+              </View>
+            ) : (
+              filteredFriends.map((friend) => (
+                <Row
+                  key={`fr-${friend.id}`}
+                  C={C}
+                  title={friend.name}
+                  subtitle={friend.status_message}
+                  avatar={friend.avatar}
+                  online={friend.is_online}
+                  mood={moodEmoji(friend.mood_icon)}
+                  onPress={() => void openConversation(friend)}
+                />
+              ))
+            )}
+          </ScrollView>
+        )}
+
+        <View style={[styles.meBar, { backgroundColor: C.card2, borderTopColor: C.line }]}>
+          {me?.avatar ? (
+            <Image source={{ uri: mediaUrl(me.avatar) }} style={styles.meAvatar} />
+          ) : (
+            <View style={[styles.meAvatar, { backgroundColor: C.brown, alignItems: 'center', justifyContent: 'center' }]}>
+              <Text style={{ color: '#fff', fontWeight: '800' }}>{meName.slice(0, 1).toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.meName, { color: C.text }]} numberOfLines={1}>
+              {meName}
+            </Text>
+            <Text style={{ color: C.online, fontSize: 12 }}>{t('chat.online')}</Text>
+          </View>
+          <Pressable onPress={() => void toggleMood()} hitSlop={8} accessibilityLabel={t('chat.moodStamp')}>
+            <Text style={{ fontSize: 20 }}>{moodEmoji(me?.mood_icon)}</Text>
+          </Pressable>
+          <Pressable onPress={() => navigation.navigate('Settings')} hitSlop={8}>
+            <Ionicons name="settings-outline" size={22} color={C.text2} />
+          </Pressable>
+        </View>
+      </SafeAreaView>
+
+      <Modal visible={createOpen} transparent animationType="fade" onRequestClose={() => setCreateOpen(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalRoot}>
+          <Pressable style={[styles.overlay, { backgroundColor: C.overlay }]} onPress={() => setCreateOpen(false)} />
+          <View style={[styles.sheet, { backgroundColor: C.cream, borderColor: C.line }]}>
+            <Text style={[styles.modalTitle, { color: C.text }]}>{t('chat.newGroupRoom')}</Text>
+            <TextInput
+              value={roomName}
+              onChangeText={setRoomName}
+              placeholder={t('chat.roomNamePlaceholder')}
+              placeholderTextColor={C.text2}
+              style={[styles.input, { backgroundColor: C.white, borderColor: C.line, color: C.text }]}
+            />
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => setCreateOpen(false)} style={[styles.modalBtn, { backgroundColor: C.card }]}>
+                <Text style={{ color: C.text, fontWeight: '700' }}>{t('common.cancel')}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void createRoom()}
+                disabled={creating || !roomName.trim()}
+                style={[styles.modalBtn, { backgroundColor: C.brownDk, opacity: creating || !roomName.trim() ? 0.55 : 1 }]}
               >
-                {tab === 'dms' ? 'DMs' : 'Rooms'}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+                {creating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: '800' }}>{t('chat.createRoomLabel')}</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}
 
-      {loading && !refreshing ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.primary} />
+function SectionLabel({ C, label }: { C: ChatPalette; label: string }) {
+  return <Text style={[styles.sectionLabel, { color: C.text2 }]}>{label}</Text>;
+}
+
+function Row({
+  C,
+  title,
+  subtitle,
+  avatar,
+  emoji,
+  online,
+  muted,
+  mood,
+  time,
+  unread,
+  trailing,
+  onPress,
+  onLongPress,
+}: {
+  C: ChatPalette;
+  title: string;
+  subtitle?: string;
+  avatar?: string | null;
+  emoji?: string;
+  online?: boolean;
+  muted?: boolean;
+  mood?: string;
+  time?: string;
+  unread?: number;
+  trailing?: React.ReactNode;
+  onPress: () => void;
+  onLongPress?: () => void;
+}) {
+  const src = avatar ? mediaUrl(avatar) : '';
+  return (
+    <Pressable
+      onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={400}
+      style={({ pressed }) => [styles.row, { backgroundColor: pressed ? C.card : 'transparent' }]}
+    >
+      <View style={styles.avatarWrap}>
+        {src ? (
+          <Image source={{ uri: src }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, { backgroundColor: C.card, alignItems: 'center', justifyContent: 'center' }]}>
+            <Text style={{ fontSize: emoji ? 18 : 16 }}>{emoji || title.slice(0, 1).toUpperCase()}</Text>
+          </View>
+        )}
+        {online ? <View style={[styles.onlineDot, { backgroundColor: C.online, borderColor: C.white }]} /> : null}
+      </View>
+      <View style={styles.meta}>
+        <View style={styles.metaTop}>
+          <Text style={[styles.name, { color: C.text }]} numberOfLines={1}>
+            {title}
+            {muted ? ' 🔇' : ''}
+          </Text>
+          {time ? <Text style={[styles.time, { color: C.text2 }]}>{time}</Text> : null}
         </View>
-      ) : activeTab === 'dms' ? (
-        <FlatList
-          data={visibleConversations}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderConversation}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              progressBackgroundColor={colors.surface}
-            />
-          }
-          ListEmptyComponent={EmptyDms}
-        />
-      ) : (
-        <FlatList
-          data={rooms}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderRoom}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={[colors.primary]}
-              progressBackgroundColor={colors.surface}
-            />
-          }
-          ListEmptyComponent={EmptyRooms}
-        />
-      )}
-    </SafeAreaView>
+        {subtitle ? (
+          <Text style={[styles.status, { color: C.text2 }]} numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {unread && unread > 0 ? (
+        <View style={[styles.badge, { backgroundColor: C.brown }]}>
+          <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
+        </View>
+      ) : null}
+      {mood ? <Text style={{ fontSize: 16 }}>{mood}</Text> : null}
+      {trailing}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    gap: 8,
+  },
+  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  title: { flex: 1, fontSize: 22, fontWeight: '800' },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  liveDot: { width: 8, height: 8, borderRadius: 4 },
+  liveText: { fontSize: 11, fontWeight: '700' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scroll: { paddingBottom: 16 },
+  searchWrap: { paddingHorizontal: 12, paddingTop: 12, paddingBottom: 6 },
+  searchIcon: { position: 'absolute', left: 24, top: 24, zIndex: 1 },
+  search: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: 36,
+    fontSize: 14,
+  },
+  section: { paddingHorizontal: 8, paddingTop: 8 },
+  sectionLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingTop: 14,
+    paddingBottom: 6,
   },
-  headerTitle: { fontSize: 20, fontWeight: '700' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  newMessageButton: { padding: 4 },
-  tabBar: {
-    flexDirection: 'row',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  tab: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabLabel: { fontSize: 15, fontWeight: '600' },
-  tabLabelActive: { fontWeight: '700' },
-  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  listContent: { paddingBottom: 100, flexGrow: 1 },
-  listItem: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  itemAvatar: { width: 56, height: 56, borderRadius: 28, marginRight: 12 },
-  roomAvatar: { justifyContent: 'center', alignItems: 'center' },
-  roomAvatarText: { fontSize: 24 },
-  avatarPlaceholder: { justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  itemInfo: { flex: 1, minWidth: 0 },
-  itemHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  itemTitleRow: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 },
-  itemTitle: { fontSize: 16, fontWeight: '700', flexShrink: 1 },
-  muteIcon: { fontSize: 14, marginLeft: 6 },
-  itemTime: { fontSize: 12, fontWeight: '500' },
-  itemPreview: { flexDirection: 'row', alignItems: 'center' },
-  unreadBadge: {
-    minWidth: 20,
-    height: 20,
+  reqToggle: {
+    marginHorizontal: 8,
     borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    marginRight: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-  unreadBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  itemSubtitle: { fontSize: 14, fontWeight: '500', flex: 1 },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyText: { fontSize: 18, fontWeight: '600', textAlign: 'center' },
-  emptySubtext: { fontSize: 14, textAlign: 'center', marginTop: 8, marginBottom: 24 },
-  emptyActionButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 24 },
-  emptyActionButtonText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  reqToggleText: { fontSize: 12, fontWeight: '800' },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginHorizontal: 6,
+    borderRadius: 14,
+  },
+  avatarWrap: { width: 44, height: 44 },
+  avatar: { width: 44, height: 44, borderRadius: 22 },
+  onlineDot: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+  },
+  meta: { flex: 1, minWidth: 0 },
+  metaTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  name: { flex: 1, fontSize: 14, fontWeight: '700' },
+  time: { fontSize: 11, fontWeight: '600' },
+  status: { fontSize: 12, marginTop: 2 },
+  badge: { minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  ghostBtn: {
+    marginHorizontal: 14,
+    marginBottom: 6,
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  ghostBtnText: { fontSize: 12, fontWeight: '800' },
+  emptyHint: { fontSize: 12, paddingHorizontal: 16, paddingVertical: 8, lineHeight: 18 },
+  emptyFriends: { gap: 10, paddingBottom: 8 },
+  accept: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  acceptText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  meBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+  },
+  meAvatar: { width: 36, height: 36, borderRadius: 18 },
+  meName: { fontSize: 14, fontWeight: '700' },
+  modalRoot: { flex: 1, justifyContent: 'center', padding: 16 },
+  overlay: { ...StyleSheet.absoluteFillObject },
+  sheet: { borderRadius: 22, borderWidth: 1, padding: 18 },
+  modalTitle: { fontSize: 18, fontWeight: '800', marginBottom: 12 },
+  input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 14 },
+  modalActions: { flexDirection: 'row', gap: 10 },
+  modalBtn: { flex: 1, borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
 });

@@ -1,5 +1,14 @@
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, View, ViewStyle, TextStyle } from 'react-native';
+import {
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  View,
+  ViewStyle,
+  TextStyle,
+  StyleProp,
+  Pressable,
+} from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
 
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -14,7 +23,7 @@ interface ButtonProps {
   size?: ButtonSize;
   variant?: ButtonVariant;
   fullWidth?: boolean;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   textStyle?: TextStyle;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
@@ -35,26 +44,27 @@ export default function Button({
   rightIcon,
 }: ButtonProps) {
   const { colors } = useTheme();
+  const busy = disabled || loading;
 
-  const sizeStyles: Record<ButtonSize, { paddingVertical: number; paddingHorizontal: number; fontSize: number; borderRadius: number }> = {
-    sm: { paddingVertical: 8, paddingHorizontal: 14, fontSize: 13, borderRadius: 8 },
-    md: { paddingVertical: 12, paddingHorizontal: 20, fontSize: 15, borderRadius: 12 },
-    lg: { paddingVertical: 16, paddingHorizontal: 28, fontSize: 17, borderRadius: 14 },
+  const sizeStyles: Record<ButtonSize, { paddingVertical: number; paddingHorizontal: number; fontSize: number; borderRadius: number; minHeight: number }> = {
+    sm: { paddingVertical: 10, paddingHorizontal: 14, fontSize: 13, borderRadius: 12, minHeight: 44 },
+    md: { paddingVertical: 12, paddingHorizontal: 20, fontSize: 15, borderRadius: 14, minHeight: 48 },
+    lg: { paddingVertical: 16, paddingHorizontal: 28, fontSize: 17, borderRadius: 999, minHeight: 52 },
   };
 
   const variantStyles: Record<ButtonVariant, { backgroundColor: string; borderWidth?: number; borderColor?: string }> = {
-    primary: { backgroundColor: disabled ? colors.disabled : colors.primary },
-    secondary: { backgroundColor: disabled ? colors.disabled : colors.surfaceSecondary },
-    outline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: disabled ? colors.disabled : colors.primary },
+    primary: { backgroundColor: busy ? colors.disabled : colors.primary },
+    secondary: { backgroundColor: busy ? colors.disabled : colors.surfaceSecondary },
+    outline: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: busy ? colors.disabled : colors.primary },
     ghost: { backgroundColor: 'transparent' },
-    danger: { backgroundColor: disabled ? colors.disabled : colors.error },
+    danger: { backgroundColor: busy ? colors.disabled : colors.error },
   };
 
   const textColorForVariant: Record<ButtonVariant, string> = {
     primary: '#fff',
     secondary: colors.text,
-    outline: disabled ? colors.disabled : colors.primary,
-    ghost: disabled ? colors.disabled : colors.primary,
+    outline: busy ? colors.disabled : colors.primary,
+    ghost: busy ? colors.disabled : colors.primary,
     danger: '#fff',
   };
 
@@ -63,31 +73,39 @@ export default function Button({
   const textColor = textColorForVariant[variant];
 
   return (
-    <TouchableOpacity
-      style={[
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={typeof label === 'string' ? label : undefined}
+      accessibilityState={{ disabled: busy, busy: !!loading }}
+      style={({ pressed }) => [
         styles.base,
         currentVariant,
-        { paddingVertical: currentSize.paddingVertical, paddingHorizontal: currentSize.paddingHorizontal, borderRadius: currentSize.borderRadius },
+        {
+          paddingVertical: currentSize.paddingVertical,
+          paddingHorizontal: currentSize.paddingHorizontal,
+          borderRadius: currentSize.borderRadius,
+          minHeight: currentSize.minHeight,
+        },
         fullWidth && styles.fullWidth,
-        disabled && styles.disabled,
+        busy && styles.disabled,
+        pressed && !busy ? styles.pressed : null,
         style,
       ]}
       onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.85}
+      disabled={busy}
     >
       {loading ? (
         <ActivityIndicator size="small" color={textColor} />
       ) : (
         <>
-          {leftIcon && <View style={styles.leftIcon}>{leftIcon}</View>}
+          {leftIcon ? <View style={styles.leftIcon}>{leftIcon}</View> : null}
           <Text style={[{ fontSize: currentSize.fontSize, fontWeight: '700', color: textColor }, textStyle]}>
             {label || children}
           </Text>
-          {rightIcon && <View style={styles.rightIcon}>{rightIcon}</View>}
+          {rightIcon ? <View style={styles.rightIcon}>{rightIcon}</View> : null}
         </>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -96,10 +114,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 48,
   } as ViewStyle,
   fullWidth: { width: '100%' } as ViewStyle,
-  disabled: { opacity: 0.6 } as ViewStyle,
+  disabled: { opacity: 0.55 } as ViewStyle,
+  pressed: { opacity: 0.88 } as ViewStyle,
   leftIcon: { marginRight: 8 } as ViewStyle,
   rightIcon: { marginLeft: 8 } as ViewStyle,
 });

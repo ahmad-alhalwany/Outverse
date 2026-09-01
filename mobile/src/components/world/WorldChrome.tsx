@@ -3,22 +3,26 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
   ViewStyle,
-  TextStyle,
+  ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme, shadows, borderRadius } from '@/hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme, shadows } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 
-type WorldTone = 'lab' | 'vault' | 'bazaar' | 'live' | 'shop' | 'default';
+export type WorldTone = 'lab' | 'vault' | 'bazaar' | 'story' | 'live' | 'shop' | 'default';
 
-const TONES: Record<WorldTone, { from: string; to: string; accent: string }> = {
-  lab: { from: '#2A1748', to: '#5B21B6', accent: '#C4B5FD' },
-  vault: { from: '#1A1035', to: '#4C1D95', accent: '#A78BFA' },
-  bazaar: { from: '#2B1538', to: '#7C3AED', accent: '#DDD6FE' },
-  live: { from: '#3B0764', to: '#9F1239', accent: '#F9A8D4' },
-  shop: { from: '#1E1B4B', to: '#4338CA', accent: '#A5B4FC' },
-  default: { from: '#17122A', to: '#4C1D95', accent: '#C4B5FD' },
+const TONES: Record<WorldTone, { from: string; to: string; accent: string; button: [string, string] }> = {
+  lab: { from: '#14102A', to: '#16351C', accent: '#81C784', button: ['#4CAF50', '#2E7D32'] },
+  vault: { from: '#14102A', to: '#2A1038', accent: '#CE93D8', button: ['#9C27B0', '#6A1B9A'] },
+  bazaar: { from: '#14102A', to: '#0D2744', accent: '#64B5F6', button: ['#2196F3', '#1565C0'] },
+  story: { from: '#14102A', to: '#3A1C06', accent: '#FFB74D', button: ['#FF9800', '#E65100'] },
+  live: { from: '#14102A', to: '#3B0764', accent: '#F9A8D4', button: ['#9F1239', '#7C3AED'] },
+  shop: { from: '#14102A', to: '#3A1020', accent: '#F48FB1', button: ['#E91E63', '#AD1457'] },
+  default: { from: '#14102A', to: '#4C1D95', accent: '#C4B5FD', button: ['#7C3AED', '#5B21B6'] },
 };
 
 export function WorldBackdrop({
@@ -72,22 +76,40 @@ export function WorldHeader({
   tone?: WorldTone;
 }) {
   const { colors } = useTheme();
+  const { t, isRTL } = useLocale();
   const accent = TONES[tone].accent;
   return (
     <View style={styles.header}>
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, isRTL && { flexDirection: 'row-reverse' }]}>
         {onBack ? (
-          <TouchableOpacity onPress={onBack} style={[styles.iconBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} activeOpacity={0.85}>
-            <Text style={{ color: colors.text, fontSize: 18 }}>←</Text>
-          </TouchableOpacity>
+          <Pressable
+            onPress={onBack}
+            style={({ pressed }) => [
+              styles.iconBtn,
+              { borderColor: colors.border, backgroundColor: colors.surface, opacity: pressed ? 0.8 : 1 },
+            ]}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+          >
+            <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={colors.icon} />
+          </Pressable>
         ) : (
-          <View style={styles.iconBtn} />
+          <View style={styles.iconSlot} />
         )}
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>{title}</Text>
-          {subtitle ? <Text style={[styles.headerSub, { color: accent }]}>{subtitle}</Text> : null}
+        <View style={{ flex: 1, alignItems: 'center', minWidth: 0 }}>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={[styles.headerSub, { color: accent }]} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
-        <View style={[styles.iconBtn, { alignItems: 'flex-end' }]}>{right}</View>
+        <View style={[styles.iconSlot, { alignItems: 'flex-end', justifyContent: 'center' }]}>
+          {right}
+        </View>
       </View>
     </View>
   );
@@ -106,17 +128,24 @@ export function WorldHero({
   tone?: WorldTone;
   action?: ReactNode;
 }) {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 360;
+  const heroTitle = isCompact ? 24 : width >= 768 ? 34 : 28;
   const t = TONES[tone];
   return (
     <LinearGradient
       colors={isDark ? [t.from, t.to] : ['#F5F1FE', '#E9E1FA']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 1 }}
-      style={[styles.hero, shadows.lg, { borderColor: isDark ? 'rgba(167,139,250,0.25)' : 'rgba(124,58,237,0.16)' }]}
+      style={[
+        styles.hero,
+        shadows.lg,
+        { borderColor: isDark ? 'rgba(167,139,250,0.25)' : 'rgba(124,58,237,0.16)', padding: isCompact ? 16 : 22 },
+      ]}
     >
       {eyebrow ? <Text style={[styles.eyebrow, { color: t.accent }]}>{eyebrow}</Text> : null}
-      <Text style={[styles.heroTitle, { color: isDark ? '#F8F5FF' : '#211B3D' }]}>{title}</Text>
+      <Text style={[styles.heroTitle, { color: isDark ? '#F8F5FF' : '#211B3D', fontSize: heroTitle, lineHeight: heroTitle + 6 }]}>{title}</Text>
       {body ? (
         <Text style={[styles.heroBody, { color: isDark ? 'rgba(245,243,255,0.78)' : '#79709E' }]}>{body}</Text>
       ) : null}
@@ -152,9 +181,9 @@ export function WorldCard({
   );
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.92}>
+      <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.92 : 1 })}>
         {content}
-      </TouchableOpacity>
+      </Pressable>
     );
   }
   return content;
@@ -164,32 +193,38 @@ export function WorldPill({
   label,
   active,
   onPress,
+  tone = 'default',
 }: {
   label: string;
   active?: boolean;
   onPress?: () => void;
+  tone?: WorldTone;
 }) {
   const { colors, isDark } = useTheme();
+  const accent = TONES[tone].accent;
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      activeOpacity={0.85}
-      style={[
+      hitSlop={4}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!active }}
+      style={({ pressed }) => [
         styles.pill,
         {
           backgroundColor: active
             ? isDark
-              ? 'rgba(167,139,250,0.28)'
+              ? `${accent}33`
               : 'rgba(124,58,237,0.14)'
             : colors.surface,
-          borderColor: active ? colors.primary : colors.border,
+          borderColor: active ? accent : colors.border,
+          opacity: pressed ? 0.88 : 1,
         },
       ]}
     >
-      <Text style={{ color: active ? colors.primary : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>
+      <Text style={{ color: active ? accent : colors.textSecondary, fontWeight: '700', fontSize: 13 }}>
         {label}
       </Text>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -198,28 +233,36 @@ export function WorldPrimaryButton({
   onPress,
   disabled,
   loading,
+  tone = 'default',
 }: {
   label: string;
   onPress?: () => void;
   disabled?: boolean;
   loading?: boolean;
+  tone?: WorldTone;
 }) {
+  const busy = !!(disabled || loading);
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.9}
-      style={{ opacity: disabled || loading ? 0.55 : 1 }}
+      disabled={busy}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: busy, busy: !!loading }}
+      style={({ pressed }) => ({ opacity: busy ? 0.55 : pressed ? 0.9 : 1 })}
     >
       <LinearGradient
-        colors={['#7C3AED', '#5B21B6']}
+        colors={TONES[tone].button}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={[styles.primaryBtn, shadows.md]}
       >
-        <Text style={styles.primaryBtnText}>{loading ? '…' : label}</Text>
+        {loading ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <Text style={styles.primaryBtnText}>{label}</Text>
+        )}
       </LinearGradient>
-    </TouchableOpacity>
+    </Pressable>
   );
 }
 
@@ -258,9 +301,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  iconSlot: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   iconBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
@@ -313,12 +362,17 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryBtn: {
     borderRadius: 18,
     paddingVertical: 14,
     paddingHorizontal: 18,
+    minHeight: 48,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryBtnText: {
     color: '#fff',

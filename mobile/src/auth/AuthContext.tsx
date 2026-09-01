@@ -52,6 +52,8 @@ function normalizeUser(raw: any): User {
     following_count: raw?.following_count ?? 0,
     posts_count: raw?.posts_count ?? 0,
     is_verified: !!raw?.is_verified || !!raw?.badge_verified,
+    is_staff: !!raw?.is_staff || !!raw?.is_superuser,
+    is_superuser: !!raw?.is_superuser,
     is_private: !!raw?.is_private,
     is_following: !!raw?.is_following,
     onboarding_completed: !!raw?.onboarding_completed,

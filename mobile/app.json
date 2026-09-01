@@ -5,6 +5,7 @@
   "orientation": "portrait",
   "icon": "./assets/icon.png",
   "userInterfaceStyle": "automatic",
+  "newArchEnabled": true,
   "splash": {
     "image": "./assets/splash.png",
     "resizeMode": "contain",
@@ -14,10 +15,11 @@
   "ios": {
     "supportsTablet": true,
     "bundleIdentifier": "com.cosonova.mobile",
+    "buildNumber": "1",
     "infoPlist": {
-      "NSCameraUsageDescription": "This app uses camera for creating posts and stories",
+      "NSCameraUsageDescription": "Cosonova uses the camera for posts, stories, and video calls.",
       "NSPhotoLibraryUsageDescription": "This app accesses photo library for media uploads",
-      "NSMicrophoneUsageDescription": "This app uses microphone for video recording",
+      "NSMicrophoneUsageDescription": "Cosonova uses the microphone for recording and calls.",
       "NSLocationWhenInUseUsageDescription": "Cosonova uses your location to center the Story Map and show nearby pins."
     }
   },
@@ -27,6 +29,7 @@
       "backgroundColor": "#0A0A0F"
     },
     "package": "com.cosonova.mobile",
+    "versionCode": 1,
     "permissions": [
       "CAMERA",
       "READ_EXTERNAL_STORAGE",
@@ -51,21 +54,11 @@
         "backgroundColor": "#0A0A0F"
       }
     ],
-    [
-      "expo-font",
-      {
-        "fonts": [
-          "./assets/fonts/SpaceGrotesk-Regular.ttf",
-          "./assets/fonts/SpaceGrotesk-Medium.ttf",
-          "./assets/fonts/SpaceGrotesk-SemiBold.ttf",
-          "./assets/fonts/SpaceGrotesk-Bold.ttf"
-        ]
-      }
-    ]
+    "expo-font",
+    "./plugins/withWebRTC.js"
   ],
+  "scheme": "cosonova",
   "extra": {
-    "eas": {
-      "projectId": "your-eas-project-id"
-    }
+    "eas": {}
   }
 }

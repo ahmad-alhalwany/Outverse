@@ -11,10 +11,13 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 
 /** Signal publish defaults — Who can echo back on new posts. */
 export default function SignalPublishSettingsScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -43,24 +46,23 @@ export default function SignalPublishSettingsScreen() {
     try {
       await api.updatePreferences({ default_reply_control: next });
     } catch {
-      Alert.alert('Error', 'Could not save Signal publish defaults.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotSavePublish'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: colors.text }]}>Signal publish</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <WorldBackdrop>
+      <SafeAreaView style={{ flex: 1 }}>
+        <WorldHeader
+          title={t('mobile.signalPublish')}
+          subtitle={t('mobile.signalPublishSub')}
+          onBack={() => navigation.goBack()}
+        />
 
       <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        Default “Who can echo back” for new posts when you don’t set it in Create.
+        {t('mobile.signalPublishHint')}
       </Text>
 
       {loading ? (
@@ -69,9 +71,9 @@ export default function SignalPublishSettingsScreen() {
         <View style={{ padding: 16, gap: 8 }}>
           {(
             [
-              { id: 'everyone' as const, label: 'Everyone' },
-              { id: 'followers' as const, label: 'Followers' },
-              { id: 'nobody' as const, label: 'No one' },
+              { id: 'everyone' as const, label: t('social.policyEveryone') },
+              { id: 'followers' as const, label: t('social.policyFollowers') },
+              { id: 'nobody' as const, label: t('social.policyNone') },
             ]
           ).map((opt) => (
             <Pressable
@@ -94,7 +96,8 @@ export default function SignalPublishSettingsScreen() {
           ))}
         </View>
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 

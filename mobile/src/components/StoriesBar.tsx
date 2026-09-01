@@ -9,37 +9,41 @@ interface StoriesBarProps {
   stories: Story[];
   onStoryPress: (story: Story, index: number) => void;
   onAddStory?: () => void;
+  embedded?: boolean;
 }
 
 /** Cosmic story rail — lavender rings, not Instagram chrome. */
-export default function StoriesBar({ stories, onStoryPress, onAddStory }: StoriesBarProps) {
+export default function StoriesBar({ stories, onStoryPress, onAddStory, embedded }: StoriesBarProps) {
   const { user } = useAuth();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
 
   return (
     <View
       style={[
         styles.container,
         {
-          backgroundColor: isDark ? '#12101F' : colors.surface,
-          borderBottomColor: isDark ? 'rgba(167,139,250,0.18)' : 'rgba(124,58,237,0.12)',
+          backgroundColor: embedded ? 'transparent' : colors.background,
+          borderBottomColor: colors.border,
+          borderBottomWidth: embedded ? 0 : StyleSheet.hairlineWidth,
         },
       ]}
     >
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Pressable style={styles.storyItem} onPress={onAddStory}>
-          <View style={styles.addWrap}>
-            <View style={[styles.ring, styles.ringMine]}>
-              <Avatar avatar={user?.avatar} name={user?.username} size="lg" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.scroll, embedded && { paddingHorizontal: 0, paddingVertical: 8 }]}>
+        {!embedded ? (
+          <Pressable style={styles.storyItem} onPress={onAddStory}>
+            <View style={styles.addWrap}>
+              <View style={[styles.ring, styles.ringMine]}>
+                <Avatar avatar={user?.avatar} name={user?.username} size="xl" />
+              </View>
+              <View style={styles.plusBadge}>
+                <Text style={styles.plusText}>＋</Text>
+              </View>
             </View>
-            <View style={styles.plusBadge}>
-              <Text style={styles.plusText}>＋</Text>
-            </View>
-          </View>
-          <Text style={[styles.label, { color: colors.textSecondary }]} numberOfLines={1}>
-            إشارتك
-          </Text>
-        </Pressable>
+            <Text style={[styles.label, { color: colors.textSecondary }]} numberOfLines={1}>
+              You
+            </Text>
+          </Pressable>
+        ) : null}
 
         {stories.map((story, index) => {
           const storyUser = story.user;
@@ -57,10 +61,10 @@ export default function StoriesBar({ stories, onStoryPress, onAddStory }: Storie
                   closeFriends ? styles.ringOrbit : viewed ? styles.ringViewed : styles.ringLive,
                 ]}
               >
-                <Avatar avatar={storyUser?.avatar} name={storyUser?.username} size="lg" />
+                <Avatar avatar={storyUser?.avatar} name={storyUser?.username} size="xl" />
               </View>
               <Text style={[styles.label, { color: colors.textSecondary }]} numberOfLines={1}>
-                {storyUser?.username || 'مستخدم'}
+                {storyUser?.username || 'creator'}
               </Text>
             </Pressable>
           );
@@ -80,16 +84,16 @@ const styles = StyleSheet.create({
   },
   storyItem: {
     alignItems: 'center',
-    marginRight: 10,
-    width: 74,
+    marginRight: 20,
+    width: 88,
   },
   addWrap: {
     position: 'relative',
   },
   ring: {
-    padding: 2.5,
-    borderRadius: 40,
-    borderWidth: 2.5,
+    padding: 3,
+    borderRadius: 44,
+    borderWidth: 3,
   },
   ringMine: {
     borderColor: 'rgba(167,139,250,0.45)',

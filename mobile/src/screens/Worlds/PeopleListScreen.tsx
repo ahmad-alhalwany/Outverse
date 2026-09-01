@@ -7,6 +7,7 @@ import { mediaUrl } from '@/api/config';
 import { useTheme } from '@/hooks/useTheme';
 import { User } from '@/types';
 import { WorldBackdrop, WorldCard, WorldHeader, WorldHero } from '@/components/world/WorldChrome';
+import { openProfile } from '@/lib/nav';
 
 export default function PeopleListScreen({ kind }: { kind: 'followers' | 'following' }) {
   const navigation = useNavigation<any>();
@@ -67,7 +68,7 @@ export default function PeopleListScreen({ kind }: { kind: 'followers' | 'follow
             }
             ListEmptyComponent={<Text style={[styles.empty, { color: colors.textSecondary }]}>No people found</Text>}
             renderItem={({ item }) => (
-              <WorldCard onPress={() => navigation.navigate('Profile', { username: item.username })}>
+              <WorldCard onPress={() => openProfile(navigation, item.username, user?.username)}>
                 <TouchableOpacity style={styles.row} activeOpacity={0.9}>
                   {item.avatar ? (
                     <Image source={{ uri: mediaUrl(item.avatar) || item.avatar }} style={styles.avatar} />

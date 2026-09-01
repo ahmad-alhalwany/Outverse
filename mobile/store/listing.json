@@ -1,0 +1,28 @@
+{
+  "android": {
+    "package": "com.cosonova.mobile",
+    "title": "Cosonova",
+    "titleAr": "كوسونوفا",
+    "category": "SOCIAL",
+    "featureGraphic": "./play-feature-graphic.png",
+    "privacyPolicy": "https://cosonova.com/privacy",
+    "supportEmail": "privacy@cosonova.com",
+    "website": "https://cosonova.com",
+    "screenshotsNeeded": [
+      "Home feed",
+      "Signals",
+      "Chat",
+      "Worlds hub",
+      "Profile"
+    ]
+  },
+  "ios": {
+    "bundleIdentifier": "com.cosonova.mobile",
+    "sku": "cosonova-mobile",
+    "primaryCategory": "Social Networking",
+    "privacyPolicy": "https://cosonova.com/privacy",
+    "supportUrl": "https://cosonova.com",
+    "marketingUrl": "https://cosonova.com"
+  },
+  "keywords": "cosonova, social, creators, stories, reels, signals, bazaar, chat"
+}

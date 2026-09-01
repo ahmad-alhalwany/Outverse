@@ -14,6 +14,8 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 
 type Experience = {
   id: string | number;
@@ -36,6 +38,7 @@ const emptyForm = {
 
 export default function ExperienceScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [items, setItems] = useState<Experience[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +52,7 @@ export default function ExperienceScreen() {
       const rows = await api.getMyExperience();
       setItems(Array.isArray(rows) ? rows : []);
     } catch {
-      Alert.alert('Error', 'Could not load experience.');
+      Alert.alert(t('common.actionFailed'), t('profile.deleteExperienceError'));
     } finally {
       setLoading(false);
       if (isRefresh) setRefreshing(false);
@@ -79,7 +82,7 @@ export default function ExperienceScreen() {
 
   const save = async () => {
     if (!form.title.trim()) {
-      Alert.alert('Title required', 'Add a role or experience title.');
+      Alert.alert(t('profile.experienceFieldTitle'), t('mobile.titleRequired'));
       return;
     }
     try {
@@ -100,17 +103,17 @@ export default function ExperienceScreen() {
       resetForm();
       void load(true);
     } catch {
-      Alert.alert('Error', 'Could not save experience.');
+      Alert.alert(t('common.actionFailed'), t('profile.saveExperienceError'));
     } finally {
       setSaving(false);
     }
   };
 
   const remove = (item: Experience) => {
-    Alert.alert('Delete experience?', item.title, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('profile.experienceDeleteLabel'), item.title, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           void (async () => {
@@ -118,7 +121,7 @@ export default function ExperienceScreen() {
               await api.deleteExperience(item.id);
               setItems((prev) => prev.filter((row) => String(row.id) !== String(item.id)));
             } catch {
-              Alert.alert('Error', 'Could not delete experience.');
+              Alert.alert(t('common.actionFailed'), t('profile.deleteExperienceError'));
             }
           })();
         },
@@ -131,10 +134,10 @@ export default function ExperienceScreen() {
       <View style={{ flex: 1 }}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {item.organization || 'Independent'}
+          {item.organization || t('mobile.independent')}
         </Text>
         <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {item.start_date || 'Start'} - {item.is_current ? 'Present' : item.end_date || 'End'}
+          {item.start_date || t('profile.experienceFieldStartDate')} - {item.is_current ? t('profile.experiencePresent') : item.end_date || t('profile.experienceFieldEndDate')}
         </Text>
         {item.description ? (
           <Text style={[styles.description, { color: colors.text }]}>{item.description}</Text>
@@ -142,42 +145,44 @@ export default function ExperienceScreen() {
       </View>
       <View style={styles.cardActions}>
         <TouchableOpacity onPress={() => edit(item)} style={[styles.smallBtn, { borderColor: colors.primary }]}>
-          <Text style={[styles.smallText, { color: colors.primary }]}>Edit</Text>
+          <Text style={[styles.smallText, { color: colors.primary }]}>{t('common.edit')}</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => remove(item)} style={[styles.smallBtn, { borderColor: '#ef4444' }]}>
-          <Text style={[styles.smallText, { color: '#ef4444' }]}>Delete</Text>
+          <Text style={[styles.smallText, { color: '#ef4444' }]}>{t('common.delete')}</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={{ fontSize: 22, color: colors.text }}>←</Text>
-        </TouchableOpacity>
-        <Text style={[styles.titleText, { color: colors.text }]}>Experience</Text>
-        <TouchableOpacity onPress={resetForm} style={styles.backBtn}>
-          <Text style={{ color: colors.primary, fontWeight: '800' }}>New</Text>
-        </TouchableOpacity>
-      </View>
+    <WorldBackdrop>
+    <SafeAreaView style={styles.safe}>
+      <WorldHeader
+        title={t('profile.experienceTitle')}
+        subtitle={t('profile.experienceSubtitleOwn')}
+        onBack={() => navigation.goBack()}
+        right={
+          <TouchableOpacity onPress={resetForm} hitSlop={10}>
+            <Text style={{ color: colors.primary, fontWeight: '800' }}>{t('profile.experienceAdd')}</Text>
+          </TouchableOpacity>
+        }
+      />
 
       <View style={[styles.formBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.formTitle, { color: colors.text }]}>
-          {editingId ? 'Edit experience' : 'Add experience'}
+          {editingId ? t('profile.experienceEditLabel') : t('profile.experienceAdd')}
         </Text>
         <TextInput
           value={form.title}
           onChangeText={(title) => setForm((prev) => ({ ...prev, title }))}
-          placeholder="Title"
+          placeholder={t('profile.experienceFieldTitle')}
           placeholderTextColor={colors.textSecondary}
           style={[styles.input, { color: colors.text, borderColor: colors.border }]}
         />
         <TextInput
           value={form.organization}
           onChangeText={(organization) => setForm((prev) => ({ ...prev, organization }))}
-          placeholder="Organization"
+          placeholder={t('profile.experienceFieldOrganization')}
           placeholderTextColor={colors.textSecondary}
           style={[styles.input, { color: colors.text, borderColor: colors.border }]}
         />
@@ -192,7 +197,7 @@ export default function ExperienceScreen() {
           <TextInput
             value={form.end_date}
             onChangeText={(end_date) => setForm((prev) => ({ ...prev, end_date }))}
-            placeholder="End date"
+            placeholder={t('profile.experienceFieldEndDate')}
             placeholderTextColor={colors.textSecondary}
             editable={!form.is_current}
             style={[styles.input, styles.dateInput, { color: colors.text, borderColor: colors.border, opacity: form.is_current ? 0.5 : 1 }]}
@@ -203,18 +208,18 @@ export default function ExperienceScreen() {
           style={styles.currentRow}
         >
           <View style={[styles.checkbox, { borderColor: colors.primary, backgroundColor: form.is_current ? colors.primary : 'transparent' }]} />
-          <Text style={{ color: colors.text, fontWeight: '700' }}>I am currently here</Text>
+          <Text style={{ color: colors.text, fontWeight: '700' }}>{t('mobile.currentlyHere')}</Text>
         </TouchableOpacity>
         <TextInput
           value={form.description}
           onChangeText={(description) => setForm((prev) => ({ ...prev, description }))}
-          placeholder="Description"
+          placeholder={t('profile.experienceFieldDescription')}
           placeholderTextColor={colors.textSecondary}
           multiline
           style={[styles.input, styles.textArea, { color: colors.text, borderColor: colors.border }]}
         />
         <TouchableOpacity onPress={save} disabled={saving} style={[styles.primaryBtn, { backgroundColor: colors.primary }]}>
-          <Text style={styles.primaryText}>{saving ? 'Saving...' : editingId ? 'Save changes' : 'Add experience'}</Text>
+          <Text style={styles.primaryText}>{saving ? t('common.loading') : editingId ? t('profile.experienceSaveChanges') : t('profile.experienceAdd')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -238,10 +243,11 @@ export default function ExperienceScreen() {
               colors={[colors.primary]}
             />
           }
-          ListEmptyComponent={<Text style={[styles.empty, { color: colors.textSecondary }]}>No experience entries yet.</Text>}
+          ListEmptyComponent={<Text style={[styles.empty, { color: colors.textSecondary }]}>{t('profile.experienceEmpty')}</Text>}
         />
       )}
     </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 

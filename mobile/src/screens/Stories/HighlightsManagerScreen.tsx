@@ -15,7 +15,9 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { mediaUrl } from '@/api/config';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import StoryViewer from '@/components/StoryViewer';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 
 type Constellation = {
   id: number;
@@ -27,6 +29,7 @@ type Constellation = {
 /** Manual Highlights manager — Cosonova “Constellations”. */
 export default function HighlightsManagerScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const userId = route.params?.userId;
@@ -63,7 +66,7 @@ export default function HighlightsManagerScreen() {
       setTitle('');
       await load();
     } catch {
-      Alert.alert('Error', 'Could not create highlight.');
+      Alert.alert(t('common.actionFailed'), t('mobile.highlightCreateError'));
     }
   };
 
@@ -76,13 +79,13 @@ export default function HighlightsManagerScreen() {
         media_type: s.video ? 'video' : 'image',
       }));
       if (!stories.length) {
-        Alert.alert('Empty', 'No stories in this highlight yet.');
+        Alert.alert(t('common.actionFailed'), t('mobile.highlightEmpty'));
         return;
       }
       setPlaylist(stories);
       setViewerOpen(true);
     } catch {
-      Alert.alert('Error', 'Could not open highlight.');
+      Alert.alert(t('common.actionFailed'), t('mobile.highlightOpenError'));
     }
   };
 
@@ -92,7 +95,7 @@ export default function HighlightsManagerScreen() {
       setArchive(rows);
       setPickingFor(constellationId);
     } catch {
-      Alert.alert('Error', 'Could not load archive.');
+      Alert.alert(t('common.actionFailed'), t('mobile.highlightArchiveError'));
     }
   };
 
@@ -102,33 +105,33 @@ export default function HighlightsManagerScreen() {
       await api.addStoryToConstellation(pickingFor, storyId);
       setPickingFor(null);
       await load();
-      Alert.alert('Added', 'Story pinned to highlight.');
+      Alert.alert(t('mobile.highlightsTitle'), t('mobile.highlightAdded'));
     } catch {
-      Alert.alert('Error', 'Could not add story.');
+      Alert.alert(t('common.actionFailed'), t('mobile.highlightAddError'));
     }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: colors.text }]}>Constellations</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <WorldBackdrop tone="story">
+    <SafeAreaView style={{ flex: 1 }}>
+      <WorldHeader
+        title={t('mobile.highlightsTitle')}
+        subtitle={t('mobile.highlightsSubtitle')}
+        tone="story"
+        onBack={() => navigation.goBack()}
+      />
 
       {isOwner ? (
         <View style={styles.createRow}>
           <TextInput
             value={title}
             onChangeText={setTitle}
-            placeholder="New highlight name"
+            placeholder={t('mobile.highlightName')}
             placeholderTextColor={colors.textSecondary}
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
           />
           <Pressable style={styles.createBtn} onPress={() => void create()}>
-            <Text style={styles.createBtnText}>Create</Text>
+            <Text style={styles.createBtnText}>{t('common.save')}</Text>
           </Pressable>
         </View>
       ) : null}
@@ -142,7 +145,7 @@ export default function HighlightsManagerScreen() {
           contentContainerStyle={{ padding: 16, gap: 12 }}
           ListEmptyComponent={
             <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 40 }}>
-              No highlights yet — pin lasting signals here.
+              {t('mobile.highlightsEmpty')}
             </Text>
           }
           renderItem={({ item }) => (
@@ -160,12 +163,12 @@ export default function HighlightsManagerScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.text, fontWeight: '800', fontSize: 16 }}>{item.title}</Text>
                 <Text style={{ color: colors.textSecondary, marginTop: 2 }}>
-                  {item.stories_count ?? 0} signals
+                  {t('mobile.highlightSignals', { count: item.stories_count ?? 0 })}
                 </Text>
               </View>
               {isOwner ? (
                 <Pressable onPress={() => void startAdd(item.id)} style={styles.addBtn}>
-                  <Text style={{ color: '#A78BFA', fontWeight: '800' }}>+ Story</Text>
+                  <Text style={{ color: '#A78BFA', fontWeight: '800' }}>{t('mobile.addStoryFull')}</Text>
                 </Pressable>
               ) : null}
             </Pressable>
@@ -176,9 +179,9 @@ export default function HighlightsManagerScreen() {
       {pickingFor != null ? (
         <View style={styles.picker}>
           <View style={styles.pickerHead}>
-            <Text style={{ color: '#fff', fontWeight: '800' }}>Pick from archive</Text>
+            <Text style={{ color: '#fff', fontWeight: '800' }}>{t('mobile.pickArchive')}</Text>
             <Pressable onPress={() => setPickingFor(null)}>
-              <Text style={{ color: '#A78BFA' }}>Done</Text>
+              <Text style={{ color: '#A78BFA' }}>{t('common.close')}</Text>
             </Pressable>
           </View>
           <FlatList
@@ -205,6 +208,7 @@ export default function HighlightsManagerScreen() {
         onClose={() => setViewerOpen(false)}
       />
     </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 

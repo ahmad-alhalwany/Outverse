@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { RTCView } from 'react-native-webrtc';
 import type { CallKind, IncomingCall } from '@/hooks/useWebRTCCall';
 import { mediaUrl } from '@/api/config';
+import { useLocale } from '@/i18n/LocaleProvider';
 
 type Props = {
   mode: 'incoming' | 'active';
@@ -38,6 +39,7 @@ export function CallOverlay({
   onHangUp,
   onToggleMute,
 }: Props) {
+  const { t } = useLocale();
   const name = incoming?.fromName || peerName;
   const avatar = incoming?.fromAvatar ?? peerAvatar;
   const kind = incoming?.callType || callKind;
@@ -49,13 +51,15 @@ export function CallOverlay({
           <>
             <Image source={avatarSource(name, avatar)} style={styles.avatar} />
             <Text style={styles.title}>{name}</Text>
-            <Text style={styles.subtitle}>Incoming {kind === 'video' ? 'video' : 'voice'} call</Text>
+            <Text style={styles.subtitle}>
+              {kind === 'video' ? t('chat.incomingVideoCall') : t('chat.incomingVoiceCall')}
+            </Text>
             <View style={styles.actions}>
               <TouchableOpacity onPress={onReject} style={[styles.button, styles.reject]}>
-                <Text style={styles.buttonText}>Decline</Text>
+                <Text style={styles.buttonText}>{t('chat.decline')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={onAccept} style={[styles.button, styles.accept]}>
-                <Text style={styles.buttonText}>Accept</Text>
+                <Text style={styles.buttonText}>{t('chat.accept')}</Text>
               </TouchableOpacity>
             </View>
           </>
@@ -71,13 +75,13 @@ export function CallOverlay({
                 <RTCView streamURL={localStreamUrl} objectFit="cover" mirror style={styles.localVideo} />
               ) : null}
             </View>
-            <Text style={styles.subtitle}>{name} · {kind === 'video' ? 'Video' : 'Voice'}</Text>
+            <Text style={styles.subtitle}>{name} · {kind === 'video' ? t('chat.video') : t('chat.voice')}</Text>
             <View style={styles.toolbar}>
               <TouchableOpacity onPress={onToggleMute} style={styles.round}>
-                <Text style={styles.roundText}>{muted ? 'Unmute' : 'Mute'}</Text>
+                <Text style={styles.roundText}>{muted ? t('chat.callUnmute') : t('chat.callMute')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={onHangUp} style={[styles.round, styles.end]}>
-                <Text style={styles.roundText}>End</Text>
+                <Text style={styles.roundText}>{t('chat.endCall')}</Text>
               </TouchableOpacity>
             </View>
           </>

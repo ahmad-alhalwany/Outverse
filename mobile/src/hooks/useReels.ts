@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import api from '../api/client';
 import type { Reel, ReelComment } from '../types';
+import type { ReactionType } from '@/lib/reactions';
 
 export type ReelsFeedMode = 'all' | 'following';
 
@@ -28,33 +29,41 @@ export function useReels(feed: ReelsFeedMode = 'all') {
     }
   }, [feed]);
 
-  const like = useCallback((reelId: string) => {
-    const wasReacted = reels.find((r) => String(r.id) === String(reelId))?.my_reaction === 'spark';
+  const like = useCallback((reelId: string, type: ReactionType = 'spark') => {
+    const current = reels.find((r) => String(r.id) === String(reelId));
+    const wasSame = current?.my_reaction === type;
+    const next = wasSame ? null : type;
     setReels((prev) =>
       prev.map((r) =>
         String(r.id) === String(reelId)
           ? {
               ...r,
-              is_liked: !wasReacted,
-              my_reaction: wasReacted ? null : 'spark',
-              likes_count: wasReacted ? r.likes_count - 1 : r.likes_count + 1,
+              is_liked: !!next,
+              my_reaction: next,
+              likes_count: wasSame
+                ? Math.max(0, r.likes_count - 1)
+                : r.likes_count + (current?.my_reaction ? 0 : 1),
             }
           : r
       )
     );
-    api.reactToReel(reelId, wasReacted ? null : 'spark').catch(() => {
+    api.reactToReel(reelId, next).then((data) => {
       setReels((prev) =>
         prev.map((r) =>
           String(r.id) === String(reelId)
             ? {
                 ...r,
-                is_liked: wasReacted,
-                my_reaction: wasReacted ? 'spark' : null,
-                likes_count: wasReacted ? r.likes_count + 1 : r.likes_count - 1,
+                my_reaction: data.my_reaction,
+                is_liked: !!data.my_reaction,
+                reaction_counts: data.reaction_counts || r.reaction_counts,
               }
             : r
         )
       );
+    }).catch(() => {
+      if (current) {
+        setReels((prev) => prev.map((r) => (String(r.id) === String(reelId) ? current : r)));
+      }
     });
   }, [reels]);
 

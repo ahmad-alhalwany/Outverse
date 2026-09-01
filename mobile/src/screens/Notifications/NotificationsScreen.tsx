@@ -1,322 +1,574 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList, StyleSheet, SafeAreaView, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import { api } from '@/api/client';
 import { Notification } from '@/types';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
+import { openProfile } from '@/lib/nav';
 
-type FilterKey = 'all' | 'mentions' | 'likes' | 'follows' | 'live';
+type FilterKey = 'all' | 'reactions' | 'comments' | 'stories' | 'messages' | 'challenges' | 'ideas';
+type ListRow =
+  | { kind: 'section'; key: string; label: string }
+  | { kind: 'item'; key: string; item: Notification };
 
-const FILTERS: Array<{ key: FilterKey; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'mentions', label: 'Mentions' },
-  { key: 'likes', label: 'Likes' },
-  { key: 'follows', label: 'Follows' },
-  { key: 'live', label: 'Live' },
+const FILTERS: Array<{ key: FilterKey; labelKey: string; icon: keyof typeof Ionicons.glyphMap }> = [
+  { key: 'all', labelKey: 'notifications.filterAll', icon: 'apps-outline' },
+  { key: 'reactions', labelKey: 'notifications.filterReactions', icon: 'heart-outline' },
+  { key: 'comments', labelKey: 'notifications.filterComments', icon: 'chatbubbles-outline' },
+  { key: 'stories', labelKey: 'notifications.filterStories', icon: 'book-outline' },
+  { key: 'messages', labelKey: 'notifications.filterMessages', icon: 'mail-outline' },
+  { key: 'challenges', labelKey: 'notifications.filterChallenges', icon: 'flame-outline' },
+  { key: 'ideas', labelKey: 'notifications.filterIdeas', icon: 'bulb-outline' },
 ];
 
+function asRecord(notification: Notification) {
+  return notification as Notification & Record<string, unknown>;
+}
+
 function notificationBucket(notification: Notification): string {
-  const n = notification as Notification & Record<string, any>;
-  return `${n.type || ''} ${n.verb || ''} ${n.target_type || ''}`.toLowerCase();
+  const n = asRecord(notification);
+  return `${n.type || ''} ${n.verb || ''} ${n.target_type || ''} ${n.text || ''}`.toLowerCase();
 }
 
 function matchesFilter(notification: Notification, filter: FilterKey): boolean {
   if (filter === 'all') return true;
   const haystack = notificationBucket(notification);
-  if (filter === 'mentions') return haystack.includes('mention') || haystack.includes('tag');
-  if (filter === 'likes') return haystack.includes('like') || haystack.includes('reaction');
-  if (filter === 'follows') return haystack.includes('follow');
-  return haystack.includes('live') || haystack.includes('stream');
+  if (filter === 'reactions') return /like|reaction|follow|share/.test(haystack);
+  if (filter === 'comments') return /comment|mention|tag/.test(haystack);
+  if (filter === 'stories') return /story|highlight/.test(haystack);
+  if (filter === 'messages') return /message|chat|dm/.test(haystack);
+  if (filter === 'challenges') return /challenge/.test(haystack);
+  return /idea|bazaar/.test(haystack);
 }
 
-export default function NotificationsScreen({ navigation }: any) {
-  const { colors } = useTheme();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [filter, setFilter] = useState<FilterKey>('all');
-
-  const fetchNotifications = useCallback(async (pageNum = 1, isRefresh = false) => {
-    try {
-      const response = await api.getNotifications({ page: pageNum, unread_only: false });
-      const newNotifications = response.results || response;
-      
-      if (isRefresh || pageNum === 1) {
-        setNotifications(newNotifications);
-      } else {
-        setNotifications(prev => [...prev, ...newNotifications]);
-      }
-      setHasMore(!!response.has_more || !!response.next);
-      setPage(pageNum);
-    } catch (error) {
-      console.error('Failed to fetch notifications:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  const handleRefresh = () => {
-    fetchNotifications(1, true);
-  };
-
-  const handleLoadMore = () => {
-    if (!loading && hasMore) {
-      fetchNotifications(page + 1);
-    }
-  };
-
-  const handleNotificationPress = async (notification: Notification) => {
-    if (!notification.is_read) {
-      try {
-        await api.markNotificationRead(notification.id.toString());
-        setNotifications(prev => 
-          prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n)
-        );
-      } catch (error) {
-        console.error('Failed to mark as read:', error);
-      }
-    }
-
-    const n = notification as Notification & Record<string, any>;
-    const verb = String(n.verb || n.type || n.target_type || '').toLowerCase();
-    const targetType = String(n.target_type || '').toLowerCase();
-    const pickId = (...keys: string[]) => keys.map((key) => n[key]).find((value) => value != null);
-
-    if (verb.includes('reel')) {
-      navigation.navigate('Reels', { reelId: pickId('reel_id', 'target_id', 'object_id') });
-    } else if (verb.includes('story')) {
-      navigation.navigate('StoryMap', { storyId: pickId('story_id', 'target_id', 'object_id') });
-    } else if (verb.includes('live')) {
-      navigation.navigate('LiveViewer', { sessionId: pickId('live_id', 'session_id', 'target_id', 'object_id') });
-    } else if (verb.includes('idea') || targetType === 'idea') {
-      navigation.navigate('BazaarDetail', { ideaId: pickId('idea_id', 'target_id', 'object_id') });
-    } else if (verb.includes('chat') || verb.includes('message') || targetType.includes('chat')) {
-      const roomId = pickId('room_id', 'chat_room_id');
-      const conversationId = pickId('conversation_id', 'target_id', 'object_id');
-      if (roomId) {
-        navigation.navigate('Room', { roomId, roomName: n.room_name || n.target_text });
-      } else {
-        navigation.navigate('Conversation', { conversationId });
-      }
-    } else if (verb.includes('community') || targetType === 'community') {
-      const slug = pickId('community_slug', 'slug', 'target_slug');
-      if (slug) {
-        navigation.navigate('CommunityDetail', { slug });
-      } else {
-        navigation.navigate('Communities');
-      }
-    } else if (verb.includes('video') || targetType === 'video') {
-      navigation.navigate('Videos', { videoId: pickId('video_id', 'target_id', 'object_id') });
-    } else if (notification.post) {
-      navigation.navigate('PostDetail', { postId: notification.post.id });
-    } else if (notification.actor) {
-      navigation.navigate('Profile', { username: notification.actor.username });
-    }
-  };
-
-  const handleMarkAllRead = async () => {
-    try {
-      await api.markAllNotificationsRead();
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
-  };
-
-  const unreadCount = notifications.filter(n => !n.is_read).length;
-  const filteredNotifications = notifications.filter((notification) => matchesFilter(notification, filter));
-
-  useEffect(() => {
-    fetchNotifications(1);
-  }, [fetchNotifications]);
-
-  const renderNotification = ({ item }: { item: Notification }) => {
-    const getIcon = () => {
-      switch (item.type) {
-        case 'like': return '❤️';
-        case 'comment': return '💬';
-        case 'follow': return '👤';
-        case 'mention': return '📝';
-        case 'repost': return '🔁';
-        case 'message': return '📨';
-        default: return '🔔';
-      }
-    };
-
-    const getText = () => {
-      const actorName = item.actor?.display_name || item.actor?.username || 'Someone';
-      switch (item.type) {
-        case 'like': return `${actorName} liked your post`;
-        case 'comment': return `${actorName} commented on your post`;
-        case 'follow': return `${actorName} started following you`;
-        case 'mention': return `${actorName} mentioned you`;
-        case 'repost': return `${actorName} reposted your post`;
-        case 'message': return `${actorName} sent you a message`;
-        default: return 'New notification';
-      }
-    };
-
-    return (
-      <TouchableOpacity
-        style={[styles.notificationItem, { backgroundColor: item.is_read ? colors.surface : colors.primaryLight, borderColor: colors.border }]}
-        onPress={() => handleNotificationPress(item)}
-        activeOpacity={0.8}
-      >
-        <View style={styles.notificationContent}>
-          <View style={[styles.notificationIcon, { backgroundColor: item.is_read ? colors.surfaceSecondary : colors.primary }]}>
-            <Text style={{ fontSize: 18 }}>{getIcon()}</Text>
-          </View>
-          <View style={styles.notificationTextContainer}>
-            <Text style={[styles.notificationText, { color: colors.text }]}>{getText()}</Text>
-            <Text style={[styles.notificationTime, { color: colors.textSecondary }]}>{formatTime(item.created_at)}</Text>
-          </View>
-          {!item.is_read && (
-            <View style={[styles.unreadDot, { backgroundColor: colors.primary }]} />
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  if (loading && notifications.length === 0) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </SafeAreaView>
-    );
+function targetId(value: unknown): string | number | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value === 'object' && value && 'id' in value) {
+    const id = (value as { id?: string | number }).id;
+    return id == null ? undefined : id;
   }
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <View style={styles.headerLeft}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
-        </View>
-        {unreadCount > 0 && (
-          <TouchableOpacity onPress={handleMarkAllRead} style={styles.markAllReadButton}>
-            <Text style={[styles.markAllReadText, { color: colors.primary }]}>Mark all read</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      <View style={[styles.filterRow, { borderBottomColor: colors.border }]}>
-        {FILTERS.map((item) => {
-          const active = filter === item.key;
-          return (
-            <TouchableOpacity
-              key={item.key}
-              onPress={() => setFilter(item.key)}
-              style={[
-                styles.filterChip,
-                {
-                  backgroundColor: active ? colors.primary : colors.surface,
-                  borderColor: active ? colors.primary : colors.border,
-                },
-              ]}
-            >
-              <Text style={{ color: active ? '#fff' : colors.text, fontWeight: '700', fontSize: 12 }}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <FlatList
-        data={filteredNotifications}
-        renderItem={renderNotification}
-        keyExtractor={item => item.id.toString()}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={[colors.primary]}
-            progressBackgroundColor={colors.surface}
-          />
-        }
-        onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
-        ListEmptyComponent={
-          !loading && filteredNotifications.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={{ fontSize: 48 }}>🔔</Text>
-              <Text style={[styles.emptyText, { color: colors.textSecondary, marginTop: 16 }]}>
-                {filter === 'all' ? 'No notifications yet' : `No ${FILTERS.find((f) => f.key === filter)?.label.toLowerCase()} notifications`}
-              </Text>
-              <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>When you get notifications, they'll appear here</Text>
-            </View>
-          ) : null
-        }
-        ListFooterComponent={
-          hasMore ? (
-            <View style={styles.loadMore}>
-              <ActivityIndicator size="small" color={colors.primary} />
-            </View>
-          ) : null
-        }
-      />
-    </SafeAreaView>
-  );
+  return value as string | number;
 }
 
-function formatTime(dateString: string): string {
+function openNotificationTarget(navigation: any, notification: Notification) {
+  const n = asRecord(notification);
+  const kind = String(n.type || n.verb || '').toLowerCase();
+  const postId = targetId(n.post);
+  const reelId = targetId(n.reel);
+  const storyId = targetId(n.story);
+  const ideaId = targetId(n.idea);
+  const sessionId = targetId(n.studio_session);
+  const actorUsername = notification.actor?.username;
+
+  if (reelId) {
+    navigation.navigate('Reels', { focusId: reelId });
+    return;
+  }
+  if (postId) {
+    navigation.navigate('PostDetail', { postId });
+    return;
+  }
+  if (storyId) {
+    navigation.navigate('StoryMap', { storyId });
+    return;
+  }
+  if (ideaId) {
+    navigation.navigate('BazaarDetail', { ideaId });
+    return;
+  }
+  if (sessionId) {
+    navigation.navigate('StudioSession', { sessionId });
+    return;
+  }
+  if (kind === 'follow' && actorUsername) {
+    openProfile(navigation, actorUsername);
+    return;
+  }
+  if (kind.includes('chat') || kind.includes('message')) {
+    navigation.navigate('Chat');
+    return;
+  }
+  if (kind.includes('challenge')) {
+    navigation.navigate('Lab');
+    return;
+  }
+  if (kind.startsWith('forge_')) {
+    navigation.navigate('Forge');
+    return;
+  }
+  if (kind.includes('shop') || kind === 'tip' || kind.includes('purchase')) {
+    navigation.navigate('Shop');
+    return;
+  }
+  if (kind.includes('live')) {
+    navigation.navigate('Live');
+    return;
+  }
+  if (kind.includes('achievement')) {
+    navigation.navigate('Achievements');
+    return;
+  }
+  if (kind.includes('video')) {
+    navigation.navigate('Videos');
+    return;
+  }
+  if (kind.includes('community')) {
+    navigation.navigate('Communities');
+    return;
+  }
+  if (actorUsername) {
+    openProfile(navigation, actorUsername);
+    return;
+  }
+  navigation.navigate('Search');
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function groupLabel(iso: string, t: (key: string) => string) {
+  const now = new Date();
+  const date = new Date(iso);
+  const diffDays = Math.floor((startOfDay(now).getTime() - startOfDay(date).getTime()) / 86400000);
+  if (diffDays <= 0) return t('common.today');
+  if (diffDays === 1) return t('common.yesterday');
+  if (diffDays < 7) return t('common.thisWeek');
+  return t('common.earlier');
+}
+
+function formatTime(dateString: string, locale: string) {
   const date = new Date(dateString);
   const now = new Date();
   const diff = now.getTime() - date.getTime();
   const mins = Math.floor(diff / 60000);
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
-  if (mins < 1) return 'Just now';
+  if (mins < 1) return locale === 'ar' ? 'الآن' : 'Just now';
   if (mins < 60) return `${mins}m`;
   if (hours < 24) return `${hours}h`;
   if (days < 7) return `${days}d`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(locale === 'ar' ? 'ar' : 'en-US', { month: 'short', day: 'numeric' });
+}
+
+function iconFor(notification: Notification): keyof typeof Ionicons.glyphMap {
+  const kind = String(asRecord(notification).type || asRecord(notification).verb || '').toLowerCase();
+  if (kind.includes('like') || kind.includes('reaction')) return 'heart';
+  if (kind.includes('comment')) return 'chatbubbles';
+  if (kind.includes('follow')) return 'person-add';
+  if (kind.includes('mention')) return 'at';
+  if (kind.includes('repost') || kind.includes('share')) return 'repeat';
+  if (kind.includes('message') || kind.includes('chat')) return 'mail';
+  if (kind.includes('challenge')) return 'flag';
+  if (kind.includes('idea')) return 'bulb';
+  if (kind.includes('story')) return 'book';
+  if (kind.includes('shop') || kind.includes('tip')) return 'cart';
+  if (kind.includes('live')) return 'radio';
+  return 'notifications';
+}
+
+function titleFor(
+  notification: Notification,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
+  const n = asRecord(notification);
+  const actorName = notification.actor?.display_name || notification.actor?.username || t('notifications.defaultActor');
+  const kind = String(n.type || n.verb || '').toLowerCase();
+  const text = String(n.text || '');
+
+  if (kind.includes('challenge')) {
+    if (/invite/i.test(text)) return t('notifications.titleChallengeInvite');
+    if (/completed|finished/i.test(text)) return t('notifications.titleChallengeCompleted');
+    if (/progress|halfway|leading/i.test(text)) return t('notifications.titleChallengeProgress');
+    return t('notifications.titleChallengeUpdate');
+  }
+  if (kind.includes('reaction') || kind.includes('like')) return t('notifications.titleNewReaction');
+  if (kind.includes('share') || kind.includes('repost')) return t('notifications.titleSignalShared');
+  if (kind.includes('comment')) return t('notifications.titleNewComment');
+  if (kind.includes('mention')) return t('notifications.titleMention');
+  if (kind.includes('message') || kind.includes('chat')) return t('notifications.titleNewMessage');
+  if (kind.includes('follow')) return t('notifications.titleFollowed', { name: actorName });
+  if (kind.includes('idea')) return t('notifications.titleIdeaBazaar');
+  if (kind.includes('studio')) return t('notifications.titleStudioInvite');
+  if (kind.includes('shop') || kind.includes('tip')) return t('notifications.titleShopUpdate');
+  if (/achievement/i.test(text) || kind.includes('achievement')) return t('notifications.titleAchievementUnlocked');
+  return String(n.verb || actorName);
+}
+
+function bodyFor(
+  notification: Notification,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+) {
+  const n = asRecord(notification);
+  const actorName = notification.actor?.display_name || notification.actor?.username || t('notifications.someoneActor');
+  const kind = String(n.type || n.verb || '').toLowerCase();
+  const text = String(n.text || notification.target_text || '').trim();
+  if (kind.includes('follow')) return t('notifications.descFollowedYou', { name: actorName });
+  if (text) return kind.includes('reaction') || kind.includes('comment') || kind.includes('mention') || kind.includes('idea')
+    ? `${actorName} ${text}`
+    : text;
+  return notification.target_text || '';
+}
+
+function asNotificationList(response: unknown): Notification[] {
+  if (Array.isArray(response)) return response as Notification[];
+  if (response && typeof response === 'object' && Array.isArray((response as { results?: Notification[] }).results)) {
+    return (response as { results: Notification[] }).results;
+  }
+  return [];
+}
+
+export default function NotificationsScreen({ navigation }: any) {
+  const { colors, isDark } = useTheme();
+  const { t, isRTL, locale } = useLocale();
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [filter, setFilter] = useState<FilterKey>('all');
+
+  const fetchNotifications = useCallback(async (pageNum = 1, isRefresh = false) => {
+    try {
+      if (!isRefresh && pageNum === 1) setError(false);
+      const response = await api.getNotifications({ page: pageNum, unread_only: false });
+      const next = asNotificationList(response);
+      setNotifications((prev) => (isRefresh || pageNum === 1 ? next : [...prev, ...next]));
+      setHasMore(Boolean((response as { has_more?: boolean; next?: string })?.has_more || (response as { next?: string })?.next));
+      setPage(pageNum);
+    } catch {
+      if (pageNum === 1) setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchNotifications(1);
+  }, [fetchNotifications]);
+
+  const handleNotificationPress = (notification: Notification) => {
+    if (!notification.is_read) {
+      setNotifications((prev) => prev.map((n) => (n.id === notification.id ? { ...n, is_read: true } : n)));
+      void api.markNotificationRead(notification.id).catch(() => {
+        setNotifications((prev) => prev.map((n) => (n.id === notification.id ? { ...n, is_read: false } : n)));
+      });
+    }
+    openNotificationTarget(navigation, notification);
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+  const filtered = notifications.filter((notification) => matchesFilter(notification, filter));
+  const rows = useMemo<ListRow[]>(() => {
+    const out: ListRow[] = [];
+    let last = '';
+    filtered.forEach((item) => {
+      const label = groupLabel(item.created_at, t);
+      if (label !== last) {
+        out.push({ kind: 'section', key: `section-${label}`, label });
+        last = label;
+      }
+      out.push({ kind: 'item', key: `item-${item.id}`, item });
+    });
+    return out;
+  }, [filtered, t]);
+
+  return (
+    <WorldBackdrop>
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <WorldHeader
+          title={t('notifications.title')}
+          subtitle={t('notifications.subtitle')}
+          onBack={() => navigation.goBack()}
+          right={
+            unreadCount > 0 ? (
+              <Pressable
+                onPress={() => void handleMarkAllRead()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('notifications.markAll')}
+                style={styles.markAllHit}
+              >
+                <Ionicons name="checkmark-done-outline" size={20} color={colors.primary} />
+              </Pressable>
+            ) : null
+          }
+        />
+
+        {unreadCount > 0 ? (
+          <Pressable onPress={() => void handleMarkAllRead()} style={styles.markAllRow}>
+            <Text style={[styles.markAllText, { color: colors.primary, textAlign: isRTL ? 'right' : 'left' }]}>
+              {t('notifications.markAll')} · {unreadCount}
+            </Text>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.tabsWrap}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.tabs, isRTL && { flexDirection: 'row-reverse' }]}
+          >
+            {FILTERS.map((item) => {
+              const active = filter === item.key;
+              return (
+                <Pressable
+                  key={item.key}
+                  onPress={() => setFilter(item.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  style={({ pressed }) => [
+                    styles.tab,
+                    {
+                      backgroundColor: active
+                        ? isDark
+                          ? 'rgba(196,181,253,0.18)'
+                          : 'rgba(124,58,237,0.12)'
+                        : isDark
+                          ? 'rgba(255,255,255,0.04)'
+                          : '#FFFFFF',
+                      borderColor: active ? colors.primary : colors.border,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Ionicons name={item.icon} size={14} color={active ? colors.primary : colors.textSecondary} />
+                  <Text style={{ color: active ? colors.primary : colors.text, fontWeight: '700', fontSize: 13 }}>
+                    {t(item.labelKey)}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {loading && notifications.length === 0 ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>{t('notifications.loading')}</Text>
+          </View>
+        ) : error && notifications.length === 0 ? (
+          <View style={styles.center}>
+            <View style={[styles.emptyIcon, { backgroundColor: isDark ? 'rgba(196,181,253,0.12)' : 'rgba(124,58,237,0.10)' }]}>
+              <Ionicons name="cloud-offline-outline" size={28} color={colors.primary} />
+            </View>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>{t('notifications.loadError')}</Text>
+            <Pressable
+              onPress={() => {
+                setLoading(true);
+                void fetchNotifications(1, true);
+              }}
+              style={[styles.cta, { backgroundColor: colors.primary }]}
+            >
+              <Text style={styles.ctaText}>{t('notifications.retry')}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <FlatList
+            style={styles.flex}
+            data={rows}
+            keyExtractor={(row) => row.key}
+            contentContainerStyle={rows.length === 0 ? styles.emptyList : styles.list}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true);
+                  void fetchNotifications(1, true);
+                }}
+                colors={[colors.primary]}
+                tintColor={colors.primary}
+                progressBackgroundColor={colors.surface}
+              />
+            }
+            onEndReached={() => {
+              if (!loading && hasMore) void fetchNotifications(page + 1);
+            }}
+            onEndReachedThreshold={0.4}
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <View style={[styles.emptyIcon, { backgroundColor: isDark ? 'rgba(196,181,253,0.12)' : 'rgba(124,58,237,0.10)' }]}>
+                  <Ionicons name="notifications-outline" size={28} color={colors.primary} />
+                </View>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>{t('notifications.empty')}</Text>
+                <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>{t('notifications.allCaughtUp')}</Text>
+                <Pressable
+                  onPress={() => navigation.navigate('Search')}
+                  style={[styles.cta, { backgroundColor: colors.primary }]}
+                >
+                  <Text style={styles.ctaText}>{t('notifications.emptyCta')}</Text>
+                </Pressable>
+              </View>
+            }
+            ListFooterComponent={
+              hasMore && filtered.length > 0 ? (
+                <View style={styles.footer}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : null
+            }
+            renderItem={({ item: row }) => {
+              if (row.kind === 'section') {
+                return (
+                  <Text style={[styles.section, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left' }]}>
+                    {row.label}
+                  </Text>
+                );
+              }
+              const item = row.item;
+              const unread = !item.is_read;
+              const body = bodyFor(item, t);
+              return (
+                <Pressable
+                  onPress={() => void handleNotificationPress(item)}
+                  style={({ pressed }) => [
+                    styles.card,
+                    {
+                      backgroundColor: isDark ? 'rgba(26,22,48,0.88)' : '#FFFFFF',
+                      borderColor: unread ? colors.primary : colors.border,
+                      opacity: pressed ? 0.88 : 1,
+                      flexDirection: isRTL ? 'row-reverse' : 'row',
+                    },
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.iconWrap,
+                      {
+                        backgroundColor: unread
+                          ? isDark
+                            ? 'rgba(196,181,253,0.18)'
+                            : 'rgba(124,58,237,0.12)'
+                          : isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : 'rgba(124,58,237,0.06)',
+                      },
+                    ]}
+                  >
+                    <Ionicons name={iconFor(item)} size={18} color={unread ? colors.primary : colors.icon} />
+                  </View>
+                  <View style={styles.body}>
+                    <View style={[styles.titleRow, isRTL && { flexDirection: 'row-reverse' }]}>
+                      <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+                        {titleFor(item, t)}
+                      </Text>
+                      {unread ? (
+                        <View style={[styles.newBadge, { backgroundColor: colors.primary }]}>
+                          <Text style={styles.newBadgeText}>{t('notifications.newBadge')}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {body ? (
+                      <Text style={[styles.desc, { color: colors.textSecondary, textAlign: isRTL ? 'right' : 'left' }]} numberOfLines={2}>
+                        {body}
+                      </Text>
+                    ) : null}
+                    <Text style={[styles.time, { color: colors.textMuted, textAlign: isRTL ? 'right' : 'left' }]}>
+                      {formatTime(item.created_at, locale)}
+                    </Text>
+                  </View>
+                  <Ionicons name={isRTL ? 'chevron-back' : 'chevron-forward'} size={16} color={colors.textMuted} />
+                </Pressable>
+              );
+            }}
+          />
+        )}
+      </SafeAreaView>
+    </WorldBackdrop>
+  );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  safe: { flex: 1 },
+  flex: { flex: 1 },
+  markAllHit: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  markAllRow: { paddingHorizontal: 20, paddingBottom: 4 },
+  markAllText: { fontSize: 13, fontWeight: '700' },
+  tabsWrap: { height: 48, marginBottom: 8 },
+  tabs: { paddingHorizontal: 16, alignItems: 'center', gap: 8 },
+  tab: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  headerLeft: { flex: 1 },
-  headerTitle: { fontSize: 20, fontWeight: '700' },
-  markAllReadButton: { paddingHorizontal: 12, paddingVertical: 6 },
-  markAllReadText: { fontSize: 14, fontWeight: '600' },
-  filterRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  listContent: { paddingVertical: 8 },
-  notificationItem: {
-    marginHorizontal: 12,
-    marginBottom: 8,
-    borderRadius: 12,
-    padding: 12,
+    gap: 6,
+    paddingHorizontal: 12,
+    minHeight: 36,
+    borderRadius: 999,
     borderWidth: 1,
   },
-  notificationContent: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  list: { paddingHorizontal: 16, paddingBottom: 40 },
+  emptyList: { flexGrow: 1, paddingHorizontal: 16 },
+  section: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    marginTop: 8,
+    marginBottom: 10,
   },
-  notificationIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+  card: {
     alignItems: 'center',
-    marginRight: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 10,
   },
-  notificationTextContainer: { flex: 1, minWidth: 0 },
-  notificationText: { fontSize: 15, lineHeight: 21, marginBottom: 4 },
-  notificationTime: { fontSize: 12, fontWeight: '500' },
-  unreadDot: { width: 8, height: 8, borderRadius: 4, marginLeft: 8, marginTop: 4 },
-  emptyState: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyText: { fontSize: 18, fontWeight: '600', textAlign: 'center' },
-  emptySubtext: { fontSize: 14, textAlign: 'center', marginTop: 8 },
-  loadMore: { padding: 20, alignItems: 'center' },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  body: { flex: 1, minWidth: 0, gap: 4 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  title: { flex: 1, fontSize: 15, fontWeight: '700' },
+  desc: { fontSize: 13, lineHeight: 19 },
+  time: { fontSize: 12, fontWeight: '600' },
+  newBadge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  newBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 28 },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  emptyTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 8 },
+  emptyHint: { fontSize: 14, lineHeight: 21, textAlign: 'center', maxWidth: 320, marginTop: 6 },
+  cta: {
+    marginTop: 16,
+    paddingHorizontal: 18,
+    minHeight: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ctaText: { color: '#fff', fontWeight: '700' },
+  footer: { paddingVertical: 18, alignItems: 'center' },
 });

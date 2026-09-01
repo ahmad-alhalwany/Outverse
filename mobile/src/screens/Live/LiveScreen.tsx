@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import { api } from '@/api/client';
 import {
   WorldBackdrop,
@@ -33,6 +34,7 @@ type LiveRow = {
 
 export default function LiveScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [sessions, setSessions] = useState<LiveRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,11 +64,11 @@ export default function LiveScreen() {
     if (goingLive) return;
     setGoingLive(true);
     try {
-      const session = await api.createLiveSession({ title: 'My Live Stream' });
+      const session = await api.createLiveSession({ title: t('mobile.liveSessionFallback') });
       const started = await api.startLiveSession(session.id);
       navigation.navigate('LiveViewer', { sessionId: started.id || session.id, isHost: true });
     } catch (error: any) {
-      Alert.alert('Could not go live', error?.response?.data?.detail || 'Try again.');
+      Alert.alert(t('mobile.couldNotGoLive'), error?.response?.data?.detail || t('common.tryAgain'));
     } finally {
       setGoingLive(false);
     }
@@ -78,8 +80,8 @@ export default function LiveScreen() {
     <WorldBackdrop tone="live">
       <SafeAreaView style={{ flex: 1 }}>
         <WorldHeader
-          title="Live"
-          subtitle="Watch & broadcast"
+          title={t('live.title')}
+          subtitle={t('live.subtitle')}
           tone="live"
           onBack={() => navigation.goBack()}
           right={
@@ -87,7 +89,7 @@ export default function LiveScreen() {
               onPress={goingLive ? undefined : handleGoLive}
               style={[styles.goLiveText, { color: goingLive ? colors.textSecondary : colors.primary }]}
             >
-              {goingLive ? '…' : 'Go Live'}
+              {goingLive ? '…' : t('live.goLive')}
             </Text>
           }
         />
@@ -115,8 +117,8 @@ export default function LiveScreen() {
               liveCount > 0 ? (
                 <WorldCard style={styles.statsCard}>
                   <View style={styles.statsRow}>
-                    <WorldStat label="Live now" value={liveCount} />
-                    <WorldStat label="Total sessions" value={sessions.length} />
+                    <WorldStat label={t('live.liveNow')} value={liveCount} />
+                    <WorldStat label={t('mobile.totalSessions')} value={sessions.length} />
                   </View>
                 </WorldCard>
               ) : null
@@ -124,7 +126,7 @@ export default function LiveScreen() {
             ListEmptyComponent={
               <View style={styles.center}>
                 <Text style={{ fontSize: 40, marginBottom: 8 }}>📡</Text>
-                <Text style={{ color: colors.textSecondary }}>No live sessions right now</Text>
+                <Text style={{ color: colors.textSecondary }}>{t('live.noLiveSessions')}</Text>
               </View>
             }
             renderItem={({ item }) => {
@@ -133,7 +135,7 @@ export default function LiveScreen() {
                 <WorldCard onPress={() => navigation.navigate('LiveViewer', { sessionId: item.id })}>
                   <View style={styles.cardTop}>
                     <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-                      {item.title || 'Untitled stream'}
+                      {item.title || t('mobile.untitledStream')}
                     </Text>
                     <View style={[styles.liveDot, { backgroundColor: live ? '#ef4444' : colors.textSecondary }]} />
                   </View>
@@ -143,15 +145,15 @@ export default function LiveScreen() {
                     </Text>
                   ) : null}
                   <View style={styles.metaRow}>
-                    <WorldStat label="Viewers" value={item.current_viewers ?? 0} />
+                    <WorldStat label={t('mobile.views')} value={item.current_viewers ?? 0} />
                     {item.user ? (
-                      <Text style={[styles.meta, { color: colors.textSecondary }]}>by {item.user}</Text>
+                      <Text style={[styles.meta, { color: colors.textSecondary }]}>{t('common.by')} {item.user}</Text>
                     ) : null}
                     <Text style={[styles.statusBadge, {
                       color: live ? '#ef4444' : colors.textSecondary,
                       fontWeight: live ? '700' : '400',
                     }]}>
-                      {live ? '● LIVE' : item.status || 'scheduled'}
+                      {live ? t('live.statusLive') : item.status || t('live.statusScheduled')}
                     </Text>
                   </View>
                 </WorldCard>

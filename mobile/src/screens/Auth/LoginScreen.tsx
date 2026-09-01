@@ -7,6 +7,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -14,9 +15,16 @@ import { useAuth } from '../../auth/AuthContext';
 import { api } from '../../api/client';
 import Button from '../../components/Button';
 import Input from '../../components/Input';
+import { useTheme } from '../../hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
+  const { t } = useLocale();
+  const { width } = useWindowDimensions();
+  const gutter = width < 360 ? 12 : width >= 768 ? 28 : 16;
+  const formMax = Math.min(Math.max(width - gutter * 2, 280), 440);
   const { login, loginWithGoogle, loginWithApple, complete2FA, pending2FA, clearPending2FA } = useAuth();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
@@ -27,9 +35,9 @@ export default function LoginScreen() {
 
   const validate = () => {
     const e: typeof errors = {};
-    if (!identifier.trim()) e.identifier = 'اسم المستخدم أو البريد مطلوب';
-    if (!password) e.password = 'كلمة المرور مطلوبة';
-    else if (password.length < 6) e.password = 'كلمة المرور قصيرة جداً';
+    if (!identifier.trim()) e.identifier = t('mobile.usernameOrEmail');
+    if (!password) e.password = t('mobile.passwordRequired');
+    else if (password.length < 6) e.password = t('auth.passwordMin');
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -40,7 +48,7 @@ export default function LoginScreen() {
     try {
       const result = await login(identifier.trim(), password);
       if (result.requires_2fa) {
-        Alert.alert('التحقق بخطوتين', 'أدخل رمز المصادقة من تطبيقك.');
+        Alert.alert(t('mobile.twoFactorTitle'), t('mobile.twoFactorBody'));
       }
     } catch (err: any) {
       const data = err?.response?.data || {};
@@ -48,9 +56,9 @@ export default function LoginScreen() {
         data.detail ||
         data.error ||
         (data.code === 'email_not_verified'
-          ? 'يرجى تأكيد البريد الإلكتروني قبل تسجيل الدخول.'
-          : 'فشل تسجيل الدخول');
-      Alert.alert('خطأ', msg);
+          ? t('mobile.verifyEmailFirst')
+          : t('auth.loginFailed'));
+      Alert.alert(t('auth.signIn'), msg);
     } finally {
       setLoading(false);
     }
@@ -58,15 +66,15 @@ export default function LoginScreen() {
 
   const handle2FA = async () => {
     if (!otp.trim()) {
-      setErrors({ otp: 'أدخل رمز التحقق' });
+      setErrors({ otp: t('mobile.authenticatorCode') });
       return;
     }
     setLoading(true);
     try {
       await complete2FA(otp.trim());
     } catch (err: any) {
-      const msg = err?.response?.data?.error || err?.message || 'رمز غير صحيح';
-      Alert.alert('خطأ', msg);
+      const msg = err?.response?.data?.error || err?.message || 'Invalid code';
+      Alert.alert(t('auth.signIn'), msg);
     } finally {
       setLoading(false);
     }
@@ -77,10 +85,10 @@ export default function LoginScreen() {
     try {
       const result = await loginWithGoogle();
       if (result.requires_2fa) {
-        Alert.alert('التحقق بخطوتين', 'أدخل رمز المصادقة من تطبيقك.');
+        Alert.alert(t('mobile.twoFactorTitle'), t('mobile.twoFactorBody'));
       }
     } catch (err: any) {
-      Alert.alert('خطأ', err?.message || 'فشل تسجيل الدخول عبر Google');
+      Alert.alert(t('auth.signIn'), err?.message || t('auth.googleFailed'));
     } finally {
       setLoading(false);
     }
@@ -91,10 +99,10 @@ export default function LoginScreen() {
     try {
       const result = await loginWithApple();
       if (result.requires_2fa) {
-        Alert.alert('التحقق بخطوتين', 'أدخل رمز المصادقة من تطبيقك.');
+        Alert.alert(t('mobile.twoFactorTitle'), t('mobile.twoFactorBody'));
       }
     } catch (err: any) {
-      Alert.alert('خطأ', err?.message || 'فشل تسجيل الدخول عبر Apple');
+      Alert.alert(t('auth.signIn'), err?.message || t('auth.appleFailed'));
     } finally {
       setLoading(false);
     }
@@ -102,42 +110,44 @@ export default function LoginScreen() {
 
   const handleForgot = async () => {
     if (!identifier.trim() || !identifier.includes('@')) {
-      Alert.alert('تنبيه', 'أدخل بريدك الإلكتروني أولاً.');
+      Alert.alert(t('auth.resetPasswordTitle'), t('auth.enterEmail'));
       return;
     }
     setLoading(true);
     try {
       await api.forgotPassword(identifier.trim());
-      Alert.alert('تم', 'إذا كان البريد مسجلاً، ستصلك رسالة إعادة تعيين.');
+      Alert.alert(t('mobile.checkEmail'), t('auth.resetLinkExpiryNotice'));
       setForgotMode(false);
     } catch (err: any) {
-      Alert.alert('خطأ', err?.response?.data?.error || 'تعذر إرسال الرسالة');
+      Alert.alert(t('auth.resetPasswordTitle'), err?.response?.data?.error || t('auth.resetEmailFailed'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={styles.scroll}
+          contentContainerStyle={[styles.scroll, { paddingHorizontal: gutter }]}
           keyboardShouldPersistTaps="handled"
         >
+          <View style={{ width: '100%', maxWidth: formMax, alignSelf: 'center' }}>
           <View style={styles.header}>
-            <Text style={styles.logoText}>Cosonova</Text>
-            <Text style={styles.tagline}>انضم إلى مجتمع الإبداع</Text>
+            <Text style={[styles.logoText, { color: colors.text }]}>Cosonova</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('auth.welcomeBack')}</Text>
+            <Text style={[styles.tagline, { color: colors.textSecondary }]}>{t('auth.signInSubtitle')}</Text>
           </View>
 
-          <View style={styles.form}>
+          <View style={[styles.form, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {pending2FA ? (
               <>
-                <Text style={styles.hint}>أدخل رمز التحقق الثنائي</Text>
+                <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('mobile.twoFactorBody')}</Text>
                 <Input
-                  label="رمز 2FA"
+                  label={t('mobile.authenticatorCode')}
                   value={otp}
                   onChangeText={setOtp}
                   placeholder="123456"
@@ -145,7 +155,7 @@ export default function LoginScreen() {
                   error={errors.otp}
                 />
                 <Button
-                  label="تأكيد"
+                  label={t('auth.confirm')}
                   onPress={handle2FA}
                   loading={loading}
                   size="lg"
@@ -153,7 +163,7 @@ export default function LoginScreen() {
                   style={styles.submitBtn}
                 />
                 <Button
-                  label="رجوع"
+                  label={t('common.back')}
                   onPress={clearPending2FA}
                   variant="ghost"
                   size="sm"
@@ -162,15 +172,15 @@ export default function LoginScreen() {
             ) : forgotMode ? (
               <>
                 <Input
-                  label="البريد الإلكتروني"
+                  label={t('auth.email')}
                   value={identifier}
                   onChangeText={setIdentifier}
-                  placeholder="example@email.com"
+                  placeholder="you@email.com"
                   keyboardType="email-address"
                   error={errors.identifier}
                 />
                 <Button
-                  label="إرسال رابط الاستعادة"
+                  label={t('auth.sendResetLink')}
                   onPress={handleForgot}
                   loading={loading}
                   size="lg"
@@ -178,7 +188,7 @@ export default function LoginScreen() {
                   style={styles.submitBtn}
                 />
                 <Button
-                  label="رجوع لتسجيل الدخول"
+                  label={t('auth.backToSignIn')}
                   onPress={() => setForgotMode(false)}
                   variant="ghost"
                   size="sm"
@@ -187,23 +197,23 @@ export default function LoginScreen() {
             ) : (
               <>
                 <Input
-                  label="اسم المستخدم أو البريد"
+                  label={t('auth.username')}
                   value={identifier}
                   onChangeText={setIdentifier}
-                  placeholder="username أو email"
+                  placeholder={t('auth.enterEmail')}
                   autoCapitalize="none"
                   error={errors.identifier}
                 />
                 <Input
-                  label="كلمة المرور"
+                  label={t('auth.password')}
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="•••••••"
+                  placeholder={t('auth.enterPassword')}
                   secureTextEntry
                   error={errors.password}
                 />
                 <Button
-                  label="تسجيل الدخول"
+                  label={t('auth.signIn')}
                   onPress={handleSubmit}
                   loading={loading}
                   size="lg"
@@ -211,25 +221,25 @@ export default function LoginScreen() {
                   style={styles.submitBtn}
                 />
                 <Button
-                  label="المتابعة مع Google"
+                  label={t('mobile.continueWithGoogle')}
                   onPress={handleGoogle}
                   loading={loading}
                   variant="ghost"
                   size="lg"
                   fullWidth
-                  style={styles.googleBtn}
+                  style={[styles.googleBtn, { borderColor: colors.primary }]}
                 />
                 <Button
-                  label="المتابعة مع Apple"
+                  label={t('auth.continueWithApple')}
                   onPress={handleApple}
                   loading={loading}
                   variant="ghost"
                   size="lg"
                   fullWidth
-                  style={styles.googleBtn}
+                  style={[styles.googleBtn, { borderColor: colors.primary }]}
                 />
                 <Button
-                  label="نسيت كلمة المرور؟"
+                  label={t('auth.forgotPassword')}
                   onPress={() => setForgotMode(true)}
                   variant="ghost"
                   size="sm"
@@ -240,13 +250,14 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>ليس لديك حساب؟</Text>
+            <Text style={[styles.footerText, { color: colors.textSecondary }]}>{t('auth.newToCosonova')}</Text>
             <Button
-              label="إنشاء حساب"
+              label={t('auth.createAccount')}
               onPress={() => navigation.navigate('Register')}
               variant="ghost"
               size="sm"
             />
+          </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -255,16 +266,17 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0f0a1f' },
+  safe: { flex: 1 },
   scroll: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  header: { alignItems: 'center', marginBottom: 32 },
-  logoText: { fontSize: 36, fontWeight: '800', color: '#c4b5fd' },
-  tagline: { marginTop: 8, color: '#a78bfa', fontSize: 15 },
-  form: { gap: 8 },
-  hint: { color: '#ddd6fe', marginBottom: 8, textAlign: 'center' },
+  header: { alignItems: 'center', marginBottom: 28 },
+  logoText: { fontSize: 18, fontWeight: '800', letterSpacing: 0.4 },
+  title: { fontSize: 28, fontWeight: '800', marginTop: 10 },
+  tagline: { marginTop: 8, fontSize: 15 },
+  form: { gap: 8, borderRadius: 28, borderWidth: 1, padding: 18 },
+  hint: { marginBottom: 8, textAlign: 'center' },
   submitBtn: { marginTop: 12 },
-  googleBtn: { marginTop: 8, borderWidth: 1, borderColor: '#7c3aed' },
+  googleBtn: { marginTop: 8, borderWidth: 1 },
   forgotBtn: { marginTop: 4 },
   footer: { marginTop: 28, alignItems: 'center' },
-  footerText: { color: '#9ca3af', marginBottom: 4 },
+  footerText: { marginBottom: 4 },
 });

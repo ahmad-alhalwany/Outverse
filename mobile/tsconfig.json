@@ -39,9 +39,13 @@
       ],
       "@/screens/*": [
         "src/screens/*"
+      ],
+      "react-native-webrtc": [
+        "src/shims/react-native-webrtc.d.ts"
       ]
     },
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "moduleSuffixes": [".native", ""]
   },
   "include": [
     "src/**/*",
@@ -49,7 +53,8 @@
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/shims/react-native-webrtc.native.js"
   ],
   "extends": "expo/tsconfig.base"
 }

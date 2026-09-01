@@ -13,6 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../auth/AuthContext';
 import { api } from '../../api/client';
+import { useTheme } from '../../hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 
 const INTEREST_GROUPS: { label: string; tags: string[] }[] = [
   { label: 'Science & Future', tags: ['space', 'astronomy', 'ai', 'technology', 'future'] },
@@ -38,6 +40,8 @@ type Suggestion = {
 
 export default function OnboardingScreen() {
   const { user, updateUser } = useAuth();
+  const { colors } = useTheme();
+  const { t } = useLocale();
   const [step, setStep] = useState(0);
   const [worlds, setWorlds] = useState<string[]>(['The Lab', 'The Bazaar', 'The Vault']);
   const [selectedWorlds, setSelectedWorlds] = useState<string[]>(['The Lab', 'The Bazaar', 'The Vault']);
@@ -84,7 +88,7 @@ export default function OnboardingScreen() {
   const pickAvatar = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Allow photo library access to set an avatar.');
+      Alert.alert(t('common.actionFailed'), t('onboarding.avatarHint'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -128,7 +132,7 @@ export default function OnboardingScreen() {
           : [...selectedWorlds, ...selectedTags],
       });
     } catch {
-      Alert.alert('Error', 'Could not save onboarding. Try again.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.onboardingSaveFailed'));
     } finally {
       setSaving(false);
     }
@@ -150,49 +154,72 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
       <View style={styles.top}>
         <Image source={require('../../../assets/icon.png')} style={styles.logo} />
-        <Text style={styles.brand}>Welcome to Cosonova</Text>
-        <Text style={styles.sub}>Step {step + 1} of 3</Text>
+        <Text style={[styles.brand, { color: colors.text }]}>{t('mobile.welcomeTo')}</Text>
+        <Text style={[styles.sub, { color: colors.textSecondary }]}>{t('mobile.stepOf', { n: step + 1 })}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
         {step === 0 && (
           <View>
-            <Text style={styles.title}>Choose your guide</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('mobile.chooseGuide')}</Text>
             <View style={styles.row}>
               {GUIDES.map((g) => (
                 <TouchableOpacity
                   key={g.id}
-                  style={[styles.chip, selectedGuide === g.id && styles.chipActive]}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+                    selectedGuide === g.id && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  ]}
                   onPress={() => setSelectedGuide(g.id)}
                 >
-                  <Text style={[styles.chipText, selectedGuide === g.id && styles.chipTextActive]}>
-                    {g.label}
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: colors.text },
+                      selectedGuide === g.id && styles.chipTextActive,
+                    ]}
+                  >
+                    {g.id === 'explorer' ? t('onboarding.explorer') : t('onboarding.creator')}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <Text style={[styles.title, { marginTop: 20 }]}>Worlds</Text>
+            <Text style={[styles.title, { color: colors.text, marginTop: 20 }]}>{t('mobile.worlds')}</Text>
             <View style={styles.row}>
               {worlds.map((w) => (
                 <TouchableOpacity
                   key={w}
-                  style={[styles.chip, selectedWorlds.includes(w) && styles.chipActive]}
+                  style={[
+                    styles.chip,
+                    { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+                    selectedWorlds.includes(w) && { backgroundColor: colors.primary, borderColor: colors.primary },
+                  ]}
                   onPress={() => toggleWorld(w)}
                 >
-                  <Text style={[styles.chipText, selectedWorlds.includes(w) && styles.chipTextActive]}>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: colors.text },
+                      selectedWorlds.includes(w) && styles.chipTextActive,
+                    ]}
+                  >
                     {w}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
-            <TouchableOpacity style={styles.avatarBtn} onPress={() => void pickAvatar()}>
+            <TouchableOpacity
+              style={[styles.avatarBtn, { backgroundColor: colors.surfaceSecondary }]}
+              onPress={() => void pickAvatar()}
+            >
               {avatarUri ? (
                 <Image source={{ uri: avatarUri }} style={styles.avatar} />
               ) : (
-                <Text style={styles.avatarBtnText}>Add avatar</Text>
+                <Text style={[styles.avatarBtnText, { color: colors.primary }]}>{t('mobile.addAvatar')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -200,20 +227,39 @@ export default function OnboardingScreen() {
 
         {step === 1 && (
           <View>
-            <Text style={styles.title}>Interests</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('mobile.interests')}</Text>
             {INTEREST_GROUPS.map((group) => (
               <View key={group.label} style={{ marginBottom: 14 }}>
-                <Text style={styles.groupLabel}>{group.label}</Text>
+                <Text style={[styles.groupLabel, { color: colors.textSecondary }]}>
+                  {t(
+                    group.label === 'Science & Future'
+                      ? 'mobile.groupScience'
+                      : group.label === 'History'
+                        ? 'mobile.groupHistory'
+                        : group.label === 'Fantasy'
+                          ? 'mobile.groupFantasy'
+                          : group.label === 'Philosophy'
+                            ? 'mobile.groupPhilosophy'
+                            : group.label === 'Everyday'
+                              ? 'mobile.groupEveryday'
+                              : 'mobile.groupArt',
+                  )}
+                </Text>
                 <View style={styles.row}>
                   {group.tags.map((tag) => (
                     <TouchableOpacity
                       key={tag}
-                      style={[styles.chip, selectedTags.includes(tag) && styles.chipActive]}
+                      style={[
+                        styles.chip,
+                        { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+                        selectedTags.includes(tag) && { backgroundColor: colors.primary, borderColor: colors.primary },
+                      ]}
                       onPress={() => toggleTag(tag)}
                     >
                       <Text
                         style={[
                           styles.chipText,
+                          { color: colors.text },
                           selectedTags.includes(tag) && styles.chipTextActive,
                         ]}
                       >
@@ -229,26 +275,30 @@ export default function OnboardingScreen() {
 
         {step === 2 && (
           <View>
-            <Text style={styles.title}>People to follow</Text>
+            <Text style={[styles.title, { color: colors.text }]}>{t('mobile.peopleToFollow')}</Text>
             {suggestions.length === 0 ? (
-              <Text style={styles.muted}>No suggestions right now — you can skip.</Text>
+              <Text style={[styles.muted, { color: colors.textSecondary }]}>{t('mobile.noSuggestions')}</Text>
             ) : (
               suggestions.slice(0, 12).map((s) => (
-                <View key={s.id} style={styles.suggestRow}>
+                <View key={s.id} style={[styles.suggestRow, { borderBottomColor: colors.border }]}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.suggestName}>@{s.username}</Text>
+                    <Text style={[styles.suggestName, { color: colors.text }]}>@{s.username}</Text>
                     {s.bio ? (
-                      <Text style={styles.muted} numberOfLines={1}>
+                      <Text style={[styles.muted, { color: colors.textSecondary }]} numberOfLines={1}>
                         {s.bio}
                       </Text>
                     ) : null}
                   </View>
                   <TouchableOpacity
-                    style={[styles.followBtn, s.is_following && styles.followingBtn]}
+                    style={[
+                      styles.followBtn,
+                      { backgroundColor: colors.primary },
+                      s.is_following && { backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border },
+                    ]}
                     onPress={() => void toggleFollow(s.id)}
                   >
-                    <Text style={[styles.followText, s.is_following && { color: '#4f46e5' }]}>
-                      {s.is_following ? 'Following' : 'Follow'}
+                    <Text style={[styles.followText, s.is_following && { color: colors.primary }]}>
+                      {s.is_following ? t('onboarding.following') : t('onboarding.follow')}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -258,20 +308,24 @@ export default function OnboardingScreen() {
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { borderTopColor: colors.border }]}>
         <TouchableOpacity onPress={() => void finish(true)} disabled={saving}>
-          <Text style={styles.skip}>Skip</Text>
+          <Text style={[styles.skip, { color: colors.textSecondary }]}>{t('onboarding.skipForNow')}</Text>
         </TouchableOpacity>
         {step < 2 ? (
-          <TouchableOpacity style={styles.next} onPress={() => setStep((s) => s + 1)}>
-            <Text style={styles.nextText}>Next</Text>
+          <TouchableOpacity style={[styles.next, { backgroundColor: colors.primary }]} onPress={() => setStep((s) => s + 1)}>
+            <Text style={styles.nextText}>{t('common.next')}</Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.next} onPress={() => void finish(false)} disabled={saving}>
+          <TouchableOpacity
+            style={[styles.next, { backgroundColor: colors.primary }]}
+            onPress={() => void finish(false)}
+            disabled={saving}
+          >
             {saving ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.nextText}>Enter Cosonova</Text>
+              <Text style={styles.nextText}>{t('mobile.enterCosonova')}</Text>
             )}
           </TouchableOpacity>
         )}
@@ -281,23 +335,21 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f8fafc' },
+  safe: { flex: 1 },
   top: { alignItems: 'center', paddingTop: 12, paddingBottom: 8 },
   logo: { width: 56, height: 56, borderRadius: 14, marginBottom: 10 },
-  brand: { fontSize: 22, fontWeight: '800', color: '#312e81' },
-  sub: { marginTop: 4, color: '#6b7280', fontWeight: '600' },
+  brand: { fontSize: 22, fontWeight: '800' },
+  sub: { marginTop: 4, fontWeight: '600' },
   body: { padding: 16, paddingBottom: 32 },
-  title: { fontSize: 18, fontWeight: '800', color: '#111827', marginBottom: 12 },
-  groupLabel: { fontSize: 13, fontWeight: '700', color: '#6b7280', marginBottom: 8 },
+  title: { fontSize: 18, fontWeight: '800', marginBottom: 12 },
+  groupLabel: { fontSize: 13, fontWeight: '700', marginBottom: 8 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#e5e7eb',
   },
-  chipActive: { backgroundColor: '#4f46e5' },
-  chipText: { fontWeight: '700', color: '#374151', fontSize: 13 },
+  chipText: { fontWeight: '700', fontSize: 13 },
   chipTextActive: { color: '#fff' },
   avatarBtn: {
     marginTop: 20,
@@ -305,30 +357,26 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#ede9fe',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
   avatar: { width: 96, height: 96 },
-  avatarBtnText: { color: '#5b21b6', fontWeight: '700' },
-  muted: { color: '#6b7280', fontSize: 13 },
+  avatarBtnText: { fontWeight: '700' },
+  muted: { fontSize: 13 },
   suggestRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#e5e7eb',
     gap: 10,
   },
-  suggestName: { fontWeight: '700', color: '#111827' },
+  suggestName: { fontWeight: '700' },
   followBtn: {
-    backgroundColor: '#4f46e5',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
   },
-  followingBtn: { backgroundColor: '#ede9fe' },
   followText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   footer: {
     flexDirection: 'row',
@@ -337,11 +385,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e5e7eb',
   },
-  skip: { color: '#6b7280', fontWeight: '700', fontSize: 15 },
+  skip: { fontWeight: '700', fontSize: 15 },
   next: {
-    backgroundColor: '#4f46e5',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 999,

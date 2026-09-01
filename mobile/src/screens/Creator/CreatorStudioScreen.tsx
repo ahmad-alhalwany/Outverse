@@ -16,7 +16,9 @@ import {
 import Video from 'react-native-video';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import { api } from '@/api/client';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 
 type CreatorSummary = {
   total_content?: number;
@@ -63,6 +65,7 @@ type ScheduledPost = {
 
 export default function CreatorStudioScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -122,7 +125,7 @@ export default function CreatorStudioScreen() {
   const createTier = async () => {
     const price = Number.parseFloat(tierPrice);
     if (!tierName.trim() || !Number.isFinite(price) || price < 1) {
-      Alert.alert('Tier details', 'Add a tier name and a price of at least $1.');
+      Alert.alert(t('mobile.creatorTiers'), t('mobile.tierDetails'));
       return;
     }
     setTierBusy(true);
@@ -137,7 +140,7 @@ export default function CreatorStudioScreen() {
       resetTierForm();
     } catch (e) {
       console.error('Create tier failed', e);
-      Alert.alert('Error', 'Could not create creator tier.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotCreateTier'));
     } finally {
       setTierBusy(false);
     }
@@ -150,7 +153,7 @@ export default function CreatorStudioScreen() {
       setTiers((prev) => prev.map((item) => (item.id === tier.id ? (updated as CreatorTier) : item)));
     } catch (e) {
       console.error('Update tier failed', e);
-      Alert.alert('Error', 'Could not update creator tier.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotUpdateTier'));
     } finally {
       setTierBusy(false);
     }
@@ -163,7 +166,7 @@ export default function CreatorStudioScreen() {
       setTiers((prev) => prev.filter((item) => item.id !== tier.id));
     } catch (e) {
       console.error('Delete tier failed', e);
-      Alert.alert('Error', 'Could not delete creator tier.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotDeleteTier'));
     } finally {
       setTierBusy(false);
     }
@@ -174,7 +177,7 @@ export default function CreatorStudioScreen() {
       await api.cancelScheduledPost(post.id);
       setScheduledPosts((prev) => prev.filter((item) => String(item.id) !== String(post.id)));
     } catch {
-      Alert.alert('Error', 'Could not cancel scheduled post.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotCancelScheduled'));
     }
   };
 
@@ -184,34 +187,32 @@ export default function CreatorStudioScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
+      <WorldBackdrop>
+      <SafeAreaView style={styles.safe}>
+        <WorldHeader title={t('mobile.creatorStudioTitle')} subtitle={t('mobile.creatorStudioSub')} onBack={() => navigation.goBack()} />
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
       </SafeAreaView>
+      </WorldBackdrop>
     );
   }
 
   const cards: Array<{ label: string; value: number | string }> = [
-    { label: 'Views', value: summary.total_views ?? 0 },
-    { label: 'Likes', value: summary.total_likes ?? 0 },
-    { label: 'Comments', value: summary.total_comments ?? 0 },
-    { label: 'Shares', value: summary.total_shares ?? 0 },
-    { label: 'Posts', value: summary.total_posts ?? 0 },
-    { label: 'Pulses', value: summary.total_signals ?? 0 },
+    { label: t('mobile.views'), value: summary.total_views ?? 0 },
+    { label: t('mobile.likes'), value: summary.total_likes ?? 0 },
+    { label: t('mobile.commentsCount'), value: summary.total_comments ?? 0 },
+    { label: t('mobile.shares'), value: summary.total_shares ?? 0 },
+    { label: t('mobile.posts'), value: summary.total_posts ?? 0 },
+    { label: t('mobile.pulses'), value: summary.total_signals ?? 0 },
   ];
   const reactionEntries = Object.entries(reactionsByType).filter(([, count]) => Number(count) > 0);
   const shareEntries = Object.entries(sharesByChannel).filter(([, count]) => Number(count) > 0);
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={{ fontSize: 22, color: colors.text }}>←</Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]}>Creator Studio</Text>
-        <View style={styles.backBtn} />
-      </View>
+    <WorldBackdrop>
+    <SafeAreaView style={styles.safe}>
+      <WorldHeader title={t('mobile.creatorStudioTitle')} subtitle={t('mobile.creatorStudioSub')} onBack={() => navigation.goBack()} />
 
       <ScrollView
         contentContainerStyle={styles.body}
@@ -231,33 +232,33 @@ export default function CreatorStudioScreen() {
             onPress={() => navigation.navigate('Videos')}
             style={[styles.linkCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <Text style={[styles.linkTitle, { color: colors.text }]}>Videos</Text>
-            <Text style={[styles.linkMeta, { color: colors.textSecondary }]}>Upload and premiere</Text>
+            <Text style={[styles.linkTitle, { color: colors.text }]}>{t('nav.videos')}</Text>
+            <Text style={[styles.linkMeta, { color: colors.textSecondary }]}>{t('mobile.uploadAndPremiere')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => navigation.navigate('Playlists')}
             style={[styles.linkCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <Text style={[styles.linkTitle, { color: colors.text }]}>Playlists</Text>
-            <Text style={[styles.linkMeta, { color: colors.textSecondary }]}>Curate video sets</Text>
+            <Text style={[styles.linkTitle, { color: colors.text }]}>{t('nav.playlists')}</Text>
+            <Text style={[styles.linkMeta, { color: colors.textSecondary }]}>{t('mobile.curateVideoSets')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => navigation.navigate('Experience')}
             style={[styles.linkCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <Text style={[styles.linkTitle, { color: colors.text }]}>Experience</Text>
-            <Text style={[styles.linkMeta, { color: colors.textSecondary }]}>Profile timeline</Text>
+            <Text style={[styles.linkTitle, { color: colors.text }]}>{t('profile.experienceTitle')}</Text>
+            <Text style={[styles.linkMeta, { color: colors.textSecondary }]}>{t('mobile.profileTimeline')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => void load(true)}
             style={[styles.linkCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            <Text style={[styles.linkTitle, { color: colors.text }]}>Refresh stats</Text>
-            <Text style={[styles.linkMeta, { color: colors.textSecondary }]}>Refresh metrics</Text>
+            <Text style={[styles.linkTitle, { color: colors.text }]}>{t('mobile.refreshStats')}</Text>
+            <Text style={[styles.linkMeta, { color: colors.textSecondary }]}>{t('mobile.refreshMetrics')}</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.section, { color: colors.text }]}>Analytics</Text>
+        <Text style={[styles.section, { color: colors.text }]}>{t('nav.analytics')}</Text>
         <View style={styles.grid}>
           {cards.map((c) => (
             <View key={c.label} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -271,7 +272,7 @@ export default function CreatorStudioScreen() {
           <View style={[styles.breakdownCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {reactionEntries.length ? (
               <>
-                <Text style={[styles.breakdownTitle, { color: colors.text }]}>Reactions</Text>
+                <Text style={[styles.breakdownTitle, { color: colors.text }]}>{t('mobile.reactionsLabel')}</Text>
                 <View style={styles.chipList}>
                   {reactionEntries.map(([type, count]) => (
                     <View key={type} style={[styles.metricChip, { borderColor: colors.border }]}>
@@ -285,7 +286,7 @@ export default function CreatorStudioScreen() {
             ) : null}
             {shareEntries.length ? (
               <>
-                <Text style={[styles.breakdownTitle, { color: colors.text }]}>Shares by channel</Text>
+                <Text style={[styles.breakdownTitle, { color: colors.text }]}>{t('mobile.sharesByChannel')}</Text>
                 <View style={styles.chipList}>
                   {shareEntries.map(([channel, count]) => (
                     <View key={channel} style={[styles.metricChip, { borderColor: colors.border }]}>
@@ -302,7 +303,7 @@ export default function CreatorStudioScreen() {
 
         {daily.length > 0 ? (
           <>
-            <Text style={[styles.section, { color: colors.text }]}>Engagement · 7 days</Text>
+            <Text style={[styles.section, { color: colors.text }]}>{t('mobile.engagement7days')}</Text>
             <View style={[styles.barWrap, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {daily.map((d) => {
                 const max = Math.max(...daily.map((x) => x.count), 1);
@@ -339,9 +340,9 @@ export default function CreatorStudioScreen() {
                   {item.title || `${item.type} #${item.id}`}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  {item.type || 'content'} · {item.views ?? 0} views · {item.likes ?? item.reactions ?? 0} likes
-                  {item.comments != null ? ` · ${item.comments} comments` : ''}
-                  {item.shares != null ? ` · ${item.shares} shares` : ''}
+                  {item.type || t('mobile.posts')} · {item.views ?? 0} {t('mobile.views')} · {item.likes ?? item.reactions ?? 0} {t('mobile.likes')}
+                  {item.comments != null ? ` · ${item.comments} ${t('mobile.commentsCount')}` : ''}
+                  {item.shares != null ? ` · ${item.shares} ${t('mobile.shares')}` : ''}
                 </Text>
                 {item.created_at || item.published_at || item.status ? (
                   <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 2 }}>
@@ -370,19 +371,19 @@ export default function CreatorStudioScreen() {
           ))
         )}
 
-        <Text style={[styles.section, { color: colors.text }]}>Creator tiers</Text>
+        <Text style={[styles.section, { color: colors.text }]}>{t('mobile.creatorTiers')}</Text>
         <View style={[styles.tierForm, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <TextInput
             value={tierName}
             onChangeText={setTierName}
-            placeholder="Tier name"
+            placeholder={t('mobile.tierName')}
             placeholderTextColor={colors.textSecondary}
             style={[styles.input, { color: colors.text, borderColor: colors.border }]}
           />
           <TextInput
             value={tierPrice}
             onChangeText={setTierPrice}
-            placeholder="Price USD"
+            placeholder={t('mobile.priceUsd')}
             placeholderTextColor={colors.textSecondary}
             keyboardType="decimal-pad"
             style={[styles.input, { color: colors.text, borderColor: colors.border }]}
@@ -390,7 +391,7 @@ export default function CreatorStudioScreen() {
           <TextInput
             value={tierDescription}
             onChangeText={setTierDescription}
-            placeholder="Description"
+            placeholder={t('profile.experienceFieldDescription')}
             placeholderTextColor={colors.textSecondary}
             style={[styles.input, { color: colors.text, borderColor: colors.border }]}
           />
@@ -399,11 +400,11 @@ export default function CreatorStudioScreen() {
             onPress={() => void createTier()}
             style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: tierBusy || !tierName.trim() || !tierPrice.trim() ? 0.5 : 1 }]}
           >
-            <Text style={styles.primaryBtnText}>{tierBusy ? '…' : 'Create tier'}</Text>
+            <Text style={styles.primaryBtnText}>{tierBusy ? '…' : t('mobile.createTier')}</Text>
           </TouchableOpacity>
         </View>
         {tiers.length === 0 ? (
-          <Text style={{ color: colors.textSecondary }}>No tiers yet.</Text>
+          <Text style={{ color: colors.textSecondary }}>{t('mobile.noTiersYet')}</Text>
         ) : (
           tiers.map((tier) => (
             <View key={String(tier.id)} style={[styles.row, { borderColor: colors.border, backgroundColor: colors.surface }]}>
@@ -412,7 +413,7 @@ export default function CreatorStudioScreen() {
                   {tier.name} · ${Number(tier.price_usd ?? (tier.price_usd_cents || 0) / 100).toFixed(2)}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }} numberOfLines={2}>
-                  {tier.description || tier.benefits?.join(' · ') || 'No description'}
+                  {tier.description || tier.benefits?.join(' · ') || t('mobile.noDescription')}
                 </Text>
               </View>
               <TouchableOpacity
@@ -420,51 +421,51 @@ export default function CreatorStudioScreen() {
                 onPress={() => void updateTier(tier, { is_active: !tier.is_active })}
               >
                 <Text style={{ color: colors.primary, fontWeight: '700' }}>
-                  {tier.is_active === false ? 'Activate' : 'Pause'}
+                  {tier.is_active === false ? t('mobile.activate') : t('mobile.pause')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity disabled={tierBusy} onPress={() => void deleteTier(tier)}>
-                <Text style={{ color: '#dc2626', fontWeight: '700' }}>Delete</Text>
+                <Text style={{ color: '#dc2626', fontWeight: '700' }}>{t('common.delete')}</Text>
               </TouchableOpacity>
             </View>
           ))
         )}
 
         <View style={styles.sectionRow}>
-          <Text style={[styles.section, { color: colors.text, marginBottom: 0 }]}>Scheduled posts</Text>
+          <Text style={[styles.section, { color: colors.text, marginBottom: 0 }]}>{t('mobile.scheduledPosts')}</Text>
           <TouchableOpacity onPress={() => navigation.navigate('SignalPublish')}>
-            <Text style={{ color: colors.primary, fontWeight: '700' }}>Create</Text>
+            <Text style={{ color: colors.primary, fontWeight: '700' }}>{t('live.create')}</Text>
           </TouchableOpacity>
         </View>
         {scheduledPosts.length === 0 ? (
-          <Text style={{ color: colors.textSecondary }}>No pending scheduled posts.</Text>
+          <Text style={{ color: colors.textSecondary }}>{t('mobile.noPendingScheduled')}</Text>
         ) : (
           scheduledPosts.slice(0, 5).map((post) => (
             <View key={String(post.id)} style={[styles.row, { borderColor: colors.border, backgroundColor: colors.surface }]}>
               <View style={{ flex: 1 }}>
                 <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
-                  {post.payload?.text || post.text || `Scheduled post #${post.id}`}
+                  {post.payload?.text || post.text || t('mobile.scheduledPostN', { id: post.id })}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  {post.publish_at ? new Date(post.publish_at).toLocaleString() : 'Pending'}
+                  {post.publish_at ? new Date(post.publish_at).toLocaleString() : t('mobile.pending')}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => void cancelScheduled(post)}>
-                <Text style={{ color: '#dc2626', fontWeight: '700' }}>Cancel</Text>
+                <Text style={{ color: '#dc2626', fontWeight: '700' }}>{t('common.cancel')}</Text>
               </TouchableOpacity>
             </View>
           ))
         )}
 
         <View style={styles.sectionRow}>
-          <Text style={[styles.section, { color: colors.text, marginBottom: 0 }]}>VOD library</Text>
+          <Text style={[styles.section, { color: colors.text, marginBottom: 0 }]}>{t('mobile.vodLibrary')}</Text>
           <TouchableOpacity onPress={() => navigation.navigate('Live')}>
-            <Text style={{ color: colors.primary, fontWeight: '700' }}>Go Live</Text>
+            <Text style={{ color: colors.primary, fontWeight: '700' }}>{t('live.goLive')}</Text>
           </TouchableOpacity>
         </View>
         {vods.length === 0 ? (
           <Text style={{ color: colors.textSecondary }}>
-            Ended lives with recordings will appear here.
+            {t('mobile.vodEmpty')}
           </Text>
         ) : (
           vods.map((v) => (
@@ -477,14 +478,14 @@ export default function CreatorStudioScreen() {
             >
               <View style={{ flex: 1 }}>
                 <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
-                  {v.title || `Live #${v.id}`}
+                  {v.title || t('mobile.liveN', { id: v.id })}
                 </Text>
                 <Text style={{ color: colors.textSecondary, fontSize: 12 }}>
-                  {v.ended_at ? new Date(v.ended_at).toLocaleString() : 'Recording'}
-                  {v.peak_viewers != null ? ` · peak ${v.peak_viewers}` : ''}
+                  {v.ended_at ? new Date(v.ended_at).toLocaleString() : t('mobile.recording')}
+                  {v.peak_viewers != null ? ` · ${t('mobile.peakViewersCount', { count: v.peak_viewers })}` : ''}
                 </Text>
               </View>
-              <Text style={{ color: colors.primary, fontWeight: '700' }}>Play</Text>
+              <Text style={{ color: colors.primary, fontWeight: '700' }}>{t('mobile.play')}</Text>
             </TouchableOpacity>
           ))
         )}
@@ -493,11 +494,11 @@ export default function CreatorStudioScreen() {
         <SafeAreaView style={[styles.safe, { backgroundColor: '#000' }]}>
           <View style={styles.playerHeader}>
             <TouchableOpacity onPress={() => setSelectedVod(null)}>
-              <Text style={{ color: '#fff', fontWeight: '800' }}>Close</Text>
+              <Text style={{ color: '#fff', fontWeight: '800' }}>{t('common.close')}</Text>
             </TouchableOpacity>
             {selectedVod?.recording_url ? (
               <TouchableOpacity onPress={() => void Linking.openURL(selectedVod.recording_url!)}>
-                <Text style={{ color: '#A78BFA', fontWeight: '800' }}>Open externally</Text>
+                <Text style={{ color: '#A78BFA', fontWeight: '800' }}>{t('mobile.openExternally')}</Text>
               </TouchableOpacity>
             ) : null}
           </View>
@@ -510,12 +511,13 @@ export default function CreatorStudioScreen() {
             />
           ) : (
             <View style={styles.center}>
-              <Text style={{ color: '#fff' }}>Recording unavailable.</Text>
+              <Text style={{ color: '#fff' }}>{t('mobile.recordingUnavailable')}</Text>
             </View>
           )}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 
@@ -533,7 +535,7 @@ const styles = StyleSheet.create({
   title: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800' },
   body: { padding: 16, paddingBottom: 40, gap: 10 },
   quickLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  linkCard: { width: '47%', flexGrow: 1, borderWidth: 1, borderRadius: 14, padding: 12 },
+  linkCard: { flexGrow: 1, flexBasis: 148, minWidth: 148, borderWidth: 1, borderRadius: 14, padding: 12 },
   linkTitle: { fontSize: 15, fontWeight: '800' },
   linkMeta: { fontSize: 12, marginTop: 3 },
   section: { fontSize: 16, fontWeight: '800', marginTop: 8, marginBottom: 4 },

@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { Video } from 'expo-av';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, Dimensions, Linking } from 'react-native';
+import Video from 'react-native-video';
 import { useTheme } from '@/hooks/useTheme';
 import { Ad } from '@/types';
 
@@ -16,7 +16,6 @@ interface AdCardProps {
 export default function AdCard({ ad, placement, onImpression, onClick }: AdCardProps) {
   const { colors } = useTheme();
   const [impressionLogged, setImpressionLogged] = useState(false);
-  const adRef = useRef<TouchableOpacity>(null);
 
   const creative = ad.creative;
   const mediaUrls = creative.media_urls || [];
@@ -24,30 +23,16 @@ export default function AdCard({ ad, placement, onImpression, onClick }: AdCardP
   const isCarousel = creative.format === 'carousel';
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && !impressionLogged) {
-            onImpression?.();
-            setImpressionLogged(true);
-            observer.disconnect();
-          }
-        });
-      },
-      { threshold: 0.5 }
-    );
-
-    if (adRef.current) {
-      observer.observe(adRef.current as any);
+    if (!impressionLogged) {
+      onImpression?.();
+      setImpressionLogged(true);
     }
-
-    return () => observer.disconnect();
   }, [impressionLogged, onImpression]);
 
   const handleClick = () => {
     onClick?.();
     if (creative.landing_url) {
-      console.log('Open URL:', creative.landing_url);
+      Linking.openURL(creative.landing_url).catch(() => null);
     }
   };
 
@@ -68,9 +53,11 @@ export default function AdCard({ ad, placement, onImpression, onClick }: AdCardP
         <Video
           source={{ uri: mediaUrls[0] }}
           style={styles.media}
-          isLooping
-          isMuted
-          useNativeControls={false}
+          paused={false}
+          muted
+          repeat
+          resizeMode="cover"
+          controls={false}
         />
       );
     }
@@ -96,7 +83,6 @@ export default function AdCard({ ad, placement, onImpression, onClick }: AdCardP
 
   return (
     <TouchableOpacity
-      ref={adRef}
       style={[styles.container, { backgroundColor: colors.surface, borderColor: colors.border }]}
       onPress={handleClick}
       activeOpacity={0.9}

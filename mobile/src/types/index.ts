@@ -16,6 +16,8 @@ export interface User {
   following_count: number;
   posts_count: number;
   is_verified?: boolean;
+  is_staff?: boolean;
+  is_superuser?: boolean;
   is_private?: boolean;
   is_following?: boolean;
   is_followed_by?: boolean;
@@ -38,6 +40,8 @@ export interface Post {
   shares_count: number;
   reaction_counts: Record<string, number>;
   my_reaction: string | null;
+  top_reactors?: { id: number; name: string; username?: string; type?: string }[];
+  flair?: string;
   is_saved?: boolean;
   visibility?: 'public' | 'followers' | 'subscribers';
   reply_control?: 'everyone' | 'followers' | 'nobody';
@@ -92,8 +96,14 @@ export interface Comment {
   reaction_counts: Record<string, number>;
   my_reaction: string | null;
   is_pinned?: boolean;
+  sparked_by_author?: boolean;
+  is_post_author?: boolean;
+  vote_score?: number;
+  my_vote?: 'boost' | 'dim' | null;
+  quoted_comment?: { id: number; text: string; user: User } | null;
   replies?: Comment[];
   created_at: string;
+  edited_at?: string;
 }
 
 export interface Reel {
@@ -152,6 +162,7 @@ export interface Story {
   id: string | number;
   author?: User;
   user?: User;
+  user_id?: number;
   media?: string;
   image?: string | null;
   video?: string | null;
@@ -163,6 +174,23 @@ export interface Story {
   is_viewed: boolean;
   created_at: string;
   expires_at: string;
+  overlays?: unknown[];
+  drawing?: unknown[];
+  filter_style?: string;
+  background_style?: string;
+  mood?: string;
+  audience?: 'everyone' | 'close_friends' | string;
+  unlock_at?: string | null;
+  is_locked?: boolean;
+  unlocks_in?: number | null;
+  reaction_counts?: Record<string, number>;
+  my_reaction?: string | null;
+  poll_results?: Record<string, { counts: Record<string, number>; total: number; my_vote: number | null }>;
+  question_response_counts?: Record<string, number>;
+  location_name?: string;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  shared_post?: { id: number; username: string; text?: string; image?: string | null } | null;
 }
 
 export interface ReelComment {

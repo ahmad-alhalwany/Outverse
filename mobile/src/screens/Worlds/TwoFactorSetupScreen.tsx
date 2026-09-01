@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, T
 import { useNavigation } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import {
   WorldBackdrop,
   WorldCard,
@@ -15,6 +16,7 @@ import {
 export default function TwoFactorSetupScreen() {
   const navigation = useNavigation<any>();
   const { colors } = useTheme();
+  const { t } = useLocale();
   const [status, setStatus] = useState<any>(null);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(true);
@@ -42,7 +44,7 @@ export default function TwoFactorSetupScreen() {
       setStatus(await api.enableTwoFactor(password));
       setPassword('');
     } catch (error: any) {
-      Alert.alert('Two-Factor', error?.response?.data?.detail || 'Could not enable 2FA.');
+      Alert.alert(t('security.twoFactor'), error?.response?.data?.detail || t('mobile.couldNotEnable2FA'));
     } finally {
       setEnabling(false);
     }
@@ -51,33 +53,33 @@ export default function TwoFactorSetupScreen() {
   return (
     <WorldBackdrop tone="vault">
       <SafeAreaView style={{ flex: 1 }}>
-        <WorldHeader title="Two-Factor" subtitle="Security" tone="vault" onBack={() => navigation.goBack()} />
+        <WorldHeader title={t('security.twoFactor')} subtitle={t('mobile.accountSecurity')} tone="vault" onBack={() => navigation.goBack()} />
         <ScrollView contentContainerStyle={styles.content}>
           <WorldHero
             tone="vault"
-            eyebrow="Account security"
-            title="Protect your Cosonova account"
-            body="Check 2FA status and enable setup with your password. QR or secret values are shown when returned."
+            eyebrow={t('mobile.accountSecurity')}
+            title={t('mobile.twoFactor')}
+            body={t('security.twoFactorHint')}
           />
           {loading ? (
             <ActivityIndicator color={colors.primary} />
           ) : (
             <>
               <View style={styles.statsRow}>
-                <WorldStat label="Enabled" value={status?.enabled || status?.is_enabled ? 'Yes' : 'No'} />
-                <WorldStat label="Verified" value={status?.verified ? 'Yes' : 'No'} />
+                <WorldStat label={t('mobile.enabled')} value={status?.enabled || status?.is_enabled ? t('mobile.yes') : t('mobile.no')} />
+                <WorldStat label={t('mobile.verified')} value={status?.verified ? t('mobile.yes') : t('mobile.no')} />
               </View>
               <WorldCard>
-                <Text style={[styles.label, { color: colors.text }]}>Enable setup</Text>
+                <Text style={[styles.label, { color: colors.text }]}>{t('mobile.enableSetup')}</Text>
                 <TextInput
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Password"
+                  placeholder={t('mobile.password')}
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry
                   style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
                 />
-                <WorldPrimaryButton label="Enable 2FA" onPress={enable} loading={enabling} disabled={enabling || !password.trim()} />
+                <WorldPrimaryButton label={t('mobile.enable2FA')} onPress={enable} loading={enabling} disabled={enabling || !password.trim()} />
               </WorldCard>
               {status?.qr_code || status?.qr || status?.secret ? (
                 <WorldCard>

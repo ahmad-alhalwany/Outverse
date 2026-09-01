@@ -1,0 +1,15 @@
+Cosonova is a creative social universe for people who make things.
+
+Post sparks, launch Signals, co-write stories in the Forge, back ideas in the Bazaar, and sell work in the Shop — without juggling five apps.
+
+• Home feed with For You, Following, and Discover
+• Stories, Signals (short video), Live, and Chat
+• Communities, Lab daily prompts, and Time Capsules
+• Wallet, Premium Cosmic Pass, and creator tools
+• Privacy, 2FA, and in-app policies
+
+Cosonova is free to join. Coins (Nova) can be bought to support creators. Voice and video calls work in a native build; Expo Go opens Cosonova Chat in-app.
+
+Privacy: https://cosonova.com/privacy
+Terms: https://cosonova.com/terms
+Support: privacy@cosonova.com

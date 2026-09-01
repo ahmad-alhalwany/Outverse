@@ -18,7 +18,7 @@ export function useNotifications() {
       setItems(data.results || []);
       setUnreadCount((data.results || []).filter((n) => !n.is_read).length);
     } catch (e: any) {
-      setError(e?.message || 'فشل تحميل الإشعارات');
+      setError(e?.message || 'Could not load notifications');
     } finally {
       setLoading(false);
     }

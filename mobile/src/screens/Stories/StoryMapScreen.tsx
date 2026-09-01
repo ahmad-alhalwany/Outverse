@@ -2,142 +2,90 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import MapView, { Callout, Marker, Region } from 'react-native-maps';
-import * as Location from 'expo-location';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import MapView, { Callout, Marker } from 'react-native-maps';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/api/client';
-import { mediaUrl } from '@/api/config';
-import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import StoryViewer from '@/components/StoryViewer';
-import type { Story } from '@/types';
+import { asStoryMapPins, STORY_MAP_C, uniquePlaces, type StoryMapPin } from '@/lib/storyMap';
+import { StoryMapPinBubble, StoryMapPinCard } from './storyMapParts';
 
-type StoryMapRow = Story & {
-  story?: Story;
-  latitude?: number | string | null;
-  longitude?: number | string | null;
-  lat?: number | string | null;
-  lng?: number | string | null;
-  location_lat?: number | string | null;
-  location_lng?: number | string | null;
-  location_name?: string | null;
-};
-
-function rowStory(row: StoryMapRow): Story {
-  return (row.story || row) as Story;
-}
-
-function coordinate(row: StoryMapRow, keys: Array<keyof StoryMapRow>) {
-  for (const key of keys) {
-    const value = row[key];
-    const numberValue = typeof value === 'string' ? Number.parseFloat(value) : value;
-    if (typeof numberValue === 'number' && Number.isFinite(numberValue)) return numberValue;
-  }
-  return null;
-}
-
-const DEFAULT_REGION: Region = {
-  latitude: 24.7136,
-  longitude: 46.6753,
-  latitudeDelta: 24,
-  longitudeDelta: 24,
+const DEFAULT_REGION = {
+  latitude: 25,
+  longitude: 30,
+  latitudeDelta: 40,
+  longitudeDelta: 40,
 };
 
 export default function StoryMapScreen({ route, navigation }: any) {
-  const { colors } = useTheme();
+  const { t, isRTL } = useLocale();
   const mapRef = useRef<MapView>(null);
-  const [rows, setRows] = useState<StoryMapRow[]>([]);
+  const [pins, setPins] = useState<StoryMapPin[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
   const [viewerOpen, setViewerOpen] = useState(false);
   const [storyIndex, setStoryIndex] = useState(0);
-  const [region, setRegion] = useState<Region>(DEFAULT_REGION);
 
-  const load = useCallback(async (isRefresh = false, nextRegion?: Region) => {
+  const load = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
+    setError('');
     try {
-      const r = nextRegion || region;
-      const data = await api.getStoryMap({
-        min_lat: r.latitude - r.latitudeDelta,
-        max_lat: r.latitude + r.latitudeDelta,
-        min_lng: r.longitude - r.longitudeDelta,
-        max_lng: r.longitude + r.longitudeDelta,
-      });
-      setRows(Array.isArray(data) ? (data as StoryMapRow[]) : []);
-    } catch (error) {
-      console.error('Failed to load story map:', error);
+      setPins(asStoryMapPins(await api.getStoryMap()));
+    } catch {
+      setPins([]);
+      setError(t('storyMap.loadError'));
     } finally {
       setLoading(false);
-      if (isRefresh) setRefreshing(false);
+      setRefreshing(false);
     }
-  }, [region]);
+  }, [t]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted' || cancelled) return;
-        const pos = await Location.getCurrentPositionAsync({});
-        if (cancelled) return;
-        const next: Region = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          latitudeDelta: 0.35,
-          longitudeDelta: 0.35,
-        };
-        setRegion(next);
-        mapRef.current?.animateToRegion(next, 600);
-      } catch {
-        /* permission optional */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const stories = useMemo(() => rows.map(rowStory), [rows]);
-
-  const pins = useMemo(
-    () =>
-      rows
-        .map((row, index) => {
-          const lat = coordinate(row, ['location_lat', 'latitude', 'lat']);
-          const lng = coordinate(row, ['location_lng', 'longitude', 'lng']);
-          if (lat == null || lng == null) return null;
-          return { row, index, lat, lng };
-        })
-        .filter(Boolean) as Array<{ row: StoryMapRow; index: number; lat: number; lng: number }>,
-    [rows],
-  );
+  const stories = useMemo(() => pins.map((p) => p.story), [pins]);
+  const latest = useMemo(() => pins.slice(0, 8), [pins]);
+  const places = uniquePlaces(pins);
 
   useEffect(() => {
     if (!pins.length || loading) return;
+    if (pins.length === 1) {
+      mapRef.current?.animateToRegion(
+        {
+          latitude: pins[0].lat,
+          longitude: pins[0].lng,
+          latitudeDelta: 8,
+          longitudeDelta: 8,
+        },
+        500,
+      );
+      return;
+    }
     mapRef.current?.fitToCoordinates(
       pins.map((p) => ({ latitude: p.lat, longitude: p.lng })),
-      { edgePadding: { top: 60, right: 40, bottom: 180, left: 40 }, animated: true },
+      { edgePadding: { top: 48, right: 36, bottom: 48, left: 36 }, animated: true },
     );
-  }, [pins.length, loading]);
+  }, [pins, loading]);
 
   useEffect(() => {
     const storyId = route?.params?.storyId;
-    if (!storyId || !stories.length) return;
-    const index = stories.findIndex((story) => String(story.id) === String(storyId));
+    if (!storyId || !pins.length) return;
+    const index = pins.findIndex((pin) => String(pin.id) === String(storyId));
     if (index >= 0) {
       setStoryIndex(index);
       setViewerOpen(true);
     }
-  }, [route?.params?.storyId, stories]);
+  }, [route?.params?.storyId, pins]);
 
   const openStory = (index: number) => {
     setStoryIndex(index);
@@ -145,181 +93,272 @@ export default function StoryMapScreen({ route, navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={10}
-        >
-          <Text style={{ fontSize: 22, color: colors.text }}>←</Text>
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Story Map</Text>
-        <Pressable
-          onPress={() => {
-            setRefreshing(true);
-            void load(true);
-          }}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Refresh map"
-          hitSlop={10}
-        >
-          <Text style={{ fontSize: 16, color: colors.primary }}>↻</Text>
-        </Pressable>
-      </View>
+    <LinearGradient colors={['#1a1040', '#0c0a1a', '#0a1628']} style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.header}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+            <Ionicons name={isRTL ? 'chevron-forward' : 'chevron-back'} size={22} color={STORY_MAP_C.muted} />
+          </Pressable>
+          <View style={{ flex: 1 }}>
+            <View style={styles.kicker}>
+              <Ionicons name="sparkles" size={12} color="#a5f3fc" />
+              <Text style={styles.kickerText}>{t('storyMap.liveLocations')}</Text>
+            </View>
+            <Text style={styles.title}>{t('storyMap.title')}</Text>
+          </View>
+          <Pressable
+            onPress={() => navigation.navigate('StoryStudio')}
+            style={styles.addBtn}
+            accessibilityLabel={t('storyMap.addStoryCta')}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+          </Pressable>
+        </View>
+        <Text style={styles.subtitle}>{t('storyMap.subtitle')}</Text>
 
-      <View style={styles.mapWrap}>
-        <MapView
-          ref={mapRef}
-          style={StyleSheet.absoluteFill}
-          initialRegion={region}
-          onRegionChangeComplete={(next) => setRegion(next)}
-          userInterfaceStyle="dark"
-          accessibilityLabel="Story location map"
-        >
-          {pins.map(({ row, index, lat, lng }) => {
-            const story = rowStory(row);
-            const author = story.user || story.author;
-            return (
+        <View style={styles.stats}>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>{t('storyMap.pinsStat')}</Text>
+            <Text style={styles.statValue}>{pins.length}</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>{t('storyMap.placesStat')}</Text>
+            <Text style={styles.statValue}>{places}</Text>
+          </View>
+          <Pressable onPress={() => navigation.navigate('StoryStudio')} style={styles.cta}>
+            <Ionicons name="add" size={14} color="#fff" />
+            <Text style={styles.ctaText}>{t('storyMap.addStoryCta')}</Text>
+          </Pressable>
+        </View>
+
+        {error ? (
+          <Pressable onPress={() => void load()} style={styles.errorBox}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.retry}>{t('discover.retry')}</Text>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.mapFrame}>
+          <MapView
+            ref={mapRef}
+            style={StyleSheet.absoluteFill}
+            initialRegion={DEFAULT_REGION}
+            userInterfaceStyle="dark"
+            accessibilityLabel={t('storyMap.title')}
+          >
+            {pins.map((pin, index) => (
               <Marker
-                key={String(story.id ?? index)}
-                coordinate={{ latitude: lat, longitude: lng }}
-                onCalloutPress={() => openStory(index)}
+                key={String(pin.id)}
+                coordinate={{ latitude: pin.lat, longitude: pin.lng }}
+                onPress={() => openStory(index)}
               >
+                <StoryMapPinBubble hasThumbnail={!!pin.thumbnail} />
                 <Callout onPress={() => openStory(index)}>
                   <View style={styles.callout}>
-                    <Text style={styles.calloutTitle} numberOfLines={1}>
-                      @{author?.username || 'story'}
-                    </Text>
-                    <Text style={styles.calloutMeta} numberOfLines={2}>
-                      {row.location_name || 'Pinned story'}
-                    </Text>
+                    <Text style={styles.calloutTitle}>@{pin.author}</Text>
+                    <Text style={styles.calloutMeta}>{pin.locationName}</Text>
+                    <Text style={styles.calloutCta}>{t('storyMap.openStory')}</Text>
                   </View>
                 </Callout>
               </Marker>
-            );
-          })}
-        </MapView>
-        {loading ? (
-          <View style={styles.mapLoading}>
-            <ActivityIndicator color="#818CF8" />
-          </View>
-        ) : null}
-      </View>
+            ))}
+          </MapView>
+          {loading ? (
+            <View style={styles.mapOverlay}>
+              <ActivityIndicator color="#a5f3fc" />
+              <Text style={styles.loadingText}>{t('storyMap.loading')}</Text>
+            </View>
+          ) : pins.length === 0 ? (
+            <View style={styles.mapOverlay}>
+              <Text style={styles.emptyMap}>{t('storyMap.emptyMap')}</Text>
+            </View>
+          ) : null}
+        </View>
 
-      <FlatList
-        data={rows}
-        keyExtractor={(item, index) => String(rowStory(item).id ?? index)}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              void load(true);
-            }}
-            colors={['#6366F1']}
-          />
-        }
-        ListHeaderComponent={
-          <Text style={[styles.listTitle, { color: colors.text }]}>
-            {pins.length} mapped {pins.length === 1 ? 'story' : 'stories'}
-          </Text>
-        }
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={{ color: colors.textSecondary }}>No mapped stories yet.</Text>
-          </View>
-        }
-        renderItem={({ item, index }) => {
-          const story = rowStory(item);
-          const lat = coordinate(item, ['location_lat', 'latitude', 'lat']);
-          const lng = coordinate(item, ['location_lng', 'longitude', 'lng']);
-          const uri = mediaUrl(story.image || story.media || story.video || '');
-          const author = story.user || story.author;
-          return (
-            <Pressable
-              onPress={() => openStory(index)}
-              accessibilityRole="button"
-              accessibilityLabel={`Open story by ${author?.username || 'user'}`}
-              hitSlop={6}
-              style={({ pressed }) => [
-                styles.card,
-                { backgroundColor: colors.surface, borderColor: colors.border, opacity: pressed ? 0.85 : 1 },
-              ]}
-            >
-              {uri ? (
-                <Image source={{ uri }} style={styles.thumb} />
-              ) : (
-                <View style={[styles.thumb, styles.thumbFallback]}>
-                  <Text style={styles.thumbIcon}>◎</Text>
-                </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-                  @{author?.username || 'story'}
-                </Text>
-                <Text style={[styles.meta, { color: colors.textSecondary }]}>
-                  {item.location_name || 'Pinned story'}
-                  {lat != null && lng != null ? ` · ${lat.toFixed(3)}, ${lng.toFixed(3)}` : ''}
+        <FlatList
+          data={latest}
+          keyExtractor={(item) => String(item.id)}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                void load(true);
+              }}
+              tintColor="#22d3ee"
+            />
+          }
+          ListHeaderComponent={
+            <View style={styles.listHead}>
+              <Text style={styles.listTitle}>{t('storyMap.latestMapped')}</Text>
+              <View style={styles.countChip}>
+                <Text style={styles.countChipText}>
+                  {pins.length === 1
+                    ? t('storyMap.pinsCountOne', { count: '1' })
+                    : t('storyMap.pinsCountMany', { count: String(pins.length) })}
                 </Text>
               </View>
-            </Pressable>
-          );
-        }}
-      />
+            </View>
+          }
+          ListEmptyComponent={
+            loading ? null : <Text style={styles.emptyList}>{t('storyMap.emptyList')}</Text>
+          }
+          renderItem={({ item, index }) => (
+            <StoryMapPinCard pin={item} onPress={() => openStory(index)} />
+          )}
+        />
 
-      <StoryViewer
-        visible={viewerOpen}
-        stories={stories}
-        startIndex={storyIndex}
-        onClose={() => setViewerOpen(false)}
-        onViewStory={(storyId) => void api.viewStory(storyId)}
-      />
-    </SafeAreaView>
+        <StoryViewer
+          visible={viewerOpen}
+          stories={stories}
+          startIndex={storyIndex}
+          onClose={() => setViewerOpen(false)}
+          onViewStory={(storyId) => void api.viewStory(storyId)}
+        />
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    gap: 8,
   },
-  backBtn: { width: 44, alignItems: 'center' },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800' },
-  mapWrap: { height: 320, backgroundColor: '#0A0A0F' },
-  mapLoading: {
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: STORY_MAP_C.raised,
+    borderWidth: 1,
+    borderColor: STORY_MAP_C.borderSoft,
+  },
+  kicker: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(34,211,238,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(34,211,238,0.45)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 4,
+  },
+  kickerText: {
+    color: '#a5f3fc',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  title: { color: '#fff', fontSize: 22, fontWeight: '800' },
+  subtitle: {
+    color: '#d4d0ea',
+    fontSize: 13,
+    lineHeight: 19,
+    paddingHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#7C3AED',
+  },
+  stats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  stat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: STORY_MAP_C.raised,
+    borderWidth: 1,
+    borderColor: STORY_MAP_C.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  statLabel: { color: '#e9e5ff', fontSize: 12, fontWeight: '700' },
+  statValue: { color: STORY_MAP_C.cyan, fontSize: 13, fontWeight: '800' },
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#7C3AED',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  ctaText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  errorBox: {
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(248,113,113,0.5)',
+    backgroundColor: 'rgba(127,29,29,0.55)',
+    padding: 12,
+  },
+  errorText: { color: '#fecaca', fontSize: 13, fontWeight: '700' },
+  retry: { color: '#fff', fontSize: 12, fontWeight: '800', marginTop: 6 },
+  mapFrame: {
+    height: 320,
+    marginHorizontal: 16,
+    borderRadius: 22,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(167,139,250,0.45)',
+    backgroundColor: '#0a0818',
+  },
+  mapOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(10,10,15,0.35)',
+    backgroundColor: 'rgba(12,10,26,0.4)',
+    padding: 20,
   },
-  callout: { minWidth: 140, maxWidth: 200 },
-  calloutTitle: { fontWeight: '800', fontSize: 13, color: '#111' },
-  calloutMeta: { fontSize: 11, color: '#555', marginTop: 2 },
-  list: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 32 },
-  listTitle: { fontSize: 14, fontWeight: '800', marginBottom: 10 },
-  card: {
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 10,
+  loadingText: { color: '#ddd6fe', marginTop: 8, fontWeight: '700' },
+  emptyMap: { color: '#fff', fontWeight: '700', textAlign: 'center' },
+  list: { flex: 1, marginTop: 8 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 32 },
+  listHead: {
     flexDirection: 'row',
-    gap: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: STORY_MAP_C.borderSoft,
   },
-  thumb: { width: 64, height: 80, borderRadius: 12, backgroundColor: '#111827' },
-  thumbFallback: { alignItems: 'center', justifyContent: 'center' },
-  thumbIcon: { color: '#fff', fontSize: 20 },
-  title: { fontSize: 15, fontWeight: '800' },
-  meta: { fontSize: 12, marginTop: 3 },
-  empty: { padding: 24, alignItems: 'center' },
+  listTitle: { color: '#fff', fontSize: 16, fontWeight: '800' },
+  countChip: {
+    borderRadius: 999,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  countChipText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  emptyList: { color: '#c4b5fd', fontSize: 13, lineHeight: 20, paddingVertical: 12 },
+  callout: { minWidth: 150, maxWidth: 220 },
+  calloutTitle: { fontWeight: '800', fontSize: 13, color: '#111' },
+  calloutMeta: { fontSize: 11, color: '#0e7490', marginTop: 2, fontWeight: '700' },
+  calloutCta: { fontSize: 11, fontWeight: '800', color: '#7C3AED', marginTop: 6 },
 });

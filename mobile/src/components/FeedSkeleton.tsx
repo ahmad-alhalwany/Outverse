@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import { View, StyleSheet, FlatList } from 'react-native';
 import Skeleton from './Skeleton';
+import { useTheme } from '@/hooks/useTheme';
 
 export function PostCardSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.header}>
         <Skeleton width={40} height={40} borderRadius={20} />
         <View style={styles.headerInfo}>
@@ -40,12 +42,10 @@ export default function FeedSkeleton({ count = 3 }: FeedSkeletonProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    marginBottom: 12,
+    borderRadius: 28,
+    marginBottom: 16,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#e5e7eb',
+    borderWidth: 1,
   },
   header: {
     flexDirection: 'row',

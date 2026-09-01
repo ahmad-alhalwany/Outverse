@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   SafeAreaView,
-  Pressable,
   Switch,
   ActivityIndicator,
   Alert,
@@ -12,10 +11,13 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 
 /** Pulse creator defaults — mirrors web Settings. */
 export default function PulseCreatorSettingsScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -54,24 +56,23 @@ export default function PulseCreatorSettingsScreen() {
         default_allow_download: patch.default_allow_download ?? allowDownload,
       });
     } catch {
-      Alert.alert('Error', 'Could not save Pulse creator defaults.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotSavePulse'));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: colors.text }]}>Pulse creator</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <WorldBackdrop>
+      <SafeAreaView style={{ flex: 1 }}>
+        <WorldHeader
+          title={t('mobile.pulseCreator')}
+          subtitle={t('mobile.pulseCreatorSub')}
+          onBack={() => navigation.goBack()}
+        />
 
       <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        Defaults applied to new signals you launch — Remix, Weave, and export.
+        {t('mobile.pulseHint')}
       </Text>
 
       {loading ? (
@@ -79,7 +80,7 @@ export default function PulseCreatorSettingsScreen() {
       ) : (
         <View style={{ padding: 16, gap: 4 }}>
           <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.text }]}>Allow Remix</Text>
+            <Text style={[styles.label, { color: colors.text }]}>{t('mobile.allowRemix')}</Text>
             <Switch
               value={allowRemix}
               onValueChange={(v) => {
@@ -91,7 +92,7 @@ export default function PulseCreatorSettingsScreen() {
             />
           </View>
           <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.text }]}>Allow Weave</Text>
+            <Text style={[styles.label, { color: colors.text }]}>{t('mobile.allowWeave')}</Text>
             <Switch
               value={allowWeave}
               onValueChange={(v) => {
@@ -103,7 +104,7 @@ export default function PulseCreatorSettingsScreen() {
             />
           </View>
           <View style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.label, { color: colors.text }]}>Allow export</Text>
+            <Text style={[styles.label, { color: colors.text }]}>{t('mobile.allowExport')}</Text>
             <Switch
               value={allowDownload}
               onValueChange={(v) => {
@@ -116,7 +117,8 @@ export default function PulseCreatorSettingsScreen() {
           </View>
         </View>
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 

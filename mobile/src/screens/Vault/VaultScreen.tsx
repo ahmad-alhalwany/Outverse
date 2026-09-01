@@ -1,239 +1,174 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
+  Pressable,
   RefreshControl,
-  TextInput,
-  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { useTheme } from '@/hooks/useTheme';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { api } from '@/api/client';
+import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 import {
-  WorldBackdrop,
-  WorldCard,
-  WorldHeader,
-  WorldHero,
-  WorldPrimaryButton,
-  WorldStat,
-} from '@/components/world/WorldChrome';
-
-type YearStats = {
-  year?: number;
-  posts_count?: number;
-  words_written?: number;
-  capsules_opened?: number;
-  ritual_streak?: number;
-};
-
-type Collection = {
-  id: number;
-  name: string;
-  item_count: number;
-  is_public?: boolean;
-};
+  asCapsuleStats,
+  asVaultMoods,
+  moodLabel,
+  ritualStreak,
+  useVaultPalette,
+  type CapsuleStats,
+  type VaultMoodRow,
+} from '@/lib/vault';
 
 export default function VaultScreen() {
-  const { colors } = useTheme();
   const navigation = useNavigation<any>();
-  const [yearStats, setYearStats] = useState<YearStats | null>(null);
-  const [capsuleStats, setCapsuleStats] = useState<{ sealed?: number; ready?: number; opened?: number } | null>(null);
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [collectionName, setCollectionName] = useState('');
-  const [collectionBusy, setCollectionBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { isDark } = useTheme();
+  const C = useVaultPalette(isDark);
+  const { t, locale } = useLocale();
+
+  const [streak, setStreak] = useState(0);
+  const [capsuleStats, setCapsuleStats] = useState<CapsuleStats | null>(null);
+  const [moods, setMoods] = useState<VaultMoodRow[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async (isRefresh = false) => {
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
     try {
-      const [year, caps, savedCollections] = await Promise.all([
-        api.getYearStats().catch(() => null),
+      const [ritual, caps, dashboard] = await Promise.all([
+        api.getDailyQuestion({ lang: locale }).catch(() => null),
         api.getCapsuleStats().catch(() => null),
-        api.getCollections().catch(() => []),
+        api.getBottlesDashboard().catch(() => null),
       ]);
-      setYearStats(year as YearStats | null);
-      setCapsuleStats(caps);
-      setCollections(Array.isArray(savedCollections) ? savedCollections : []);
-    } catch (error) {
-      console.error('Failed to load vault:', error);
+      setStreak(ritualStreak(ritual));
+      setCapsuleStats(asCapsuleStats(caps));
+      setMoods(asVaultMoods(dashboard));
     } finally {
-      setLoading(false);
-      if (isRefresh) setRefreshing(false);
+      setRefreshing(false);
     }
-  }, []);
+  }, [locale]);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
-  const toggleCollectionPublic = async (collection: Collection) => {
-    setCollectionBusy(true);
-    try {
-      const updated = await api.updateCollection(collection.id, {
-        is_public: !collection.is_public,
-      });
-      setCollections((prev) => prev.map((item) => (item.id === collection.id ? updated : item)));
-    } catch {
-      Alert.alert('Error', 'Could not update collection visibility.');
-    } finally {
-      setCollectionBusy(false);
-    }
-  };
-
-  const createCollection = async (isPublic: boolean) => {
-    if (!collectionName.trim()) {
-      Alert.alert('Name required', 'Add a collection name.');
-      return;
-    }
-    setCollectionBusy(true);
-    try {
-      const created = await api.createCollection(collectionName.trim(), isPublic);
-      setCollections((prev) => [created, ...prev]);
-      setCollectionName('');
-    } catch {
-      Alert.alert('Error', 'Could not create collection.');
-    } finally {
-      setCollectionBusy(false);
-    }
-  };
+  const chambers = [
+    {
+      key: 'bottles',
+      screen: 'Bottles',
+      label: t('vault.bottlesLabel'),
+      title: t('vault.bottlesTitle'),
+      body: t('vault.bottlesBody'),
+    },
+    {
+      key: 'capsules',
+      screen: 'Capsules',
+      label: t('vault.capsulesLabel'),
+      title: t('vault.capsulesTitle'),
+      body: capsuleStats
+        ? t('vault.capsulesStats', {
+            sealed: capsuleStats.sealed,
+            ready: capsuleStats.ready,
+            opened: capsuleStats.opened,
+          })
+        : t('vault.capsulesBody'),
+    },
+    {
+      key: 'year',
+      screen: 'Year',
+      label: t('vault.mapLabel'),
+      title: t('vault.mapTitle'),
+      body: t('vault.mapBody', { streak }),
+    },
+  ];
 
   return (
     <WorldBackdrop tone="vault">
-      <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <WorldHeader
-          title="The Vault"
-          subtitle="Emotional archive"
+          title={t('nav.vault')}
+          subtitle={t('vault.eyebrow')}
           tone="vault"
           onBack={() => navigation.goBack()}
         />
         <ScrollView
           contentContainerStyle={styles.content}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                load(true);
-              }}
-              colors={[colors.primary]}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={C.accent} />
           }
         >
-          <WorldHero
-            tone="vault"
-            eyebrow="One world"
-            title="Bottles, capsules, and the moods that shaped you"
-            body="Open a chamber of the archive — or revisit the year that made you."
+          <LinearGradient
+            colors={[C.glow, 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.7, y: 1 }}
+            style={styles.glow}
           />
 
-          <WorldCard onPress={() => navigation.navigate('Bottles')}>
-            <Text style={[styles.kicker, { color: colors.primary }]}>Bottles</Text>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Drift & catch</Text>
-            <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
-              Throw anonymous feelings into the current and catch what washes ashore.
-            </Text>
-          </WorldCard>
+          <Text style={[styles.eyebrow, { color: C.accent }]}>{t('vault.eyebrow')}</Text>
+          <Text style={[styles.title, { color: C.ink }]}>{t('vault.title')}</Text>
+          <Text style={[styles.subtitle, { color: C.muted }]}>{t('vault.subtitle')}</Text>
 
-          <WorldCard onPress={() => navigation.navigate('Capsules')}>
-            <Text style={[styles.kicker, { color: colors.primary }]}>Capsules</Text>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Messages to future-you</Text>
-            <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
-              {capsuleStats
-                ? `${capsuleStats.sealed ?? 0} sealed · ${capsuleStats.ready ?? 0} ready · ${capsuleStats.opened ?? 0} opened`
-                : 'Seal a note that opens on the date you choose.'}
-            </Text>
-          </WorldCard>
+          {chambers.map((chamber) => (
+            <Pressable
+              key={chamber.key}
+              onPress={() => navigation.navigate(chamber.screen)}
+              style={[styles.chamber, { backgroundColor: C.card, borderColor: C.line }]}
+            >
+              <Text style={[styles.chamberLabel, { color: C.accent }]}>{chamber.label}</Text>
+              <Text style={[styles.chamberTitle, { color: C.ink }]}>{chamber.title}</Text>
+              <Text style={[styles.chamberBody, { color: C.muted }]}>{chamber.body}</Text>
+              <Text style={[styles.enter, { color: C.accent }]}>{t('vault.enter')}</Text>
+            </Pressable>
+          ))}
 
-          <WorldCard>
-            <Text style={[styles.kicker, { color: colors.primary }]}>Public boards</Text>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Saved collections</Text>
-            <Text style={[styles.cardBody, { color: colors.textSecondary }]}>
-              Publish a collection to turn it into a shareable public board.
-            </Text>
-            <View style={styles.collectionForm}>
-              <TextInput
-                value={collectionName}
-                onChangeText={setCollectionName}
-                placeholder="Collection name"
-                placeholderTextColor={colors.textSecondary}
-                style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-              />
-              <View style={styles.collectionActions}>
-                <TouchableOpacity
-                  disabled={collectionBusy || !collectionName.trim()}
-                  onPress={() => void createCollection(false)}
-                  style={[styles.secondaryBtn, { borderColor: colors.border, opacity: collectionBusy || !collectionName.trim() ? 0.5 : 1 }]}
-                >
-                  <Text style={[styles.secondaryText, { color: colors.text }]}>Create</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  disabled={collectionBusy || !collectionName.trim()}
-                  onPress={() => void createCollection(true)}
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: collectionBusy || !collectionName.trim() ? 0.5 : 1 }]}
-                >
-                  <Text style={styles.primaryText}>Create public</Text>
-                </TouchableOpacity>
-              </View>
+          <View style={[styles.moodCard, { backgroundColor: C.card, borderColor: C.line }]}>
+            <Text style={[styles.moodTitle, { color: C.ink }]}>{t('vault.emotionTitle')}</Text>
+            <Text style={[styles.moodSub, { color: C.muted }]}>{t('vault.emotionSubtitle')}</Text>
+
+            <View style={styles.moodActions}>
+              <Pressable
+                onPress={() => navigation.navigate('Bottles')}
+                style={[styles.primaryBtn, { backgroundColor: C.accentDk }]}
+              >
+                <Text style={styles.primaryText}>{t('vault.openBottles')}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => navigation.navigate('Memories')}
+                style={[styles.secondaryBtn, { borderColor: C.line }]}
+              >
+                <Text style={[styles.secondaryText, { color: C.ink }]}>{t('vault.openMemories')}</Text>
+              </Pressable>
             </View>
-            {collections.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textSecondary }]}>No saved collections yet.</Text>
+
+            {moods.length === 0 ? (
+              <Text style={[styles.empty, { color: C.muted }]}>{t('vault.emotionEmpty')}</Text>
             ) : (
-              collections.map((collection) => (
-                <TouchableOpacity
-                  key={collection.id}
-                  onPress={() => {
-                    if (collection.is_public) {
-                      navigation.navigate('PublicBoard', { collectionId: collection.id });
-                    } else {
-                      Alert.alert('Private collection', 'Make this collection public to open its board.');
-                    }
-                  }}
-                  style={[styles.collectionRow, { borderColor: colors.border }]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.collectionTitle, { color: colors.text }]} numberOfLines={1}>
-                      {collection.name}
-                    </Text>
-                    <Text style={[styles.collectionMeta, { color: colors.textSecondary }]}>
-                      {collection.item_count ?? 0} items - {collection.is_public ? 'public' : 'private'}
+              <View style={styles.moodList}>
+                {moods.map((row) => (
+                  <View
+                    key={row.emotion}
+                    style={[
+                      styles.moodRow,
+                      {
+                        borderColor: C.line,
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(124,58,237,0.04)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.moodName, { color: C.ink }]}>{moodLabel(row.emotion, t)}</Text>
+                    <Text style={[styles.moodCount, { color: C.accent }]}>
+                      {row.asPercent ? `${row.count}%` : row.count}
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    disabled={collectionBusy}
-                    onPress={() => void toggleCollectionPublic(collection)}
-                    style={[styles.visibilityBtn, { borderColor: collection.is_public ? colors.primary : colors.border }]}
-                  >
-                    <Text style={{ color: collection.is_public ? colors.primary : colors.text, fontWeight: '800', fontSize: 12 }}>
-                      {collection.is_public ? 'Public' : 'Make public'}
-                    </Text>
-                  </TouchableOpacity>
-                </TouchableOpacity>
-              ))
+                ))}
+              </View>
             )}
-          </WorldCard>
-
-          {loading && !yearStats ? (
-            <ActivityIndicator color={colors.primary} style={{ marginTop: 12 }} />
-          ) : yearStats ? (
-            <WorldCard>
-              <Text style={[styles.kicker, { color: colors.primary }]}>
-                {yearStats.year || new Date().getFullYear()} in feelings
-              </Text>
-              <View style={styles.statsRow}>
-                <WorldStat label="Posts" value={yearStats.posts_count ?? 0} />
-                <WorldStat label="Words" value={yearStats.words_written ?? 0} />
-                <WorldStat label="Streak" value={yearStats.ritual_streak ?? 0} />
-              </View>
-              <View style={{ marginTop: 12 }}>
-                <WorldPrimaryButton label="Open Passports" onPress={() => navigation.navigate('Passport')} />
-              </View>
-            </WorldCard>
-          ) : null}
+          </View>
         </ScrollView>
       </SafeAreaView>
     </WorldBackdrop>
@@ -241,34 +176,66 @@ export default function VaultScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 16, paddingBottom: 40 },
-  kicker: {
+  content: { paddingHorizontal: 16, paddingBottom: 48 },
+  glow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 80,
+    height: 180,
+    opacity: 0.7,
+  },
+  eyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.5,
+    letterSpacing: 2.2,
     textTransform: 'uppercase',
-    marginBottom: 6,
+    marginBottom: 10,
+    marginTop: 4,
   },
-  cardTitle: { fontSize: 20, fontWeight: '800', marginBottom: 6 },
-  cardBody: { fontSize: 14, lineHeight: 21 },
-  statsRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  collectionForm: { gap: 8, marginTop: 12 },
-  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14 },
-  collectionActions: { flexDirection: 'row', gap: 8 },
-  primaryBtn: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  primaryText: { color: '#fff', fontWeight: '800', fontSize: 12 },
-  secondaryBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  secondaryText: { fontWeight: '800', fontSize: 12 },
-  collectionRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingVertical: 11,
-    marginTop: 6,
+  title: { fontSize: 32, fontWeight: '800', letterSpacing: -0.6, lineHeight: 38 },
+  subtitle: { fontSize: 16, lineHeight: 24, marginTop: 12, marginBottom: 22 },
+  chamber: {
+    borderWidth: 1,
+    borderRadius: 28,
+    padding: 20,
+    marginBottom: 12,
+  },
+  chamberLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.8,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  chamberTitle: { fontSize: 20, fontWeight: '800', marginBottom: 8 },
+  chamberBody: { fontSize: 14, lineHeight: 21 },
+  enter: { marginTop: 16, fontSize: 14, fontWeight: '800' },
+  moodCard: {
+    borderWidth: 1,
+    borderRadius: 32,
+    padding: 20,
+    marginTop: 8,
+  },
+  moodTitle: { fontSize: 20, fontWeight: '800' },
+  moodSub: { fontSize: 13, marginTop: 6, marginBottom: 14 },
+  moodActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
+  primaryBtn: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10 },
+  primaryText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  secondaryBtn: { borderRadius: 999, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10 },
+  secondaryText: { fontWeight: '800', fontSize: 13 },
+  empty: { fontSize: 13, lineHeight: 20 },
+  moodList: { gap: 10 },
+  moodRow: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
   },
-  collectionTitle: { fontSize: 14, fontWeight: '800' },
-  collectionMeta: { fontSize: 12, marginTop: 2 },
-  visibilityBtn: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  empty: { marginTop: 12, fontSize: 13 },
+  moodName: { fontSize: 15, fontWeight: '700', flex: 1 },
+  moodCount: { fontSize: 18, fontWeight: '800' },
 });

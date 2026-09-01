@@ -10,8 +10,16 @@ export type WsChatPayload = {
   sender_name?: string;
   sender_avatar?: string | null;
   text?: string;
+  message_type?: string;
+  attachment_url?: string | null;
   created_at?: string;
   is_read?: boolean;
+  is_pinned?: boolean;
+  reaction_counts?: Record<string, number>;
+  my_reaction?: string | null;
+  edited_at?: string | null;
+  is_deleted?: boolean;
+  expires_at?: string | null;
   conversation_id?: number;
   user_id?: number;
   is_typing?: boolean;

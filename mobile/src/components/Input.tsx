@@ -1,6 +1,7 @@
 import React, { isValidElement } from 'react';
 import { View, Text, StyleSheet, TextInput, ViewStyle } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 
 interface InputProps {
   label?: string;
@@ -56,9 +57,11 @@ export default function Input({
   style,
 }: InputProps) {
   const { colors } = useTheme();
+  const { isRTL } = useLocale();
+  const [focused, setFocused] = React.useState(false);
 
   const hasError = !!error;
-  const borderColor = hasError ? colors.error : colors.border;
+  const borderColor = hasError ? colors.error : focused ? colors.primary : colors.border;
 
   const variantStyles = {
     default: {
@@ -83,6 +86,8 @@ export default function Input({
     color: colors.text,
     paddingVertical: 14,
     paddingHorizontal: 16,
+    textAlign: isRTL ? ('right' as const) : ('left' as const),
+    writingDirection: isRTL ? ('rtl' as const) : ('ltr' as const),
   };
 
   const renderIcon = (icon: React.ReactNode | ((props: { color: string }) => React.ReactNode) | undefined) => {
@@ -90,19 +95,22 @@ export default function Input({
     if (typeof icon === 'function') {
       return icon({ color: colors.textSecondary });
     }
-    return isValidElement(icon) ? React.cloneElement(icon as React.ReactElement, { color: colors.textSecondary }) : icon;
+    return isValidElement(icon)
+      ? React.cloneElement(icon as React.ReactElement<{ color?: string }>, { color: colors.textSecondary })
+      : icon;
   };
 
   return (
     <View style={styles.container}>
       {label && (
-        <Text style={[styles.label, { color: colors.text }]}>{label}</Text>
+        <Text style={[styles.label, { color: colors.text, textAlign: isRTL ? 'right' : 'left' }]}>{label}</Text>
       )}
       <View
         style={[
           styles.inputWrapper,
           variantStyles[variant],
           hasError && styles.error,
+          focused && !hasError && styles.focused,
           style,
         ]}
       >
@@ -124,8 +132,14 @@ export default function Input({
           autoCorrect={autoCorrect}
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
-          onBlur={onBlur}
-          onFocus={onFocus}
+          onBlur={() => {
+            setFocused(false);
+            onBlur?.();
+          }}
+          onFocus={() => {
+            setFocused(true);
+            onFocus?.();
+          }}
           editable={editable}
           maxLength={maxLength}
           multiline={multiline}
@@ -139,7 +153,7 @@ export default function Input({
         )}
       </View>
       {(error || helperText) && (
-        <Text style={[styles.helperText, { color: hasError ? colors.error : colors.textSecondary }]}>
+        <Text style={[styles.helperText, { color: hasError ? colors.error : colors.textSecondary, textAlign: isRTL ? 'right' : 'left' }]}>
           {error || helperText}
         </Text>
       )}
@@ -153,10 +167,11 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 16,
     minHeight: 52,
   },
   error: { borderWidth: 2 },
+  focused: { borderWidth: 1.5 },
   iconLeft: { marginLeft: 12, marginRight: 8 },
   iconRight: { marginRight: 12, marginLeft: 8 },
   helperText: { fontSize: 12, marginTop: 6, marginLeft: 4 },

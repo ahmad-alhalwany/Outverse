@@ -1,10 +1,18 @@
 import React, { useEffect, useState } from 'react';
+import { useFonts } from 'expo-font';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
 import * as SplashScreenExpo from 'expo-splash-screen';
 import { AuthProvider, useAuth } from './auth/AuthContext';
+import { useTheme } from './hooks/useTheme';
+import { INTER_FONTS, applyDefaultInter } from './lib/fonts';
+import { LocaleProvider, useLocale } from './i18n/LocaleProvider';
 
 // Auth Screens
 import LoginScreen from './screens/Auth/LoginScreen';
@@ -28,11 +36,15 @@ import CommunitiesScreen from './screens/Communities/CommunitiesScreen';
 import LiveScreen from './screens/Live/LiveScreen';
 import LiveViewerScreen from './screens/Live/LiveViewerScreen';
 import LabScreen from './screens/Lab/LabScreen';
+import LabHistoryScreen from './screens/Lab/LabHistoryScreen';
+import InspirationHistoryScreen from './screens/Lab/InspirationHistoryScreen';
 import CapsulesScreen from './screens/Capsules/CapsulesScreen';
 import VaultScreen from './screens/Vault/VaultScreen';
 import BazaarDetailScreen from './screens/Bazaar/BazaarDetailScreen';
 import CommunityDetailScreen from './screens/Communities/CommunityDetailScreen';
 import ShopScreen from './screens/Shop/ShopScreen';
+import ShopProductScreen from './screens/Shop/ShopProductScreen';
+import ShopOrdersScreen from './screens/Shop/ShopOrdersScreen';
 import WalletScreen from './screens/Shop/WalletScreen';
 import PassportScreen from './screens/Passport/PassportScreen';
 import StoryStudioScreen from './screens/Stories/StoryStudioScreen';
@@ -42,9 +54,15 @@ import OrbitFriendsScreen from './screens/Settings/OrbitFriendsScreen';
 import ReelsDiscoverScreen from './screens/Reels/ReelsDiscoverScreen';
 import SoundScreen from './screens/Reels/SoundScreen';
 import PulseCreatorSettingsScreen from './screens/Settings/PulseCreatorSettingsScreen';
+import PrivacyScreen from './screens/Settings/PrivacyScreen';
+import BlockedAccountsScreen from './screens/Settings/BlockedAccountsScreen';
+import InspirationTasteScreen from './screens/Settings/InspirationTasteScreen';
+import AppealsScreen from './screens/Settings/AppealsScreen';
 import OrbitListsScreen from './screens/OrbitLists/OrbitListsScreen';
 import SignalPublishSettingsScreen from './screens/Settings/SignalPublishSettingsScreen';
 import SettingsScreen from './screens/Settings/SettingsScreen';
+import LegalScreen from './screens/Settings/LegalScreen';
+import InAppWebScreen from './screens/Common/InAppWebScreen';
 import OnboardingScreen from './screens/Onboarding/OnboardingScreen';
 import SplashScreen from './screens/SplashScreen';
 import CreatorStudioScreen from './screens/Creator/CreatorStudioScreen';
@@ -65,6 +83,7 @@ import AchievementsScreen from './screens/Worlds/AchievementsScreen';
 import AnalyticsScreen from './screens/Worlds/AnalyticsScreen';
 import CollabScreen from './screens/Worlds/CollabScreen';
 import DrawStudioScreen from './screens/Worlds/DrawStudioScreen';
+import StudioSessionScreen from './screens/Worlds/StudioSessionScreen';
 import ForgeScreen from './screens/Worlds/ForgeScreen';
 import ForgeDetailScreen from './screens/Worlds/ForgeDetailScreen';
 import AdsScreen from './screens/Worlds/AdsScreen';
@@ -74,49 +93,43 @@ import PromptRoomsScreen from './screens/Worlds/PromptRoomsScreen';
 import ShopSellerScreen from './screens/Worlds/ShopSellerScreen';
 import TwoFactorSetupScreen from './screens/Worlds/TwoFactorSetupScreen';
 import AdminScreen from './screens/Worlds/AdminScreen';
+import AdminSectionScreen from './screens/Worlds/AdminSectionScreen';
+import AdminMarketingScreen from './screens/Worlds/AdminMarketingScreen';
 import SavedScreen from './screens/Saved/SavedScreen';
 import SearchScreen from './screens/Search/SearchScreen';
 import TagFeedScreen from './screens/Tag/TagFeedScreen';
+import MoreScreen from './screens/More/MoreScreen';
+import CommunityWikiScreen from './screens/Communities/CommunityWikiScreen';
 
 SplashScreenExpo.preventAutoHideAsync();
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// ── Icon component ── Emojis for now; swap to @expo/vector-icons later
-function TabIcon({ name, size, color, focused }: { name: string; size: number; color: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    home: '🏠',
-    search: '🔍',
-    plus: '＋',
-    bell: '🔔',
-    user: '👤',
-    reels: '🎬',
-  };
-  return (
-    <View style={{ transform: [{ scale: focused ? 1.15 : 1 }] }}>
-      <Text style={{ fontSize: size * 0.85, color }}>{icons[name] || '●'}</Text>
-    </View>
-  );
-}
+const stackScreenOptions = {
+  headerShown: false,
+};
 
 function MainTabs() {
+  const { colors } = useTheme();
+  const { t } = useLocale();
+  const insets = useSafeAreaInsets();
+  const bottomPad = Math.max(insets.bottom, 8);
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#6366f1',
-        tabBarInactiveTintColor: '#9ca3af',
+        tabBarHideOnKeyboard: true,
+        tabBarActiveTintColor: colors.iconHover,
+        tabBarInactiveTintColor: colors.textSecondary,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginTop: 1 },
         tabBarStyle: {
-          backgroundColor: '#fff',
-          borderTopWidth: 0,
-          elevation: 8,
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: 0.1,
-          shadowRadius: 8,
-          height: 60,
-          paddingBottom: 4,
+          backgroundColor: colors.background,
+          borderTopWidth: 1,
+          borderTopColor: 'rgba(156,39,176,0.15)',
+          height: 56 + bottomPad,
+          paddingBottom: bottomPad,
+          paddingTop: 6,
         },
       }}
     >
@@ -124,51 +137,35 @@ function MainTabs() {
         name="Home"
         component={HomeScreen}
         options={{
-          tabBarLabel: 'الرئيسية',
-          tabBarIcon: ({ focused, color, size }) => (
-            <TabIcon name="home" size={size} color={color} focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Explore"
-        component={ExploreScreen}
-        options={{
-          tabBarLabel: 'استكشاف',
-          tabBarIcon: ({ focused, color, size }) => (
-            <TabIcon name="search" size={size} color={color} focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Reels"
-        component={ReelsScreen}
-        options={{
-          tabBarLabel: 'ريلز',
-          tabBarIcon: ({ focused, color, size }) => (
-            <TabIcon name="reels" size={size} color={color} focused={focused} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Create"
-        component={CreateScreen}
-        options={{
-          tabBarLabel: '',
-          tabBarIcon: ({ focused, size }) => (
-            <View style={styles.createTabIcon}>
-              <TabIcon name="plus" size={size} color="#fff" focused={focused} />
+          tabBarLabel: t('nav.home'),
+          tabBarIcon: ({ color, focused }) => (
+            <View style={{ backgroundColor: focused ? 'rgba(124,58,237,0.15)' : 'transparent', borderRadius: 8, padding: 4 }}>
+              <Ionicons name={focused ? 'home' : 'home-outline'} size={20} color={color} />
             </View>
           ),
         }}
       />
       <Tab.Screen
-        name="Notifications"
-        component={NotificationsScreen}
+        name="Signals"
+        component={ReelsScreen}
         options={{
-          tabBarLabel: 'الإشعارات',
-          tabBarIcon: ({ focused, color, size }) => (
-            <TabIcon name="bell" size={size} color={color} focused={focused} />
+          tabBarLabel: t('nav.reels'),
+          tabBarIcon: ({ color, focused }) => (
+            <View style={{ backgroundColor: focused ? 'rgba(124,58,237,0.15)' : 'transparent', borderRadius: 8, padding: 4 }}>
+              <Ionicons name={focused ? 'play-circle' : 'play-circle-outline'} size={20} color={color} />
+            </View>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Daily"
+        component={LabScreen}
+        options={{
+          tabBarLabel: t('nav.lab'),
+          tabBarIcon: ({ color, focused }) => (
+            <View style={{ backgroundColor: focused ? 'rgba(124,58,237,0.15)' : 'transparent', borderRadius: 8, padding: 4 }}>
+              <Ionicons name={focused ? 'flask' : 'flask-outline'} size={20} color={color} />
+            </View>
           ),
         }}
       />
@@ -176,9 +173,23 @@ function MainTabs() {
         name="Profile"
         component={ProfileScreen}
         options={{
-          tabBarLabel: 'الملف الشخصي',
-          tabBarIcon: ({ focused, color, size }) => (
-            <TabIcon name="user" size={size} color={color} focused={focused} />
+          tabBarLabel: t('nav.profile'),
+          tabBarIcon: ({ color, focused }) => (
+            <View style={{ backgroundColor: focused ? 'rgba(124,58,237,0.15)' : 'transparent', borderRadius: 8, padding: 4 }}>
+              <Ionicons name={focused ? 'person-circle' : 'person-circle-outline'} size={20} color={color} />
+            </View>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="More"
+        component={MoreScreen}
+        options={{
+          tabBarLabel: t('nav.more'),
+          tabBarIcon: ({ color, focused }) => (
+            <View style={{ backgroundColor: focused ? 'rgba(124,58,237,0.15)' : 'transparent', borderRadius: 8, padding: 4 }}>
+              <Ionicons name={focused ? 'grid' : 'grid-outline'} size={20} color={color} />
+            </View>
           ),
         }}
       />
@@ -188,7 +199,7 @@ function MainTabs() {
 
 function AuthStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Register" component={RegisterScreen} />
     </Stack.Navigator>
@@ -197,8 +208,13 @@ function AuthStack() {
 
 function MainStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={stackScreenOptions}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
+      <Stack.Screen name="UserProfile" component={ProfileScreen} />
+      <Stack.Screen name="Create" component={CreateScreen} />
+      <Stack.Screen name="Notifications" component={NotificationsScreen} />
+      <Stack.Screen name="Explore" component={ExploreScreen} />
+      <Stack.Screen name="Reels" component={ReelsScreen} />
       <Stack.Screen name="Chat" component={ChatScreen} />
       <Stack.Screen name="Conversation" component={ConversationScreen} />
       <Stack.Screen name="Room" component={RoomScreen} />
@@ -209,18 +225,32 @@ function MainStack() {
       <Stack.Screen name="Communities" component={CommunitiesScreen} />
       <Stack.Screen name="CommunityDetail" component={CommunityDetailScreen} />
       <Stack.Screen name="Lab" component={LabScreen} />
+      <Stack.Screen name="LabHistory" component={LabHistoryScreen} />
+      <Stack.Screen name="InspirationHistory" component={InspirationHistoryScreen} />
       <Stack.Screen name="Capsules" component={CapsulesScreen} />
       <Stack.Screen name="Vault" component={VaultScreen} />
       <Stack.Screen name="Shop" component={ShopScreen} />
+      <Stack.Screen name="ShopProduct" component={ShopProductScreen} />
+      <Stack.Screen name="ShopOrders" component={ShopOrdersScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />
       <Stack.Screen name="Passport" component={PassportScreen} />
       <Stack.Screen name="Live" component={LiveScreen} />
       <Stack.Screen name="LiveViewer" component={LiveViewerScreen} />
-      <Stack.Screen name="StoryStudio" component={StoryStudioScreen} options={{ presentation: 'modal' }} />
+      <Stack.Screen
+        name="StoryStudio"
+        component={StoryStudioScreen}
+        options={{ presentation: 'modal' }}
+      />
       <Stack.Screen name="StoryMap" component={StoryMapScreen} />
       <Stack.Screen name="Highlights" component={HighlightsManagerScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Legal" component={LegalScreen} />
+      <Stack.Screen name="InAppWeb" component={InAppWebScreen} />
+      <Stack.Screen name="Privacy" component={PrivacyScreen} />
+      <Stack.Screen name="BlockedAccounts" component={BlockedAccountsScreen} />
+      <Stack.Screen name="InspirationTaste" component={InspirationTasteScreen} />
+      <Stack.Screen name="Appeals" component={AppealsScreen} />
       <Stack.Screen name="OrbitFriends" component={OrbitFriendsScreen} />
       <Stack.Screen name="ReelsDiscover" component={ReelsDiscoverScreen} />
       <Stack.Screen name="PulseCreator" component={PulseCreatorSettingsScreen} />
@@ -244,6 +274,7 @@ function MainStack() {
       <Stack.Screen name="Analytics" component={AnalyticsScreen} />
       <Stack.Screen name="Collab" component={CollabScreen} />
       <Stack.Screen name="DrawStudio" component={DrawStudioScreen} />
+      <Stack.Screen name="StudioSession" component={StudioSessionScreen} />
       <Stack.Screen name="Forge" component={ForgeScreen} />
       <Stack.Screen name="ForgeDetail" component={ForgeDetailScreen} />
       <Stack.Screen name="Ads" component={AdsScreen} />
@@ -254,6 +285,9 @@ function MainStack() {
       <Stack.Screen name="ShopSeller" component={ShopSellerScreen} />
       <Stack.Screen name="TwoFactorSetup" component={TwoFactorSetupScreen} />
       <Stack.Screen name="Admin" component={AdminScreen} />
+      <Stack.Screen name="AdminSection" component={AdminSectionScreen} />
+      <Stack.Screen name="AdminMarketing" component={AdminMarketingScreen} />
+      <Stack.Screen name="CommunityWiki" component={CommunityWikiScreen} />
       <Stack.Screen name="Saved" component={SavedScreen} />
       <Stack.Screen name="Search" component={SearchScreen} />
       <Stack.Screen name="TagFeed" component={TagFeedScreen} />
@@ -263,56 +297,56 @@ function MainStack() {
 
 function RootNavigator() {
   const { isLoading, isAuthenticated, user } = useAuth();
+  const { isDark } = useTheme();
+  const [fontsLoaded, fontError] = useFonts(INTER_FONTS);
   const [appReady, setAppReady] = useState(false);
+  const fontsReady = fontsLoaded || !!fontError;
 
   useEffect(() => {
-    if (!isLoading) {
+    if (fontsLoaded) applyDefaultInter();
+  }, [fontsLoaded]);
+
+  useEffect(() => {
+    if (!isLoading && fontsReady) {
       SplashScreenExpo.hideAsync().finally(() => setAppReady(true));
     }
-  }, [isLoading]);
+  }, [isLoading, fontsReady]);
 
-  if (!appReady || isLoading) {
+  if (!appReady || isLoading || !fontsReady) {
     return <SplashScreen />;
   }
 
   const needsOnboarding = isAuthenticated && user && user.onboarding_completed === false;
 
   return (
-    <NavigationContainer>
+    <>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <NavigationContainer>
       {!isAuthenticated ? (
         <AuthStack />
       ) : needsOnboarding ? (
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Navigator screenOptions={stackScreenOptions}>
           <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         </Stack.Navigator>
       ) : (
         <MainStack />
       )}
     </NavigationContainer>
+    </>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <LocaleProvider>
+            <RootNavigator />
+          </LocaleProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
-const styles = StyleSheet.create({
-  createTabIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#6366f1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-    marginTop: -8,
-  },
-});

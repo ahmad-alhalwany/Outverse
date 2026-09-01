@@ -1,56 +1,85 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   Modal,
+  Pressable,
   RefreshControl,
-  SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { ResizeMode, Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
-import Video from 'react-native-video';
-import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { mediaUrl } from '@/api/config';
+import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import {
+  WorldBackdrop,
+  WorldHeader,
+  WorldHero,
+  WorldPill,
+} from '@/components/world/WorldChrome';
 
+type VideoUser = { id?: number; username?: string; first_name?: string; last_name?: string };
+type Chapter = { id?: number | string; title?: string; start_seconds?: number; start?: number; order?: number };
+type Playlist = { id: number | string; title?: string; user?: VideoUser };
 type LongFormVideo = {
-  id: string | number;
+  id: number | string;
   title?: string;
   description?: string;
   video?: string;
   video_url?: string;
+  thumbnail?: string | null;
   status?: string;
   premiere_at?: string | null;
+  published_at?: string | null;
   views?: number;
-  visibility?: string;
-  user?: { username?: string };
-  created_at?: string;
-  chapters?: VideoChapter[];
+  is_premiere?: boolean;
+  is_owner?: boolean;
+  user?: VideoUser | null;
+  chapters?: Chapter[];
 };
 
-type VideoChapter = {
-  id?: string | number;
-  title?: string;
-  start_seconds?: number;
-  start?: number;
-  time?: number;
-};
+type PremiereChoice = 0 | 1 | 24;
+
+function listFrom<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  if (data && typeof data === 'object' && Array.isArray((data as { results?: T[] }).results)) {
+    return (data as { results: T[] }).results;
+  }
+  return [];
+}
+
+function creatorName(user: VideoUser | null | undefined, fallback: string) {
+  if (!user) return fallback;
+  const full = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+  return full || user.username || fallback;
+}
 
 function videoUri(item: LongFormVideo) {
   return mediaUrl(item.video_url || item.video || '');
 }
 
-function premiereCountdown(premiereAt?: string | null, now = Date.now()) {
-  if (!premiereAt) return '';
-  const diff = new Date(premiereAt).getTime() - now;
-  if (!Number.isFinite(diff) || diff <= 0) return '';
-  const totalSeconds = Math.ceil(diff / 1000);
+function formatSeconds(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function formatCountdown(ms: number, soonLabel: string) {
+  if (ms <= 0) return soonLabel;
+  const totalSeconds = Math.ceil(ms / 1000);
   const days = Math.floor(totalSeconds / 86400);
   const hours = Math.floor((totalSeconds % 86400) / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -59,421 +88,632 @@ function premiereCountdown(premiereAt?: string | null, now = Date.now()) {
   return `${Math.max(1, minutes)}m`;
 }
 
+function isPremierePending(video: LongFormVideo, now: number) {
+  const premiereAtMs = video.premiere_at ? new Date(video.premiere_at).getTime() : null;
+  const premiereInMs = premiereAtMs ? premiereAtMs - now : 0;
+  return (
+    video.status === 'scheduled' ||
+    (premiereAtMs != null && premiereInMs > 0) ||
+    (!!video.is_premiere && !video.published_at)
+  );
+}
+
 export default function VideosScreen() {
-  const { colors } = useTheme();
   const navigation = useNavigation<any>();
-  const playerRef = useRef<any>(null);
+  const route = useRoute<any>();
+  const { colors } = useTheme();
+  const { t } = useLocale();
+  const { user } = useAuth();
+  const focusVideoId = route.params?.videoId;
   const [videos, setVideos] = useState<LongFormVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [scope, setScope] = useState<'all' | 'mine'>('all');
+  const [submitting, setSubmitting] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedVideo, setSelectedVideo] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [file, setFile] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [premiereHours, setPremiereHours] = useState<PremiereChoice>(0);
+  const [message, setMessage] = useState('');
   const [playing, setPlaying] = useState<LongFormVideo | null>(null);
-  const [now, setNow] = useState(Date.now());
-  const [chapterDrafts, setChapterDrafts] = useState<Record<string, { title: string; start_seconds: string }>>({});
-  const [chapterBusy, setChapterBusy] = useState<string | null>(null);
+  const openedFocusRef = useRef<string | number | null>(null);
 
   const load = useCallback(async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
-      const page = await api.getVideos({ limit: 40, offset: 0, mine: scope === 'mine' });
-      setVideos((page.results || []) as LongFormVideo[]);
+      const page = await api.getVideos({ limit: 40, offset: 0 });
+      setVideos(listFrom<LongFormVideo>(page.results ?? page));
     } catch {
-      Alert.alert('Error', 'Could not load videos.');
+      setVideos([]);
     } finally {
       setLoading(false);
-      if (isRefresh) setRefreshing(false);
+      setRefreshing(false);
     }
-  }, [scope]);
+  }, []);
 
   useEffect(() => {
-    setLoading(true);
     void load();
   }, [load]);
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30000);
-    return () => clearInterval(timer);
-  }, []);
+    if (focusVideoId == null || openedFocusRef.current === focusVideoId) return;
+    const hit = videos.find((video) => String(video.id) === String(focusVideoId));
+    if (hit) {
+      openedFocusRef.current = focusVideoId;
+      setPlaying(hit);
+      return;
+    }
+    void api
+      .getVideo(focusVideoId)
+      .then((video) => {
+        openedFocusRef.current = focusVideoId;
+        setPlaying(video as LongFormVideo);
+      })
+      .catch(() => undefined);
+  }, [focusVideoId, videos]);
 
   const pickVideo = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow media library access to upload a video.');
+      Alert.alert(t('videos.uploadVideo'), t('videos.uploadFailed'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      allowsEditing: false,
       quality: 1,
     });
-    if (!result.canceled) {
-      setSelectedVideo(result.assets[0]);
-      if (!title.trim()) setTitle(result.assets[0].fileName?.replace(/\.[^/.]+$/, '') || 'New video');
-    }
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    setFile(asset);
+    if (!title.trim()) setTitle(asset.fileName?.replace(/\.[^/.]+$/, '') || '');
   };
 
   const uploadVideo = async () => {
-    if (!selectedVideo) {
-      Alert.alert('Choose a video', 'Pick a video file first.');
-      return;
-    }
-    if (!title.trim()) {
-      Alert.alert('Title required', 'Add a title before uploading.');
-      return;
-    }
+    if (!title.trim() || !file || submitting) return;
+    setSubmitting(true);
+    setMessage('');
     try {
-      setUploading(true);
       const form = new FormData();
       form.append('title', title.trim());
       form.append('description', description.trim());
       form.append('visibility', 'public');
+      form.append('status', premiereHours ? 'scheduled' : 'published');
       form.append('video', {
-        uri: selectedVideo.uri,
-        type: selectedVideo.mimeType || 'video/mp4',
-        name: selectedVideo.fileName || `video-${Date.now()}.mp4`,
-      } as unknown as Blob);
-      await api.createVideo(form);
+        uri: file.uri,
+        type: file.mimeType || 'video/mp4',
+        name: file.fileName || `video-${Date.now()}.mp4`,
+      } as any);
+      const created = (await api.createVideo(form)) as LongFormVideo;
+      if (premiereHours) {
+        await api.premiereVideo(created.id, new Date(Date.now() + premiereHours * 3600 * 1000).toISOString());
+      } else {
+        await api.publishVideo(created.id);
+      }
       setTitle('');
       setDescription('');
-      setSelectedVideo(null);
-      Alert.alert('Uploaded', 'Your video is ready in Studio.');
-      void load(true);
+      setFile(null);
+      setPremiereHours(0);
+      setMessage(t('videos.uploaded'));
+      await load(true);
     } catch {
-      Alert.alert('Error', 'Could not upload video.');
+      setMessage(t('videos.uploadFailed'));
     } finally {
-      setUploading(false);
+      setSubmitting(false);
     }
-  };
-
-  const premiere = async (item: LongFormVideo, hours: number) => {
-    try {
-      const premiereAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-      const updated = await api.premiereVideo(item.id, premiereAt);
-      setVideos((prev) => prev.map((v) => (String(v.id) === String(item.id) ? updated : v)));
-      Alert.alert('Premiere set', `Premiere scheduled in ${hours}h.`);
-    } catch {
-      Alert.alert('Error', 'Could not schedule premiere.');
-    }
-  };
-
-  const updateChapterDraft = (
-    videoId: string | number,
-    patch: Partial<{ title: string; start_seconds: string }>,
-  ) => {
-    const key = String(videoId);
-    setChapterDrafts((prev) => ({
-      ...prev,
-      [key]: { title: prev[key]?.title ?? '', start_seconds: prev[key]?.start_seconds ?? '', ...patch },
-    }));
-  };
-
-  const addChapter = async (item: LongFormVideo) => {
-    const key = String(item.id);
-    const draft = chapterDrafts[key] || { title: '', start_seconds: '' };
-    const seconds = Number.parseInt(draft.start_seconds.trim(), 10);
-    if (!draft.title.trim() || !Number.isFinite(seconds) || seconds < 0) {
-      Alert.alert('Chapter details', 'Add a title and a non-negative start time in seconds.');
-      return;
-    }
-    setChapterBusy(key);
-    try {
-      const created = await api.addVideoChapter(item.id, {
-        title: draft.title.trim(),
-        start_seconds: seconds,
-      });
-      setVideos((prev) =>
-        prev.map((video) =>
-          String(video.id) === key
-            ? { ...video, chapters: [...(video.chapters || []), created] }
-            : video,
-        ),
-      );
-      setPlaying((prev) =>
-        prev && String(prev.id) === key
-          ? { ...prev, chapters: [...(prev.chapters || []), created] }
-          : prev,
-      );
-      setChapterDrafts((prev) => ({ ...prev, [key]: { title: '', start_seconds: '' } }));
-    } catch {
-      Alert.alert('Error', 'Could not add chapter.');
-    } finally {
-      setChapterBusy(null);
-    }
-  };
-
-  const openVideo = async (item: LongFormVideo) => {
-    const countdown = premiereCountdown(item.premiere_at, now);
-    if (item.status === 'scheduled' && countdown) {
-      Alert.alert('Premiere scheduled', `This video premieres in ${countdown}.`);
-      return;
-    }
-    setPlaying(item);
-    try {
-      const detail = (await api.getVideo(item.id)) as LongFormVideo;
-      setPlaying(detail);
-      setVideos((prev) => prev.map((v) => (String(v.id) === String(item.id) ? { ...v, ...detail } : v)));
-    } catch {
-      // Playback can continue with the list row if detail fetch is unavailable.
-    }
-  };
-
-  const seekToChapter = (chapter: VideoChapter) => {
-    const seconds = Number(chapter.start_seconds ?? chapter.start ?? chapter.time ?? 0);
-    if (Number.isFinite(seconds)) {
-      playerRef.current?.seek?.(Math.max(0, seconds));
-    }
-  };
-
-  const renderVideo = ({ item }: { item: LongFormVideo }) => {
-    const countdown = item.status === 'scheduled' ? premiereCountdown(item.premiere_at, now) : '';
-    const locked = !!countdown;
-    const canAuthorChapters = scope === 'mine';
-    const draft = chapterDrafts[String(item.id)] || { title: '', start_seconds: '' };
-
-    return (
-    <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <TouchableOpacity
-        onPress={() => void openVideo(item)}
-        disabled={locked}
-        style={[styles.videoPreview, locked && styles.videoPreviewLocked]}
-      >
-        <Text style={styles.playIcon}>▶</Text>
-      </TouchableOpacity>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={1}>
-          {item.title || `Video #${item.id}`}
-        </Text>
-        <Text style={[styles.meta, { color: colors.textSecondary }]}>
-          {item.status || 'draft'} · {item.views || 0} views
-        </Text>
-        {item.premiere_at ? (
-          <Text style={[styles.meta, { color: colors.primary }]}>
-            Premieres {new Date(item.premiere_at).toLocaleString()}
-          </Text>
-        ) : null}
-        {locked ? (
-          <Text style={[styles.countdown, { color: colors.primary }]}>
-            Starts in {countdown}
-          </Text>
-        ) : null}
-        <View style={styles.actions}>
-          <TouchableOpacity onPress={() => void premiere(item, 1)} style={[styles.chip, { borderColor: colors.border }]}>
-            <Text style={[styles.chipText, { color: colors.text }]}>+1h</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => void premiere(item, 24)} style={[styles.chip, { borderColor: colors.border }]}>
-            <Text style={[styles.chipText, { color: colors.text }]}>+24h</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={() => void openVideo(item)}
-            disabled={locked}
-            style={[styles.chip, { borderColor: colors.primary, opacity: locked ? 0.45 : 1 }]}
-          >
-            <Text style={[styles.chipText, { color: colors.primary }]}>Play</Text>
-          </TouchableOpacity>
-        </View>
-        {canAuthorChapters ? (
-          <View style={styles.chapterForm}>
-            <Text style={[styles.meta, { color: colors.textSecondary }]}>Add chapter</Text>
-            <View style={styles.chapterInputs}>
-              <TextInput
-                value={draft.title}
-                onChangeText={(text) => updateChapterDraft(item.id, { title: text })}
-                placeholder="Title"
-                placeholderTextColor={colors.textSecondary}
-                style={[styles.chapterInput, { color: colors.text, borderColor: colors.border }]}
-              />
-              <TextInput
-                value={draft.start_seconds}
-                onChangeText={(text) => updateChapterDraft(item.id, { start_seconds: text })}
-                placeholder="Start sec"
-                placeholderTextColor={colors.textSecondary}
-                keyboardType="number-pad"
-                style={[styles.chapterTimeInput, { color: colors.text, borderColor: colors.border }]}
-              />
-            </View>
-            <TouchableOpacity
-              onPress={() => void addChapter(item)}
-              disabled={chapterBusy === String(item.id)}
-              style={[styles.addChapterBtn, { backgroundColor: colors.primary, opacity: chapterBusy === String(item.id) ? 0.6 : 1 }]}
-            >
-              <Text style={styles.addChapterText}>{chapterBusy === String(item.id) ? 'Adding...' : 'Add chapter'}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
-      </View>
-    </View>
-    );
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={{ fontSize: 22, color: colors.text }}>←</Text>
-        </TouchableOpacity>
-        <Text style={[styles.titleText, { color: colors.text }]}>Videos</Text>
-        <View style={styles.backBtn} />
-      </View>
+    <WorldBackdrop tone="default">
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <WorldHeader
+          title={t('videos.title')}
+          subtitle={t('nav.videos')}
+          tone="default"
+          onBack={() => navigation.goBack()}
+        />
+        {loading && videos.length === 0 ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('videos.loadingVideos')}</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={videos}
+            keyExtractor={(item) => String(item.id)}
+            contentContainerStyle={styles.list}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => {
+                  setRefreshing(true);
+                  void load(true);
+                }}
+                tintColor={colors.primary}
+              />
+            }
+            ListHeaderComponent={
+              <>
+                <WorldHero tone="default" eyebrow={t('nav.videos')} title={t('videos.title')} body={t('videos.subtitle')} />
+                <View style={[styles.upload, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View style={styles.uploadHead}>
+                    <Ionicons name="cloud-upload-outline" size={18} color={colors.primary} />
+                    <Text style={[styles.uploadTitle, { color: colors.textSecondary }]}>{t('videos.uploadVideo')}</Text>
+                  </View>
+                  <TextInput
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder={t('videos.titleLabel')}
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  />
+                  <TextInput
+                    value={description}
+                    onChangeText={setDescription}
+                    placeholder={t('videos.descriptionLabel')}
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    style={[styles.input, styles.area, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  />
+                  <Pressable onPress={() => void pickVideo()} style={[styles.fileBtn, { borderColor: colors.border }]}>
+                    <Ionicons name="film-outline" size={16} color={colors.primary} />
+                    <Text style={[styles.fileBtnText, { color: colors.text }]} numberOfLines={1}>
+                      {file ? file.fileName || t('videos.changeVideo') : t('videos.pickVideo')}
+                    </Text>
+                  </Pressable>
+                  <Text style={[styles.kicker, { color: colors.textSecondary }]}>{t('videos.optionalPremiere')}</Text>
+                  <View style={styles.pills}>
+                    {([
+                      [0, t('videos.premiereNone')],
+                      [1, t('videos.premiereIn1h')],
+                      [24, t('videos.premiereIn24h')],
+                    ] as const).map(([hours, label]) => (
+                      <WorldPill
+                        key={hours}
+                        label={label}
+                        active={premiereHours === hours}
+                        onPress={() => setPremiereHours(hours)}
+                      />
+                    ))}
+                  </View>
+                  <View style={styles.uploadFooter}>
+                    <Text style={[styles.message, { color: colors.textSecondary }]}>{message}</Text>
+                    <Pressable
+                      onPress={() => void uploadVideo()}
+                      disabled={submitting || !title.trim() || !file}
+                      style={[styles.uploadBtn, { opacity: submitting || !title.trim() || !file ? 0.5 : 1 }]}
+                    >
+                      <Text style={styles.uploadBtnText}>
+                        {submitting ? t('videos.uploading') : t('videos.upload')}
+                      </Text>
+                    </Pressable>
+                  </View>
+                </View>
+                <View style={styles.sectionRow}>
+                  <Text style={[styles.section, { color: colors.textSecondary }]}>{t('videos.publishedVideos')}</Text>
+                  <Pressable onPress={() => navigation.navigate('Playlists')} hitSlop={8}>
+                    <Text style={[styles.seePlaylists, { color: colors.primary }]}>{t('videos.playlistsLink')}</Text>
+                  </Pressable>
+                </View>
+              </>
+            }
+            ListEmptyComponent={<Text style={[styles.empty, { color: colors.textSecondary }]}>{t('videos.empty')}</Text>}
+            renderItem={({ item }) => (
+              <VideoCard
+                video={item}
+                colors={colors}
+                t={t}
+                onOpen={() => setPlaying(item)}
+              />
+            )}
+          />
+        )}
+        <VideoPlayerModal
+          video={playing}
+          onClose={() => setPlaying(null)}
+          onUpdated={(next) => {
+            setPlaying(next);
+            setVideos((prev) => prev.map((v) => (String(v.id) === String(next.id) ? { ...v, ...next } : v)));
+          }}
+        />
+      </SafeAreaView>
+    </WorldBackdrop>
+  );
+}
 
-      <View style={[styles.uploadBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="Video title"
-          placeholderTextColor={colors.textSecondary}
-          style={[styles.input, { color: colors.text, borderColor: colors.border }]}
-        />
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Description"
-          placeholderTextColor={colors.textSecondary}
-          multiline
-          style={[styles.input, styles.textArea, { color: colors.text, borderColor: colors.border }]}
-        />
-        <View style={styles.uploadRow}>
-          <TouchableOpacity onPress={pickVideo} style={[styles.secondaryBtn, { borderColor: colors.border }]}>
-            <Text style={[styles.secondaryText, { color: colors.text }]}>
-              {selectedVideo ? 'Change video' : 'Pick video'}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={uploadVideo} disabled={uploading} style={[styles.primaryBtn, { backgroundColor: colors.primary }]}>
-            <Text style={styles.primaryText}>{uploading ? 'Uploading...' : 'Upload'}</Text>
-          </TouchableOpacity>
+function VideoCard({
+  video,
+  colors,
+  t,
+  onOpen,
+}: {
+  video: LongFormVideo;
+  colors: { text: string; textSecondary: string; surface: string; border: string; primary: string };
+  t: (key: string, vars?: Record<string, string | number>) => string;
+  onOpen: () => void;
+}) {
+  const thumb = mediaUrl(video.thumbnail || '');
+  const pending = isPremierePending(video, Date.now());
+  return (
+    <Pressable onPress={onOpen} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.thumbWrap}>
+        {thumb ? (
+          <Image source={{ uri: thumb }} style={styles.thumb} />
+        ) : (
+          <LinearGradient colors={['rgba(124,58,237,0.55)', 'rgba(34,211,238,0.28)']} style={styles.thumb} />
+        )}
+        <View style={styles.playVeil}>
+          <Ionicons name="play-circle" size={44} color="#fff" />
         </View>
-        {selectedVideo ? (
-          <Text style={[styles.meta, { color: colors.textSecondary }]} numberOfLines={1}>
-            {selectedVideo.fileName || selectedVideo.uri}
+        {pending ? (
+          <View style={styles.premiereBadge}>
+            <Text style={styles.premiereBadgeText}>{t('videos.premiereLabel')}</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={[styles.cardTitle, { color: colors.text }]} numberOfLines={2}>
+          {video.title || t('videos.title')}
+        </Text>
+        <Text style={[styles.cardMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+          {creatorName(video.user, t('videos.creatorFallback'))} · {video.views ?? 0} {t('videos.views')}
+        </Text>
+        {video.premiere_at ? (
+          <Text style={[styles.cardPremiere, { color: colors.primary }]}>
+            {t('videos.premieres', { date: new Date(video.premiere_at).toLocaleString() })}
           </Text>
         ) : null}
       </View>
+    </Pressable>
+  );
+}
 
-      <View style={styles.tabs}>
-        {(['all', 'mine'] as const).map((key) => (
-          <TouchableOpacity
-            key={key}
-            onPress={() => setScope(key)}
-            style={[styles.tab, scope === key && { backgroundColor: colors.primary }]}
-          >
-            <Text style={[styles.tabText, { color: scope === key ? '#fff' : colors.text }]}>
-              {key === 'all' ? 'Public + Mine' : 'Mine'}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+function VideoPlayerModal({
+  video,
+  onClose,
+  onUpdated,
+}: {
+  video: LongFormVideo | null;
+  onClose: () => void;
+  onUpdated: (video: LongFormVideo) => void;
+}) {
+  const { colors, isDark } = useTheme();
+  const { t } = useLocale();
+  const { user } = useAuth();
+  const navigation = useNavigation<any>();
+  const playerRef = useRef<Video>(null);
+  const [detail, setDetail] = useState<LongFormVideo | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  const [chapterTitle, setChapterTitle] = useState('');
+  const [chapterStart, setChapterStart] = useState('');
+  const [chapterBusy, setChapterBusy] = useState(false);
+  const [chapterMessage, setChapterMessage] = useState('');
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState('');
+  const [playlistBusy, setPlaylistBusy] = useState(false);
+  const [playlistMessage, setPlaylistMessage] = useState('');
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={videos}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderVideo}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                void load(true);
-              }}
-              colors={[colors.primary]}
-            />
-          }
-          ListEmptyComponent={<Text style={[styles.empty, { color: colors.textSecondary }]}>No videos yet.</Text>}
-        />
-      )}
+  const current = detail || video;
 
-      <Modal visible={!!playing} animationType="slide" onRequestClose={() => setPlaying(null)}>
-        <SafeAreaView style={styles.playerWrap}>
-          <TouchableOpacity onPress={() => setPlaying(null)} style={styles.closeBtn}>
-            <Text style={styles.closeText}>Close</Text>
-          </TouchableOpacity>
-          {playing && videoUri(playing) ? (
-            <>
+  useEffect(() => {
+    if (!video) {
+      setDetail(null);
+      setChapterMessage('');
+      setPlaylistMessage('');
+      return;
+    }
+    setLoading(true);
+    void api
+      .getVideo(video.id)
+      .then((data) => {
+        const next = data as LongFormVideo;
+        setDetail(next);
+        onUpdated(next);
+      })
+      .catch(() => setDetail(video))
+      .finally(() => setLoading(false));
+  }, [video?.id]);
+
+  useEffect(() => {
+    if (!video) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [video]);
+
+  useEffect(() => {
+    if (!user) return;
+    void api
+      .getPlaylists({ limit: 40 })
+      .then((page) => {
+        const rows = listFrom<Playlist>(page.results ?? page).filter(
+          (p) => !p.user?.id || String(p.user.id) === String(user.id),
+        );
+        setPlaylists(rows);
+        setSelectedPlaylistId((cur) => cur || (rows[0] ? String(rows[0].id) : ''));
+      })
+      .catch(() => setPlaylists([]));
+  }, [user?.id]);
+
+  const isOwner = useMemo(() => {
+    if (!current || !user) return false;
+    if (current.is_owner) return true;
+    return current.user?.id != null && String(current.user.id) === String(user.id);
+  }, [current, user]);
+
+  const pending = current ? isPremierePending(current, now) : false;
+  const premiereInMs = current?.premiere_at ? new Date(current.premiere_at).getTime() - now : 0;
+  const chapters = useMemo(
+    () =>
+      (current?.chapters || [])
+        .slice()
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.start_seconds ?? 0) - (b.start_seconds ?? 0)),
+    [current?.chapters],
+  );
+  const src = current ? videoUri(current) : '';
+
+  const addChapter = async () => {
+    if (!current || !chapterTitle.trim() || chapterBusy) return;
+    const start = Number(chapterStart);
+    if (!Number.isFinite(start) || start < 0) {
+      setChapterMessage(t('videos.chapterStartError'));
+      return;
+    }
+    setChapterBusy(true);
+    setChapterMessage('');
+    try {
+      const created = (await api.addVideoChapter(current.id, {
+        title: chapterTitle.trim(),
+        start_seconds: Math.floor(start),
+      })) as Chapter;
+      const next = { ...current, chapters: [...(current.chapters || []), created] };
+      setDetail(next);
+      onUpdated(next);
+      setChapterTitle('');
+      setChapterStart('');
+      setChapterMessage(t('videos.chapterAdded'));
+    } catch {
+      setChapterMessage(t('videos.couldNotAddChapter'));
+    } finally {
+      setChapterBusy(false);
+    }
+  };
+
+  const addToPlaylist = async () => {
+    if (!current || !selectedPlaylistId || playlistBusy) return;
+    setPlaylistBusy(true);
+    setPlaylistMessage('');
+    try {
+      await api.addPlaylistItem(selectedPlaylistId, current.id);
+      setPlaylistMessage(t('videos.addedToPlaylist'));
+    } catch {
+      setPlaylistMessage(t('videos.couldNotAddToPlaylist'));
+    } finally {
+      setPlaylistBusy(false);
+    }
+  };
+
+  const seekTo = (seconds: number) => {
+    void playerRef.current?.setPositionAsync(Math.max(0, seconds) * 1000);
+  };
+
+  return (
+    <Modal visible={!!video} animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView style={[styles.playerSafe, { backgroundColor: isDark ? '#05030a' : colors.background }]} edges={['top']}>
+        <Pressable onPress={onClose} style={styles.closeRow} hitSlop={8}>
+          <Ionicons name="chevron-back" size={20} color={colors.primary} />
+          <Text style={[styles.closeText, { color: colors.primary }]}>{t('videos.backToVideos')}</Text>
+        </Pressable>
+        {!current || loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('videos.loadingVideo')}</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.playerBody}>
+            {pending ? (
+              <LinearGradient colors={['rgba(124,58,237,0.35)', 'rgba(34,211,238,0.18)']} style={styles.premiereLock}>
+                <Text style={styles.premiereKicker}>{t('videos.premiereLabel')}</Text>
+                <Text style={[styles.premiereTitle, { color: colors.text }]}>
+                  {current.premiere_at
+                    ? t('videos.premiereIn', { countdown: formatCountdown(premiereInMs, t('videos.premiereSoon')) })
+                    : t('videos.premiereScheduled')}
+                </Text>
+                <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('videos.premiereUnlockHint')}</Text>
+              </LinearGradient>
+            ) : src ? (
               <Video
                 ref={playerRef}
-                source={{ uri: videoUri(playing) }}
+                source={{ uri: src }}
                 style={styles.player}
-                controls
-                resizeMode="contain"
+                useNativeControls
+                resizeMode={ResizeMode.CONTAIN}
+                posterSource={current.thumbnail ? { uri: mediaUrl(current.thumbnail) } : undefined}
               />
-              {playing.chapters?.length ? (
-                <View style={styles.chapterBar}>
-                  <Text style={styles.chapterTitle}>Chapters</Text>
-                  <FlatList
-                    horizontal
-                    data={playing.chapters}
-                    keyExtractor={(item, index) => String(item.id ?? `${item.title || 'chapter'}-${index}`)}
-                    renderItem={({ item, index }) => (
-                      <TouchableOpacity onPress={() => seekToChapter(item)} style={styles.chapterChip}>
-                        <Text style={styles.chapterChipText} numberOfLines={1}>
-                          {item.title || `Chapter ${index + 1}`}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                    showsHorizontalScrollIndicator={false}
+            ) : (
+              <View style={[styles.premiereLock, { backgroundColor: colors.surface }]}>
+                <Text style={{ color: colors.textSecondary }}>{t('videos.fileUnavailable')}</Text>
+              </View>
+            )}
+
+            <View style={[styles.metaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.detailTitle, { color: colors.text }]}>{current.title}</Text>
+              <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>
+                {current.views ?? 0} {t('videos.views')}
+                {current.published_at ? ` · ${t('videos.published', { date: new Date(current.published_at).toLocaleString() })}` : ''}
+              </Text>
+              {current.description ? (
+                <Text style={[styles.desc, { color: colors.textSecondary }]}>{current.description}</Text>
+              ) : null}
+            </View>
+
+            {user ? (
+              <View style={[styles.metaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.blockTitle, { color: colors.textSecondary }]}>{t('videos.addToPlaylist')}</Text>
+                {playlists.length === 0 ? (
+                  <Pressable onPress={() => { onClose(); navigation.navigate('Playlists'); }}>
+                    <Text style={[styles.cardMeta, { color: colors.primary }]}>
+                      {t('videos.noPlaylists')} {t('videos.createOne')}
+                    </Text>
+                  </Pressable>
+                ) : (
+                  <>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pills}>
+                      {playlists.map((p) => (
+                        <WorldPill
+                          key={String(p.id)}
+                          label={p.title || String(p.id)}
+                          active={selectedPlaylistId === String(p.id)}
+                          onPress={() => setSelectedPlaylistId(String(p.id))}
+                        />
+                      ))}
+                    </ScrollView>
+                    <Pressable
+                      onPress={() => void addToPlaylist()}
+                      disabled={playlistBusy || !selectedPlaylistId}
+                      style={[styles.uploadBtn, { opacity: playlistBusy ? 0.6 : 1, alignSelf: 'flex-start', marginTop: 10 }]}
+                    >
+                      <Text style={styles.uploadBtnText}>{playlistBusy ? t('videos.adding') : t('videos.addItem')}</Text>
+                    </Pressable>
+                  </>
+                )}
+                {playlistMessage ? <Text style={[styles.message, { color: colors.textSecondary }]}>{playlistMessage}</Text> : null}
+              </View>
+            ) : null}
+
+            <View style={[styles.metaCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={[styles.blockTitle, { color: colors.textSecondary }]}>{t('videos.chapters')}</Text>
+              {isOwner ? (
+                <View style={styles.chapterForm}>
+                  <TextInput
+                    value={chapterTitle}
+                    onChangeText={setChapterTitle}
+                    placeholder={t('videos.chapterTitlePlaceholder')}
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
                   />
+                  <TextInput
+                    value={chapterStart}
+                    onChangeText={setChapterStart}
+                    placeholder={t('videos.secondsPlaceholder')}
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    style={[styles.input, { width: 90, color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
+                  />
+                  <Pressable
+                    onPress={() => void addChapter()}
+                    disabled={chapterBusy}
+                    style={[styles.uploadBtn, { opacity: chapterBusy ? 0.6 : 1 }]}
+                  >
+                    <Text style={styles.uploadBtnText}>{chapterBusy ? t('videos.adding') : t('videos.add')}</Text>
+                  </Pressable>
                 </View>
               ) : null}
-            </>
-          ) : (
-            <View style={styles.center}>
-              <Text style={{ color: '#fff' }}>Video unavailable</Text>
+              {chapterMessage ? <Text style={[styles.message, { color: colors.textSecondary }]}>{chapterMessage}</Text> : null}
+              {chapters.length === 0 ? (
+                <Text style={[styles.cardMeta, { color: colors.textSecondary }]}>{t('videos.noChapters')}</Text>
+              ) : (
+                chapters.map((ch) => (
+                  <Pressable
+                    key={String(ch.id)}
+                    onPress={() => seekTo(Number(ch.start_seconds ?? ch.start ?? 0))}
+                    disabled={pending || !src}
+                    style={[styles.chapterRow, { backgroundColor: colors.background, opacity: pending ? 0.45 : 1 }]}
+                  >
+                    <Text style={[styles.chapterName, { color: colors.text }]}>{ch.title}</Text>
+                    <Text style={[styles.chapterTime, { color: colors.textSecondary }]}>
+                      {formatSeconds(Number(ch.start_seconds ?? ch.start ?? 0))}
+                    </Text>
+                  </Pressable>
+                ))
+              )}
             </View>
-          )}
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
+          </ScrollView>
+        )}
+      </SafeAreaView>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
-  backBtn: { width: 44, alignItems: 'center' },
-  titleText: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '800' },
-  uploadBox: { margin: 16, borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
-  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
-  textArea: { minHeight: 72, textAlignVertical: 'top' },
-  uploadRow: { flexDirection: 'row', gap: 10 },
-  secondaryBtn: { flex: 1, borderWidth: 1, borderRadius: 999, paddingVertical: 10, alignItems: 'center' },
-  secondaryText: { fontWeight: '700' },
-  primaryBtn: { flex: 1, borderRadius: 999, paddingVertical: 10, alignItems: 'center' },
-  primaryText: { color: '#fff', fontWeight: '800' },
-  tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
-  tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: '#e5e7eb' },
-  tabText: { fontWeight: '700', fontSize: 13 },
-  list: { padding: 16, paddingTop: 0, paddingBottom: 32 },
-  card: { borderWidth: 1, borderRadius: 16, padding: 12, marginBottom: 10, flexDirection: 'row', gap: 12 },
-  videoPreview: { width: 82, height: 82, borderRadius: 14, backgroundColor: '#111827', alignItems: 'center', justifyContent: 'center' },
-  videoPreviewLocked: { opacity: 0.55 },
-  playIcon: { color: '#fff', fontSize: 22 },
-  cardTitle: { fontSize: 15, fontWeight: '800' },
-  meta: { fontSize: 12, marginTop: 3 },
-  countdown: { fontSize: 13, fontWeight: '800', marginTop: 5 },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
-  chipText: { fontSize: 12, fontWeight: '700' },
-  chapterForm: { marginTop: 10, gap: 7 },
-  chapterInputs: { flexDirection: 'row', gap: 8 },
-  chapterInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
-  chapterTimeInput: { width: 86, borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
-  addChapterBtn: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  addChapterText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  empty: { padding: 30, textAlign: 'center' },
-  playerWrap: { flex: 1, backgroundColor: '#05030a' },
-  closeBtn: { alignSelf: 'flex-end', paddingHorizontal: 16, paddingVertical: 12 },
-  closeText: { color: '#fff', fontWeight: '800' },
-  player: { flex: 1, width: '100%' },
-  chapterBar: { paddingHorizontal: 12, paddingBottom: 12, gap: 8 },
-  chapterTitle: { color: '#fff', fontWeight: '800', fontSize: 13 },
-  chapterChip: { maxWidth: 180, borderRadius: 999, backgroundColor: 'rgba(167,139,250,0.25)', paddingHorizontal: 12, paddingVertical: 8, marginRight: 8 },
-  chapterChipText: { color: '#fff', fontSize: 12, fontWeight: '800' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  hint: { fontSize: 13, textAlign: 'center' },
+  list: { paddingHorizontal: 16, paddingBottom: 40 },
+  upload: { borderRadius: 22, borderWidth: 1, padding: 14, gap: 10, marginBottom: 18 },
+  uploadHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  uploadTitle: { fontSize: 13, fontWeight: '700' },
+  input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  area: { minHeight: 72, textAlignVertical: 'top' },
+  fileBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  fileBtnText: { flex: 1, fontSize: 14, fontWeight: '600' },
+  kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4, textTransform: 'uppercase' },
+  pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  uploadFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  message: { flex: 1, fontSize: 12 },
+  uploadBtn: { backgroundColor: '#7C3AED', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10 },
+  uploadBtnText: { color: '#fff', fontWeight: '800', fontSize: 13 },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  section: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  seePlaylists: { fontSize: 12, fontWeight: '700' },
+  empty: { textAlign: 'center', paddingVertical: 28, fontSize: 14 },
+  card: { borderRadius: 22, overflow: 'hidden', borderWidth: 1, marginBottom: 14 },
+  thumbWrap: { width: '100%', aspectRatio: 16 / 9, backgroundColor: '#12081f' },
+  thumb: { ...StyleSheet.absoluteFillObject },
+  playVeil: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(8,6,20,0.18)',
+  },
+  premiereBadge: {
+    position: 'absolute',
+    top: 10,
+    start: 10,
+    backgroundColor: '#7C3AED',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  premiereBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
+  cardBody: { padding: 14 },
+  cardTitle: { fontSize: 16, fontWeight: '800' },
+  cardMeta: { fontSize: 12, marginTop: 4 },
+  cardPremiere: { fontSize: 12, fontWeight: '700', marginTop: 6 },
+  playerSafe: { flex: 1 },
+  closeRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 16, paddingVertical: 10 },
+  closeText: { fontSize: 14, fontWeight: '700' },
+  playerBody: { paddingHorizontal: 16, paddingBottom: 36, gap: 14 },
+  player: { width: '100%', aspectRatio: 16 / 9, borderRadius: 18, overflow: 'hidden', backgroundColor: '#000' },
+  premiereLock: {
+    aspectRatio: 16 / 9,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    gap: 8,
+  },
+  premiereKicker: { color: '#C4B5FD', fontSize: 11, fontWeight: '800', letterSpacing: 1.4, textTransform: 'uppercase' },
+  premiereTitle: { fontSize: 22, fontWeight: '800', textAlign: 'center' },
+  metaCard: { borderRadius: 18, borderWidth: 1, padding: 14 },
+  detailTitle: { fontSize: 22, fontWeight: '800' },
+  desc: { fontSize: 14, lineHeight: 21, marginTop: 10 },
+  blockTitle: { fontSize: 13, fontWeight: '800', marginBottom: 10 },
+  chapterForm: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  chapterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 6,
+  },
+  chapterName: { flex: 1, fontSize: 14, fontWeight: '600', marginEnd: 8 },
+  chapterTime: { fontSize: 12, fontWeight: '700' },
 });

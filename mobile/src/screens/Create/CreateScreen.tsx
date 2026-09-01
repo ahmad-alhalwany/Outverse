@@ -1,20 +1,24 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, Alert, Image, Dimensions, ActivityIndicator, Modal } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/hooks/useTheme';
 import { api } from '@/api/client';
 import * as ImagePicker from 'expo-image-picker';
 import ChromaPreview from '@/components/reels/ChromaPreview';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
+import { goTab } from '@/lib/nav';
+import { useLocale } from '@/i18n/LocaleProvider';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const BACKDROP_PRESETS = [
-  { key: 'nebula', label: 'Nebula', color: '#6D28D9' },
-  { key: 'orbit', label: 'Orbit', color: '#0891B2' },
-  { key: 'void', label: 'Void', color: '#111827' },
-  { key: 'aurora', label: 'Aurora', color: '#10B981' },
-  { key: 'sunset', label: 'Sunset', color: '#F97316' },
+  { key: 'nebula', labelKey: 'mobile.backdropNebula', color: '#6D28D9' },
+  { key: 'orbit', labelKey: 'mobile.backdropOrbit', color: '#0891B2' },
+  { key: 'void', labelKey: 'mobile.backdropVoid', color: '#111827' },
+  { key: 'aurora', labelKey: 'mobile.backdropAurora', color: '#10B981' },
+  { key: 'sunset', labelKey: 'mobile.backdropSunset', color: '#F97316' },
 ];
 
 type Visibility = 'public' | 'followers' | 'mentioned' | 'subscribers';
@@ -29,6 +33,7 @@ type CreatorTier = {
 export default function CreateScreen({ navigation }: any) {
   const { user } = useAuth();
   const { colors } = useTheme();
+  const { t } = useLocale();
   const route = useRoute<any>();
   const [content, setContent] = useState('');
   const [media, setMedia] = useState<Array<{ uri: string; type: 'image' | 'video' }>>([]);
@@ -145,19 +150,19 @@ export default function CreateScreen({ navigation }: any) {
 
   const pickMediaSource = (preferVideo = false) => {
     if (media.length >= 4) {
-      Alert.alert('Limit reached', 'You can add up to 4 media items');
+      Alert.alert(t('mobile.limitReached'), t('mobile.limitMedia'));
       return;
     }
-    Alert.alert(preferVideo ? 'Capture video' : 'Add media', 'How do you want to capture?', [
-      { text: 'Camera', onPress: () => void pickMedia(true, preferVideo) },
-      { text: 'Library', onPress: () => void pickMedia(false, preferVideo) },
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(preferVideo ? t('mobile.captureVideo') : t('mobile.addMedia'), t('mobile.howCapture'), [
+      { text: t('mobile.camera'), onPress: () => void pickMedia(true, preferVideo) },
+      { text: t('mobile.photoLibraryShort'), onPress: () => void pickMedia(false, preferVideo) },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   };
 
   const pickMedia = async (fromCamera = false, preferVideo = false) => {
     if (media.length >= 4) {
-      Alert.alert('Limit reached', 'You can add up to 4 media items');
+      Alert.alert(t('mobile.limitReached'), t('mobile.limitMedia'));
       return;
     }
 
@@ -165,7 +170,7 @@ export default function CreateScreen({ navigation }: any) {
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Please grant camera / media access');
+      Alert.alert(t('common.actionFailed'), t('mobile.permissionRequired'));
       return;
     }
 
@@ -273,7 +278,7 @@ export default function CreateScreen({ navigation }: any) {
     try {
       setScheduledPosts(await api.getScheduledPosts());
     } catch {
-      Alert.alert('Error', 'Could not load scheduled posts.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotLoadScheduled'));
     } finally {
       setScheduledLoading(false);
     }
@@ -289,7 +294,7 @@ export default function CreateScreen({ navigation }: any) {
       await api.cancelScheduledPost(id);
       setScheduledPosts((prev) => prev.filter((item) => item.id !== id));
     } catch {
-      Alert.alert('Error', 'Could not cancel this scheduled post.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotCancelScheduled'));
     }
   };
 
@@ -314,30 +319,30 @@ export default function CreateScreen({ navigation }: any) {
       ? [content.trim()].filter(Boolean)
       : [content.trim(), ...threadParts.slice(1).map((p) => p.trim())].filter(Boolean);
     if (!parts.length && media.length === 0) {
-      Alert.alert('Empty post', 'Add some content or media to post');
+      Alert.alert(t('mobile.emptyPostTitle'), t('mobile.emptyPost'));
       return;
     }
 
     if (charCount > 280) {
-      Alert.alert('Too long', 'Posts must be 280 characters or less');
+      Alert.alert(t('mobile.tooLongTitle'), t('mobile.tooLong'));
       return;
     }
 
     if (isPoll && cleanedPollOptions.length < 2) {
-      Alert.alert('Poll needs options', 'Add at least two poll options.');
+      Alert.alert(t('mobile.pollNeedsTitle'), t('mobile.pollNeedsOptions'));
       return;
     }
 
     const publishAt = getScheduledPublishAt();
     if (publishAt === 'invalid') {
-      Alert.alert('Invalid schedule', 'Use YYYY-MM-DD and HH:MM, and choose a future time.');
+      Alert.alert(t('mobile.invalidScheduleTitle'), t('mobile.invalidSchedule'));
       return;
     }
 
     const lat = locationLat.trim() ? Number.parseFloat(locationLat.trim()) : undefined;
     const lng = locationLng.trim() ? Number.parseFloat(locationLng.trim()) : undefined;
     if ((locationLat.trim() && !Number.isFinite(lat)) || (locationLng.trim() && !Number.isFinite(lng))) {
-      Alert.alert('Invalid location', 'Latitude and longitude must be numbers.');
+      Alert.alert(t('mobile.invalidLocationTitle'), t('mobile.invalidLocation'));
       return;
     }
 
@@ -361,8 +366,8 @@ export default function CreateScreen({ navigation }: any) {
           }
         });
         resetPostDraft();
-        Alert.alert('Scheduled', 'Signal queued for your selected time.');
-        navigation.navigate('Home');
+        Alert.alert(t('mobile.scheduledTitle'), t('mobile.scheduledOk'));
+        goTab(navigation, 'Home');
         return;
       }
 
@@ -393,10 +398,10 @@ export default function CreateScreen({ navigation }: any) {
         parentId = next?.id ?? parentId;
       }
       resetPostDraft();
-      navigation.navigate('Home');
+      goTab(navigation, 'Home');
     } catch (error) {
       console.error('Failed to create post:', error);
-      Alert.alert('Error', 'Failed to create post. Please try again.');
+      Alert.alert(t('common.actionFailed'), t('mobile.createFailedPost'));
     } finally {
       setLoading(false);
     }
@@ -407,7 +412,7 @@ export default function CreateScreen({ navigation }: any) {
       ? await ImagePicker.requestCameraPermissionsAsync()
       : await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
-      Alert.alert('Permission required', 'Please grant camera / media access');
+      Alert.alert(t('common.actionFailed'), t('mobile.permissionRequired'));
       return;
     }
     const result = fromCamera
@@ -433,7 +438,7 @@ export default function CreateScreen({ navigation }: any) {
 
   const publishReel = async () => {
     if (!reelVideo) {
-      Alert.alert('Need video', 'Capture or pick a clip first.');
+      Alert.alert(t('common.actionFailed'), t('mobile.needVideo'));
       return;
     }
     const trimStart = musicTrack != null ? Number.parseFloat(musicStartSeconds || '0') : 0;
@@ -444,7 +449,7 @@ export default function CreateScreen({ navigation }: any) {
       musicTrack != null &&
       (!Number.isFinite(trimStart) || trimStart < 0 || (trimEnd != null && (!Number.isFinite(trimEnd) || trimEnd <= trimStart)))
     ) {
-      Alert.alert('Invalid trim', 'Use positive seconds, and keep end after start.');
+      Alert.alert(t('mobile.invalidTrimTitle'), t('mobile.invalidTrim'));
       return;
     }
     setLoading(true);
@@ -479,14 +484,14 @@ export default function CreateScreen({ navigation }: any) {
         form.append('effect_meta', JSON.stringify(effectMeta));
       }
       await api.createReel(form);
-      Alert.alert('Signal launched', 'Your reel is live.');
+      Alert.alert(t('mobile.signalLaunchedTitle'), t('mobile.signalLaunched'));
       setContent('');
       setReelVideo(null);
       setMode('hub');
       navigation.navigate('Reels');
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'Could not create reel.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotCreateReel'));
     } finally {
       setLoading(false);
     }
@@ -495,10 +500,10 @@ export default function CreateScreen({ navigation }: any) {
   const handleCancel = () => {
     if (mode === 'reel') {
       if (reelVideo || content.trim()) {
-        Alert.alert('Discard signal?', 'Your draft will be lost.', [
-          { text: 'Keep editing', style: 'cancel' },
+        Alert.alert(t('mobile.discardSignal'), t('mobile.draftLost'), [
+          { text: t('mobile.keepEditing'), style: 'cancel' },
           {
-            text: 'Discard',
+            text: t('mobile.discard'),
             style: 'destructive',
             onPress: () => {
               setReelVideo(null);
@@ -516,9 +521,9 @@ export default function CreateScreen({ navigation }: any) {
       return;
     }
     if (mode === 'post' && (content.trim() || media.length > 0)) {
-      Alert.alert('Discard post?', 'Your draft will be lost.', [
-        { text: 'Keep editing', style: 'cancel' },
-        { text: 'Discard', onPress: () => setMode('hub'), style: 'destructive' },
+      Alert.alert(t('mobile.discardPost'), t('mobile.draftLost'), [
+        { text: t('mobile.keepEditing'), style: 'cancel' },
+        { text: t('mobile.discard'), onPress: () => setMode('hub'), style: 'destructive' },
       ]);
       return;
     }
@@ -528,22 +533,17 @@ export default function CreateScreen({ navigation }: any) {
 
   if (mode === 'hub') {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
-            <Text style={[styles.headerButtonText, { color: colors.text }]}>Close</Text>
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Launch a Signal</Text>
-          <View style={styles.headerButton} />
-        </View>
+      <WorldBackdrop>
+      <SafeAreaView style={{ flex: 1 }}>
+        <WorldHeader title={t('mobile.launchSignal')} subtitle={t('mobile.launchSignalSub')} onBack={() => navigation.goBack()} />
         <View style={{ padding: 20, gap: 12 }}>
           <Text style={{ color: colors.textSecondary, fontSize: 14, marginBottom: 8, lineHeight: 20 }}>
-            Choose how your signal enters the Cosonova — not just another post.
+            {t('mobile.chooseHowSignal')}
           </Text>
           {[
-            { key: 'post' as const, title: 'Post', desc: 'Share text, photos & polls to the feed', mark: '✦' },
-            { key: 'story' as const, title: 'Story Studio', desc: 'Stickers, draw, polls & camera', mark: '◎' },
-            { key: 'reel' as const, title: 'Reel', desc: 'Vertical pulse — camera, music, remix', mark: '▶' },
+            { key: 'post' as const, title: t('mobile.createPostType'), desc: t('mobile.createPostDesc'), mark: '✦' },
+            { key: 'story' as const, title: t('mobile.storyStudio'), desc: t('mobile.storyStudioDesc'), mark: '◎' },
+            { key: 'reel' as const, title: t('mobile.reelType'), desc: t('mobile.reelDesc'), mark: '▶' },
           ].map((opt) => (
             <TouchableOpacity
               key={opt.key}
@@ -584,6 +584,7 @@ export default function CreateScreen({ navigation }: any) {
           {loading ? <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} /> : null}
         </View>
       </SafeAreaView>
+      </WorldBackdrop>
     );
   }
 
@@ -591,40 +592,41 @@ export default function CreateScreen({ navigation }: any) {
     const selectedBackdropPreset = BACKDROP_PRESETS.find((preset) => preset.key === backdrop) || BACKDROP_PRESETS[0];
 
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-            <Text style={[styles.headerButtonText, { color: colors.text }]}>Back</Text>
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Launch pulse</Text>
-          <TouchableOpacity
-            onPress={() => void publishReel()}
-            style={styles.headerButton}
-            disabled={loading || !reelVideo}
-          >
-            {loading ? (
+      <WorldBackdrop>
+      <SafeAreaView style={{ flex: 1 }}>
+        <WorldHeader
+          title={t('mobile.launchPulse')}
+          subtitle={t('mobile.verticalSignal')}
+          onBack={handleCancel}
+          right={
+            loading ? (
               <ActivityIndicator color="#A78BFA" />
             ) : (
-              <Text style={[styles.headerButtonText, { color: reelVideo ? '#A78BFA' : colors.disabled }]}>
-                Launch
+              <Text
+                onPress={() => {
+                  if (reelVideo) void publishReel();
+                }}
+                style={{ color: reelVideo ? '#A78BFA' : colors.disabled, fontWeight: '800' }}
+              >
+                {t('reels.launch')}
               </Text>
-            )}
-          </TouchableOpacity>
-        </View>
+            )
+          }
+        />
         <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
           {remixOf != null ? (
-            <Text style={{ color: '#A78BFA', fontWeight: '700' }}>↻ Remixing signal #{remixOf}</Text>
+            <Text style={{ color: '#A78BFA', fontWeight: '700' }}>↻ {t('mobile.remixingSignal', { id: remixOf })}</Text>
           ) : null}
           {stitchOf != null ? (
-            <Text style={{ color: '#22D3EE', fontWeight: '700' }}>⧉ Weaving signal #{stitchOf}</Text>
+            <Text style={{ color: '#22D3EE', fontWeight: '700' }}>⧉ {t('mobile.weavingSignal', { id: stitchOf })}</Text>
           ) : null}
 
           <TouchableOpacity
             onPress={() =>
-              Alert.alert('Capture reel', 'How do you want to capture?', [
-                { text: 'Camera', onPress: () => void captureReelVideo(true) },
-                { text: 'Library', onPress: () => void captureReelVideo(false) },
-                { text: 'Cancel', style: 'cancel' },
+              Alert.alert(t('mobile.captureReel'), t('mobile.howCapture'), [
+                { text: t('mobile.camera'), onPress: () => void captureReelVideo(true) },
+                { text: t('mobile.photoLibraryShort'), onPress: () => void captureReelVideo(false) },
+                { text: t('common.cancel'), style: 'cancel' },
               ])
             }
             style={{
@@ -639,7 +641,7 @@ export default function CreateScreen({ navigation }: any) {
             }}
           >
             {reelVideo ? (
-              <Text style={{ color: colors.text, fontWeight: '700' }}>Clip ready — tap to replace</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{t('mobile.clipReady')}</Text>
             ) : (
               <Text style={{ color: colors.textSecondary }}>Camera or library · max 60s</Text>
             )}
@@ -710,7 +712,7 @@ export default function CreateScreen({ navigation }: any) {
                   }}
                 >
                   <Text style={{ color: '#fff', fontWeight: '700' }}>
-                    Pick a reel clip to preview live chroma against {selectedBackdropPreset.label}.
+                    {t('mobile.chromaAgainst', { name: t(selectedBackdropPreset.labelKey) })}
                   </Text>
                 </View>
               )}
@@ -720,7 +722,7 @@ export default function CreateScreen({ navigation }: any) {
                     key={preset.key}
                     onPress={() => setBackdrop(preset.key)}
                     accessibilityRole="button"
-                    accessibilityLabel={`Backdrop ${preset.label}`}
+                    accessibilityLabel={t(preset.labelKey)}
                     accessibilityState={{ selected: backdrop === preset.key }}
                     hitSlop={8}
                     style={{
@@ -743,7 +745,7 @@ export default function CreateScreen({ navigation }: any) {
                         backgroundColor: preset.color,
                       }}
                     />
-                    <Text style={{ color: colors.text, fontWeight: '700' }}>{preset.label}</Text>
+                    <Text style={{ color: colors.text, fontWeight: '700' }}>{t(preset.labelKey)}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
@@ -753,7 +755,7 @@ export default function CreateScreen({ navigation }: any) {
           <TextInput
             value={content}
             onChangeText={handleContentChange}
-            placeholder="Caption your signal…"
+            placeholder={t('mobile.captionSignal')}
             placeholderTextColor={colors.textSecondary}
             style={{
               minHeight: 80,
@@ -822,7 +824,7 @@ export default function CreateScreen({ navigation }: any) {
                   <TextInput
                     value={musicEndSeconds}
                     onChangeText={setMusicEndSeconds}
-                    placeholder="Optional"
+                    placeholder={t('common.optional')}
                     placeholderTextColor={colors.textSecondary}
                     keyboardType="decimal-pad"
                     style={[styles.compactInput, { color: colors.text, borderColor: colors.border, marginBottom: 0 }]}
@@ -853,6 +855,7 @@ export default function CreateScreen({ navigation }: any) {
           </View>
         </ScrollView>
       </SafeAreaView>
+      </WorldBackdrop>
     );
   }
 
@@ -886,25 +889,26 @@ export default function CreateScreen({ navigation }: any) {
       keyboardVerticalOffset={0}
     >
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.border }]}>
-          <TouchableOpacity onPress={handleCancel} style={styles.headerButton}>
-            <Text style={[styles.headerButtonText, { color: colors.text }]}>Back</Text>
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Create Post</Text>
-          <TouchableOpacity
-            style={[styles.postButton, loading && styles.postButtonDisabled, { backgroundColor: colors.primary }]}
-            onPress={handlePost}
-            disabled={!canSubmit}
-          >
-            {loading ? (
-              <View style={styles.postButtonLoading}>
-                <View style={{ ...styles.spinner, borderColor: '#fff' }} />
-              </View>
-            ) : (
-              <Text style={styles.postButtonText}>{hasSchedule ? 'Schedule' : 'Post'}</Text>
-            )}
-          </TouchableOpacity>
-        </View>
+        <WorldHeader
+          title={t('mobile.publishTitle')}
+          subtitle={t('mobile.launchIntoFeed')}
+          onBack={handleCancel}
+          right={
+            <TouchableOpacity
+              style={[styles.postButton, loading && styles.postButtonDisabled, { backgroundColor: colors.primary }]}
+              onPress={handlePost}
+              disabled={!canSubmit}
+            >
+              {loading ? (
+                <View style={styles.postButtonLoading}>
+                  <View style={{ ...styles.spinner, borderColor: '#fff' }} />
+                </View>
+              ) : (
+                <Text style={styles.postButtonText}>{hasSchedule ? 'Schedule' : 'Post'}</Text>
+              )}
+            </TouchableOpacity>
+          }
+        />
 
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -923,7 +927,7 @@ export default function CreateScreen({ navigation }: any) {
             <View style={styles.composerInputWrapper}>
               <TextInput
                 style={[styles.composerInput, { color: colors.text, backgroundColor: 'transparent' }]}
-                placeholder="What's happening?"
+                placeholder={t('mobile.whatsHappening')}
                 placeholderTextColor={colors.textSecondary}
                 value={content}
                 onChangeText={handleContentChange}
@@ -988,7 +992,7 @@ export default function CreateScreen({ navigation }: any) {
                       return next;
                     })
                   }
-                  placeholder={`Option ${idx + 1}`}
+                  placeholder={t('mobile.optionN', { n: idx + 1 })}
                   placeholderTextColor={colors.textSecondary}
                   style={[styles.compactInput, { color: colors.text, borderColor: colors.border }]}
                   maxLength={80}
@@ -1015,7 +1019,7 @@ export default function CreateScreen({ navigation }: any) {
               <TextInput
                 value={locationName}
                 onChangeText={setLocationName}
-                placeholder="Place name"
+                placeholder={t('mobile.placeName')}
                 placeholderTextColor={colors.textSecondary}
                 style={[styles.compactInput, { color: colors.text, borderColor: colors.border }]}
                 maxLength={80}
@@ -1024,7 +1028,7 @@ export default function CreateScreen({ navigation }: any) {
                 <TextInput
                   value={locationLat}
                   onChangeText={setLocationLat}
-                  placeholder="Lat (optional)"
+                  placeholder={t('mobile.latOptional')}
                   placeholderTextColor={colors.textSecondary}
                   keyboardType="decimal-pad"
                   style={[styles.compactInput, { flex: 1, color: colors.text, borderColor: colors.border }]}
@@ -1032,7 +1036,7 @@ export default function CreateScreen({ navigation }: any) {
                 <TextInput
                   value={locationLng}
                   onChangeText={setLocationLng}
-                  placeholder="Lng (optional)"
+                  placeholder={t('mobile.lngOptional')}
                   placeholderTextColor={colors.textSecondary}
                   keyboardType="decimal-pad"
                   style={[styles.compactInput, { flex: 1, color: colors.text, borderColor: colors.border }]}
@@ -1084,7 +1088,7 @@ export default function CreateScreen({ navigation }: any) {
                       <TextInput
                         value={part}
                         onChangeText={(text) => updateThreadPart(partIndex, text)}
-                        placeholder={`Continue part ${partIndex + 1}`}
+                        placeholder={t('mobile.continuePart', { n: partIndex + 1 })}
                         placeholderTextColor={colors.textSecondary}
                         style={[styles.threadInput, { color: colors.text, borderColor: colors.border }]}
                         multiline

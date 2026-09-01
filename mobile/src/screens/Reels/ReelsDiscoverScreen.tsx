@@ -13,6 +13,8 @@ import { useNavigation } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { mediaUrl } from '@/api/config';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 
 type DiscoverPayload = {
   trending?: any[];
@@ -23,6 +25,7 @@ type DiscoverPayload = {
 /** TikTok Discover → Cosonova Signal Map for reels. */
 export default function ReelsDiscoverScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [data, setData] = useState<DiscoverPayload | null>(null);
   const [tracks, setTracks] = useState<any[]>([]);
@@ -44,7 +47,7 @@ export default function ReelsDiscoverScreen() {
   }, []);
 
   const openReel = (id: number) => {
-    navigation.navigate('Reels');
+    navigation.navigate('MainTabs', { screen: 'Signals', params: { focusId: id } });
   };
 
   const openTrack = (track: any) => {
@@ -80,37 +83,37 @@ export default function ReelsDiscoverScreen() {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: colors.text }]}>Discover</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <WorldBackdrop tone="live">
+      <SafeAreaView style={{ flex: 1 }}>
+        <WorldHeader
+          title={t('reels.discoverTitle')}
+          subtitle={t('reels.discoverSub')}
+          tone="live"
+          onBack={() => navigation.goBack()}
+        />
 
       {loading ? (
-        <ActivityIndicator color="#A78BFA" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={colors.primary} style={{ marginTop: 40 }} />
       ) : (
         <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
           <Text style={[styles.sub, { color: colors.textSecondary }]}>
-            Trending pulses and signal tracks across the verse.
+            {t('reels.discoverSub')}
           </Text>
 
           <View style={styles.lane}>
-            <Text style={[styles.laneTitle, { color: colors.text }]}>Signal tracks</Text>
+            <Text style={[styles.laneTitle, { color: colors.text }]}>{t('reels.soundTitle')}</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {tracks.map((t) => (
+              {tracks.map((track) => (
                 <Pressable
-                  key={t.id}
-                  onPress={() => openTrack(t)}
+                  key={track.id}
+                  onPress={() => openTrack(track)}
                   style={[styles.trackChip, { backgroundColor: colors.surface, borderColor: colors.border }]}
                 >
                   <Text style={{ color: '#A78BFA', fontWeight: '800' }}>♪</Text>
                   <View style={{ marginLeft: 8 }}>
-                    <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>{t.title}</Text>
+                    <Text style={{ color: colors.text, fontWeight: '700', fontSize: 13 }}>{track.title}</Text>
                     <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                      {t.artist_label || 'Cosonova'} · View sound
+                      {track.artist_label || 'Cosonova'}
                     </Text>
                   </View>
                 </Pressable>
@@ -118,12 +121,13 @@ export default function ReelsDiscoverScreen() {
             </ScrollView>
           </View>
 
-          <Lane title="Trending" rows={data?.trending || []} />
-          <Lane title="Featured" rows={data?.featured || []} />
-          <Lane title="Fresh" rows={data?.fresh || []} />
+          <Lane title={t('reels.trending')} rows={data?.trending || []} />
+          <Lane title={t('reels.featured')} rows={data?.featured || []} />
+          <Lane title={t('reels.fresh')} rows={data?.fresh || []} />
         </ScrollView>
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 

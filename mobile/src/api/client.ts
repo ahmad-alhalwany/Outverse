@@ -263,6 +263,7 @@ class ApiClient {
     tag?: string;
     community?: string;
     sort?: string;
+    inspiration_only?: boolean | number;
   }): Promise<FeedPage<Post>> {
     const response = await this.client.get('/posts/', {
       params: {
@@ -274,6 +275,7 @@ class ApiClient {
         tag: params?.tag,
         community: params?.community,
         sort: params?.sort,
+        inspiration_only: params?.inspiration_only,
       },
     });
     return toFeedPage(response.data);
@@ -298,6 +300,9 @@ class ApiClient {
     flair?: string;
     is_spoiler?: boolean;
     required_tier?: string | number | null;
+    mood?: string;
+    tags?: string[];
+    shared_reel_id?: string | number;
     media?: Array<{ uri: string; type: 'image' | 'video'; name?: string }>;
   }) {
     const body: Record<string, unknown> = {
@@ -315,6 +320,9 @@ class ApiClient {
     if (payload.flair) body.flair = payload.flair;
     if (payload.is_spoiler) body.is_spoiler = true;
     if (payload.required_tier != null) body.required_tier = payload.required_tier;
+    if (payload.mood) body.mood = payload.mood;
+    if (payload.tags?.length) body.tags = payload.tags;
+    if (payload.shared_reel_id != null) body.shared_reel_id = payload.shared_reel_id;
     const response = await this.client.post('/posts/', body);
     const post = response.data;
     if (payload.media?.length && post?.id) {
@@ -424,9 +432,16 @@ class ApiClient {
     return (Array.isArray(data) ? data : data?.results || []) as Array<{ tag?: string; score?: number }>;
   }
 
-  async getOrbitLists(following = false) {
+  async getOrbitLists(mode: 'mine' | 'following' | 'discover' | boolean = 'mine') {
+    const resolved: 'mine' | 'following' | 'discover' =
+      mode === true ? 'following' : mode === false ? 'mine' : mode;
     const response = await this.client.get('/orbit-lists/', {
-      params: following ? { following: 1 } : undefined,
+      params:
+        resolved === 'following'
+          ? { following: 1 }
+          : resolved === 'discover'
+            ? { discover: 1 }
+            : undefined,
     });
     const data = response.data;
     return (Array.isArray(data) ? data : data?.results || []) as OrbitList[];
@@ -455,6 +470,11 @@ class ApiClient {
 
   async deleteOrbitList(listId: string | number) {
     await this.client.delete(`/orbit-lists/${listId}/`);
+  }
+
+  async toggleFollowOrbitList(listId: string | number) {
+    const response = await this.client.post(`/orbit-lists/${listId}/follow/`, {});
+    return response.data as { following?: boolean };
   }
 
   async getOrbitListFeed(listId: string | number, params?: { limit?: number; offset?: number }) {
@@ -513,9 +533,39 @@ class ApiClient {
     };
   }
 
+  async voteComment(id: string | number, vote: 'boost' | 'dim' | null) {
+    const response = await this.client.post(`/comments/${id}/vote/`, { vote });
+    return response.data as {
+      vote_score: number;
+      boost_count: number;
+      dim_count: number;
+      my_vote: 'boost' | 'dim' | null;
+    };
+  }
+
+  async sendTip(
+    recipientId: string | number,
+    amount: number,
+    opts?: { postId?: string | number; reelId?: string | number; message?: string },
+  ) {
+    const response = await this.client.post('/shop/tips/', {
+      recipient_id: recipientId,
+      amount,
+      post_id: opts?.postId,
+      reel_id: opts?.reelId,
+      message: opts?.message,
+    });
+    return response.data as { balance?: number; error?: string };
+  }
+
   // ── Stories ───────────────────────────────────────────────────────
   async getStories() {
     const response = await this.client.get('/stories/');
+    return response.data;
+  }
+
+  async getFollowingStories() {
+    const response = await this.client.get('/stories/following/');
     return response.data;
   }
 
@@ -527,6 +577,48 @@ class ApiClient {
   async viewStory(id: string | number) {
     const response = await this.client.post(`/stories/${id}/view/`);
     return response.data;
+  }
+
+  async reactStory(id: string | number, reaction: string | null) {
+    const response = await this.client.post(`/stories/${id}/react/`, { reaction });
+    return response.data as { reaction_counts: Record<string, number>; my_reaction: string | null };
+  }
+
+  async replyToStory(id: string | number, text: string) {
+    const response = await this.client.post(`/stories/${id}/reply/`, { text });
+    return response.data;
+  }
+
+  async getStoryViewers(id: string | number) {
+    const response = await this.client.get(`/stories/${id}/viewers/`);
+    return Array.isArray(response.data) ? response.data : [];
+  }
+
+  async voteStoryPoll(id: string | number, overlayId: string, optionIndex: number) {
+    const response = await this.client.post(`/stories/${id}/poll-vote/`, {
+      overlay_id: overlayId,
+      option_index: optionIndex,
+    });
+    return response.data as { counts: Record<string, number>; total: number; my_vote: number };
+  }
+
+  async answerStoryQuestion(id: string | number, overlayId: string, text: string) {
+    const response = await this.client.post(`/stories/${id}/question-response/`, {
+      overlay_id: overlayId,
+      text,
+    });
+    return response.data;
+  }
+
+  async getStoryQuestionResponses(id: string | number, overlayId: string) {
+    const response = await this.client.get(`/stories/${id}/question-responses/`, {
+      params: { overlay_id: overlayId },
+    });
+    return Array.isArray(response.data) ? response.data : [];
+  }
+
+  async deleteStory(id: string | number) {
+    await this.client.delete(`/stories/${id}/`);
   }
 
   async getStoryArchive() {
@@ -561,7 +653,8 @@ class ApiClient {
     const response = await this.client.get('/story-constellations/', {
       params: userId ? { user: userId } : undefined,
     });
-    return Array.isArray(response.data) ? response.data : [];
+    const data = response.data;
+    return Array.isArray(data) ? data : data?.results || [];
   }
 
   async createConstellation(title: string) {
@@ -650,6 +743,7 @@ class ApiClient {
     feed?: 'all' | 'following';
     music_track?: string | number;
     tag?: string;
+    user?: string | number;
   }): Promise<FeedPage<Reel>> {
     const response = await this.client.get('/reels/', {
       params: {
@@ -658,9 +752,24 @@ class ApiClient {
         ...(params?.feed === 'following' ? { feed: 'following' } : {}),
         ...(params?.music_track != null ? { music_track: params.music_track } : {}),
         ...(params?.tag ? { tag: params.tag } : {}),
+        ...(params?.user != null ? { user: params.user } : {}),
       },
     });
     return toFeedPage(response.data);
+  }
+
+  async getSavedReels(params?: { limit?: number; offset?: number }): Promise<FeedPage<Reel>> {
+    const response = await this.client.get('/reels/saved/', {
+      params: {
+        limit: params?.limit ?? 40,
+        offset: params?.offset ?? 0,
+      },
+    });
+    return toFeedPage(response.data);
+  }
+
+  async deleteReel(id: string | number) {
+    await this.client.delete(`/reels/${id}/`);
   }
 
   async getReelsByMusicTrack(musicTrack: string | number) {
@@ -681,6 +790,11 @@ class ApiClient {
     const response = await this.client.get('/reel-music/');
     const data = response.data;
     return Array.isArray(data) ? data : data?.results || [];
+  }
+
+  async getReelMusicTrack(id: string | number) {
+    const response = await this.client.get(`/reel-music/${id}/`);
+    return response.data;
   }
 
   async getReelTemplates() {
@@ -765,6 +879,11 @@ class ApiClient {
     return response.data;
   }
 
+  async publishVideo(id: string | number) {
+    const response = await this.client.post(`/videos/${id}/publish/`, {});
+    return response.data;
+  }
+
   async getVideo(id: string | number) {
     const response = await this.client.get(`/videos/${id}/`);
     return response.data;
@@ -813,6 +932,25 @@ class ApiClient {
     return response.data;
   }
 
+  async removePlaylistItem(playlistId: string | number, itemId: string | number) {
+    const response = await this.client.post(`/playlists/${playlistId}/remove_item/`, {
+      item_id: itemId,
+    });
+    return response.data;
+  }
+
+  async updatePlaylist(
+    id: string | number,
+    payload: { title?: string; description?: string; is_public?: boolean },
+  ) {
+    const response = await this.client.patch(`/playlists/${id}/`, payload);
+    return response.data;
+  }
+
+  async deletePlaylist(id: string | number) {
+    await this.client.delete(`/playlists/${id}/`);
+  }
+
   async getPreferences() {
     const response = await this.client.get('/preferences/');
     return response.data;
@@ -820,6 +958,37 @@ class ApiClient {
 
   async updatePreferences(payload: Record<string, unknown>) {
     const response = await this.client.put('/preferences/', payload);
+    return response.data;
+  }
+
+  async getSocialList(type: 'blocked' | 'muted' | 'restricted') {
+    const response = await this.client.get('/users/social/lists/', { params: { type } });
+    const data = response.data;
+    return Array.isArray(data) ? data : data?.results || [];
+  }
+
+  async setSocialAction(userId: string | number, action: 'block' | 'mute' | 'restrict', undo = false) {
+    const response = await this.client.post('/users/social/', {
+      user_id: userId,
+      action,
+      undo,
+    });
+    return response.data as {
+      social?: {
+        is_blocked: boolean;
+        is_muted: boolean;
+        is_restricted: boolean;
+        blocked_by_them: boolean;
+      };
+    };
+  }
+
+  async reportUser(userId: string | number, reason: string, details = '') {
+    const response = await this.client.post('/moderation/report-user/', {
+      user_id: userId,
+      reason,
+      details,
+    });
     return response.data;
   }
 
@@ -880,7 +1049,12 @@ class ApiClient {
     const response = await this.client.post('/users/follow/', {
       following_id: userId,
     });
-    return response.data as { following?: boolean; is_following?: boolean };
+    return response.data as {
+      following?: boolean;
+      is_following?: boolean;
+      followers_count?: number;
+      error?: string;
+    };
   }
 
   async followUser(userId: string | number) {
@@ -925,6 +1099,13 @@ class ApiClient {
   }
 
   // ── Unified saved items (GET/DELETE /api/saved/) ──────────────────
+  async getSavedPosts(collectionId?: number) {
+    const response = await this.client.get('/posts/saved/', {
+      params: collectionId != null ? { collection_id: collectionId } : undefined,
+    });
+    return unwrapList(response.data);
+  }
+
   async getSavedItems(collection: 'all' | 'post' | 'reel' | 'idea' | 'story' = 'all') {
     const response = await this.client.get('/saved/', {
       params: { collection },
@@ -1014,9 +1195,38 @@ class ApiClient {
   }
 
   // ── Chat ──────────────────────────────────────────────────────────
-  async getConversations() {
-    const response = await this.client.get('/chat/conversations/');
+  async getConversations(params?: { type?: 'primary' | 'requests' }) {
+    const response = await this.client.get('/chat/conversations/', {
+      params: { type: params?.type || 'primary' },
+    });
     return unwrapList(response.data);
+  }
+
+  async getChatFriends(q?: string) {
+    const response = await this.client.get('/chat/friends/', {
+      params: q ? { q } : undefined,
+    });
+    return response.data as { friends?: unknown[]; me?: unknown };
+  }
+
+  async pingChatPresence(payload?: { mood_icon?: 'sun' | 'cloud'; status_message?: string }) {
+    const response = await this.client.post('/chat/presence/', payload || {});
+    return response.data;
+  }
+
+  async acceptConversationRequest(conversationId: string | number) {
+    const response = await this.client.post(`/chat/conversations/${conversationId}/accept/`, {});
+    return response.data;
+  }
+
+  async createChatRoom(name: string, memberIds: number[] = []) {
+    const response = await this.client.post('/chat/rooms/', { name, member_ids: memberIds });
+    return response.data;
+  }
+
+  async joinPromptRoom(questionId: string | number) {
+    const response = await this.client.post('/chat/prompt-rooms/', { question_id: questionId });
+    return response.data;
   }
 
   async getMessages(conversationId: string | number, params?: { q?: string }) {
@@ -1049,12 +1259,31 @@ class ApiClient {
     };
   }
 
-  async sendMessage(conversationId: string | number, text: string) {
+  async sendMessage(conversationId: string | number, text: string, expiresInSeconds?: number | null) {
     const response = await this.client.post(
       `/chat/conversations/${conversationId}/messages/`,
-      { text },
+      { text, expires_in_seconds: expiresInSeconds || undefined },
     );
     return response.data;
+  }
+
+  async editChatMessage(messageId: string | number, text: string) {
+    const response = await this.client.patch(`/chat/messages/${messageId}/`, { text });
+    return response.data;
+  }
+
+  async deleteChatMessage(messageId: string | number) {
+    const response = await this.client.delete(`/chat/messages/${messageId}/`);
+    return response.data;
+  }
+
+  async uploadConversationFile(conversationId: string | number, formData: FormData) {
+    const response = await this.client.post(`/chat/conversations/${conversationId}/upload/`, formData);
+    return response.data;
+  }
+
+  async sendChatTyping(conversationId: string | number, isTyping: boolean) {
+    await this.client.post(`/chat/conversations/${conversationId}/typing/`, { is_typing: isTyping });
   }
 
   async startConversation(peerId: string | number) {
@@ -1122,9 +1351,85 @@ class ApiClient {
     };
   }
 
-  async sendRoomMessage(roomId: string | number, text: string) {
-    const response = await this.client.post(`/chat/rooms/${roomId}/messages/`, { text });
+  async sendRoomMessage(roomId: string | number, text: string, expiresInSeconds?: number | null) {
+    const response = await this.client.post(`/chat/rooms/${roomId}/messages/`, {
+      text,
+      expires_in_seconds: expiresInSeconds || undefined,
+    });
     return response.data;
+  }
+
+  async getChatRoom(roomId: string | number) {
+    const response = await this.client.get(`/chat/rooms/${roomId}/`);
+    return response.data;
+  }
+
+  async renameChatRoom(roomId: string | number, name: string) {
+    const response = await this.client.patch(`/chat/rooms/${roomId}/`, { name });
+    return response.data;
+  }
+
+  async inviteRoomMembers(roomId: string | number, memberIds: number[]) {
+    const response = await this.client.post(`/chat/rooms/${roomId}/members/`, { member_ids: memberIds });
+    return response.data;
+  }
+
+  async removeRoomMember(roomId: string | number, memberId: number) {
+    const response = await this.client.delete(`/chat/rooms/${roomId}/members/`, { data: { member_id: memberId } });
+    return response.data;
+  }
+
+  async leaveChatRoom(roomId: string | number) {
+    const response = await this.client.post(`/chat/rooms/${roomId}/leave/`, {});
+    return response.data;
+  }
+
+  async getRoomRecap(roomId: string | number) {
+    const response = await this.client.get(`/chat/rooms/${roomId}/recap/`);
+    return response.data;
+  }
+
+  async pinRoomMessage(messageId: string | number) {
+    const response = await this.client.post(`/chat/room-messages/${messageId}/pin/`, {});
+    return response.data as { is_pinned: boolean };
+  }
+
+  async reactRoomMessage(messageId: string | number, emoji: string | null) {
+    const response = await this.client.post(`/chat/room-messages/${messageId}/react/`, { emoji });
+    return response.data as { reaction_counts: Record<string, number>; my_reaction: string | null };
+  }
+
+  async editRoomMessage(messageId: string | number, text: string) {
+    const response = await this.client.patch(`/chat/room-messages/${messageId}/`, { text });
+    return response.data;
+  }
+
+  async deleteRoomMessage(messageId: string | number) {
+    const response = await this.client.delete(`/chat/room-messages/${messageId}/`);
+    return response.data;
+  }
+
+  async uploadRoomFile(roomId: string | number, formData: FormData) {
+    const response = await this.client.post(`/chat/rooms/${roomId}/upload/`, formData);
+    return response.data;
+  }
+
+  async sendRoomTyping(roomId: string | number, isTyping: boolean) {
+    await this.client.post(`/chat/rooms/${roomId}/typing/`, { is_typing: isTyping });
+  }
+
+  async scheduleRoomMessage(roomId: string | number, payload: { text: string; send_at: string }) {
+    const response = await this.client.post(`/chat/rooms/${roomId}/schedule/`, payload);
+    return response.data;
+  }
+
+  async getScheduledChatMessages() {
+    const response = await this.client.get('/chat/scheduled/');
+    return unwrapList(response.data);
+  }
+
+  async cancelScheduledChatMessage(id: string | number) {
+    await this.client.delete(`/chat/scheduled/${id}/`);
   }
 
   async getStageState(roomId: string | number) {
@@ -1162,6 +1467,8 @@ class ApiClient {
     category?: string;
     status?: string;
     ordering?: string;
+    owner?: string;
+    owner_id?: string | number;
   }) {
     const response = await this.client.get('/ideas/', {
       params: {
@@ -1170,6 +1477,8 @@ class ApiClient {
         category: params?.category,
         status: params?.status,
         ordering: params?.ordering,
+        owner: params?.owner,
+        owner_id: params?.owner_id,
       },
     });
     return toFeedPage(response.data);
@@ -1180,22 +1489,51 @@ class ApiClient {
     return response.data;
   }
 
-  async createIdea(payload: { title: string; description?: string; category?: string }) {
-    const response = await this.client.post('/ideas/', {
-      title: payload.title,
-      description: payload.description || '',
-      category: payload.category,
-    });
+  async getIdeaComments(id: string | number) {
+    const response = await this.client.get(`/ideas/${id}/comments/`);
+    return Array.isArray(response.data) ? response.data : response.data?.results || [];
+  }
+
+  async createIdeaComment(id: string | number, content: string) {
+    const response = await this.client.post(`/ideas/${id}/comments/`, { content });
     return response.data;
   }
 
-  async voteIdea(id: string | number, vote: 'up' | 'down' | 'support' = 'support') {
-    const response = await this.client.post(`/ideas/${id}/vote/`, { vote });
+  async getFeaturedIdeas() {
+    const response = await this.client.get('/ideas/featured/');
+    return Array.isArray(response.data) ? response.data : response.data?.results || [];
+  }
+
+  async createIdea(
+    payload:
+      | FormData
+      | { title: string; description?: string; category?: string },
+  ) {
+    const response = await this.client.post('/ideas/', payload);
     return response.data;
   }
 
-  async pledgeIdea(id: string | number, amount: number) {
-    const response = await this.client.post(`/ideas/${id}/pledge/`, { amount });
+  async updateIdea(id: string | number, payload: Record<string, unknown>) {
+    const response = await this.client.patch(`/ideas/${id}/`, payload);
+    return response.data;
+  }
+
+  async deleteIdea(id: string | number) {
+    await this.client.delete(`/ideas/${id}/`);
+  }
+
+  async voteIdea(id: string | number) {
+    const response = await this.client.post(`/ideas/${id}/vote/`);
+    return response.data as { voted?: boolean; supporters?: number };
+  }
+
+  async toggleIdeaSave(id: string | number) {
+    const response = await this.client.post(`/ideas/${id}/toggle-save/`);
+    return response.data as { saved?: boolean; is_saved?: boolean };
+  }
+
+  async pledgeIdea(id: string | number, amount: number, anonymous = false) {
+    const response = await this.client.post(`/ideas/${id}/pledge/`, { amount, anonymous });
     return response.data;
   }
 
@@ -1205,8 +1543,61 @@ class ApiClient {
     return unwrapList(response.data);
   }
 
-  async catchBottle() {
-    const response = await this.client.post('/bottles/catch/');
+  async getBottlesMap() {
+    const response = await this.client.get('/bottles/map/');
+    return unwrapList(response.data);
+  }
+
+  async getBottle(id: string | number) {
+    const response = await this.client.get(`/bottles/${id}/`);
+    return response.data;
+  }
+
+  async deleteBottle(id: string | number) {
+    await this.client.delete(`/bottles/${id}/`);
+  }
+
+  async getMyBottles(
+    opts: boolean | { active?: boolean; emotion?: string; start_date?: string; end_date?: string } = true,
+  ) {
+    const params = typeof opts === 'boolean' ? { active: opts } : opts;
+    const response = await this.client.get('/bottles/my_bottles/', {
+      params: {
+        active: params.active === false ? 0 : 1,
+        emotion: params.emotion && params.emotion !== 'all' ? params.emotion : undefined,
+        start_date: params.start_date || undefined,
+        end_date: params.end_date || undefined,
+      },
+    });
+    return unwrapList(response.data);
+  }
+
+  async getCaughtBottles(params?: { emotion?: string; start_date?: string; end_date?: string }) {
+    const response = await this.client.get('/bottles/caught/', {
+      params: {
+        emotion: params?.emotion && params.emotion !== 'all' ? params.emotion : undefined,
+        start_date: params?.start_date || undefined,
+        end_date: params?.end_date || undefined,
+      },
+    });
+    return unwrapList(response.data);
+  }
+
+  async getBottlesDashboard() {
+    const response = await this.client.get('/bottles/dashboard/');
+    return response.data as {
+      timeline?: Array<{ day: number; date: string; emotion: string | null }>;
+      current_mood?: string | null;
+      insights?: Array<{ emotion: string; pct: number; count?: number }>;
+      mood_summary?: Array<{ emotion: string; count: number }>;
+      emotions?: Array<{ emotion: string; count: number }>;
+      thrown?: number;
+      caught?: number;
+    };
+  }
+
+  async catchBottle(bottleId?: string | number) {
+    const response = await this.client.post('/bottles/catch/', bottleId ? { bottle_id: bottleId } : {});
     return response.data;
   }
 
@@ -1252,6 +1643,49 @@ class ApiClient {
 
   async getCommunity(slug: string) {
     const response = await this.client.get(`/communities/${slug}/`);
+    return response.data;
+  }
+
+  async createCommunity(payload: { name: string; description?: string; privacy?: 'public' | 'private' }) {
+    const response = await this.client.post('/communities/', {
+      name: payload.name,
+      description: payload.description || '',
+      privacy: payload.privacy || 'public',
+    });
+    return response.data;
+  }
+
+  async getCommunityConstellation(slug: string) {
+    try {
+      const response = await this.client.get(`/communities/${slug}/constellation/`);
+      return response.data as {
+        community_id?: number;
+        keywords?: string[];
+        questions?: Array<{ id: number | null; text: string; category?: string }>;
+        deep_links?: { lab?: string };
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async getCommunityRitual(slug: string) {
+    try {
+      const response = await this.client.get(`/communities/${slug}/ritual/`);
+      return response.data as {
+        available?: boolean;
+        prompt?: { id: number | null; text: string; category?: string; placeholder?: boolean } | null;
+        date?: string | null;
+        completed?: boolean;
+        streak?: number;
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async completeCommunityRitual(slug: string) {
+    const response = await this.client.post(`/communities/${slug}/ritual/`, {});
     return response.data;
   }
 
@@ -1335,6 +1769,24 @@ class ApiClient {
     }
   }
 
+  async getCommunityWikiPage(slug: string, pageSlug: string) {
+    const response = await this.client.get(
+      `/communities/${encodeURIComponent(slug)}/wiki/${encodeURIComponent(pageSlug)}/`,
+    );
+    return response.data;
+  }
+
+  async saveCommunityWikiPage(
+    slug: string,
+    payload: { title: string; body: string; slug?: string },
+  ) {
+    const response = await this.client.post(
+      `/communities/${encodeURIComponent(slug)}/wiki/`,
+      payload,
+    );
+    return response.data;
+  }
+
   async crossEchoPost(
     postId: string | number,
     payload: { community_id?: string | number; community?: string; text?: string; flair?: string },
@@ -1400,6 +1852,38 @@ class ApiClient {
     return response.data;
   }
 
+  async getInspirationStats() {
+    const response = await this.client.get('/questions/stats/');
+    return response.data as {
+      answered_by_category?: Record<string, number>;
+      skipped_by_category?: Record<string, number>;
+      preferred_categories?: string[];
+      interests?: string[];
+    };
+  }
+
+  async getInspirationHistory() {
+    const response = await this.client.get('/questions/history/');
+    const data = response.data;
+    return Array.isArray(data) ? data : data?.results || [];
+  }
+
+  async getMyChallengeEntries() {
+    const response = await this.client.get('/challenges/user_entries/');
+    return unwrapList(response.data);
+  }
+
+  async getMyAppeals() {
+    const response = await this.client.get('/moderation/appeals/');
+    const data = response.data;
+    return Array.isArray(data) ? data : data?.results || [];
+  }
+
+  async submitAppeal(payload: { content_type: string; object_id: number; reason: string }) {
+    const response = await this.client.post('/moderation/appeals/', payload);
+    return response.data;
+  }
+
   async completeDailyRitual(params?: { period?: 'morning' | 'evening'; lang?: string }) {
     const response = await this.client.post('/questions/daily/', {}, { params });
     return response.data;
@@ -1410,9 +1894,69 @@ class ApiClient {
     return response.data;
   }
 
+  async ensureDailyChallenge(lang?: string) {
+    const response = await this.client.post('/challenges/ensure-daily/', { lang: lang || 'en' });
+    return response.data;
+  }
+
+  async getChallengeStats() {
+    const response = await this.client.get('/challenges/stats/');
+    return response.data as { participants: number; success_rate: number; challenges: number };
+  }
+
+  async getChallenge(id: string | number) {
+    const response = await this.client.get(`/challenges/${id}/`);
+    return response.data;
+  }
+
+  async getChallengeSubmissions(id: string | number) {
+    const response = await this.client.get(`/challenges/${id}/submissions/`);
+    const data = response.data;
+    return Array.isArray(data) ? data : unwrapList(data);
+  }
+
+  async submitChallengeEntry(id: string | number, content: string) {
+    const response = await this.client.post(`/challenges/${id}/submissions/`, { content });
+    return response.data;
+  }
+
+  async approveChallengeSubmission(
+    challengeId: string | number,
+    submissionId: string | number,
+    isApproved: boolean,
+  ) {
+    const response = await this.client.patch(
+      `/challenges/${challengeId}/submissions/${submissionId}/approve/`,
+      { is_approved: isApproved },
+    );
+    return response.data;
+  }
+
+  async createChallenge(formData: FormData) {
+    const response = await this.client.post('/challenges/', formData);
+    return response.data;
+  }
+
+  async relayQuestion(questionId: number) {
+    try {
+      const response = await this.client.post(`/questions/${questionId}/relay/`, {});
+      const data = response.data;
+      return Array.isArray(data?.users) ? data.users : [];
+    } catch {
+      return [];
+    }
+  }
+
   async getChallenges(params?: { type?: string; page?: number; page_size?: number }) {
     const response = await this.client.get('/challenges/archive/', { params });
     return response.data;
+  }
+
+  async getUserChallengeEntries(userId: string | number) {
+    const response = await this.client.get('/challenges/user_entries/', {
+      params: { user: userId },
+    });
+    return unwrapList(response.data);
   }
 
   // ── Capsules ──────────────────────────────────────────────────────
@@ -1421,8 +1965,22 @@ class ApiClient {
     return toFeedPage(response.data);
   }
 
-  async createCapsule(payload: { text: string; open_at: string }) {
-    const response = await this.client.post('/capsules/', payload);
+  async createCapsule(payload: {
+    text: string;
+    open_at: string;
+    voice?: { uri: string; name?: string; type?: string } | null;
+  }) {
+    const form = new FormData();
+    form.append('text', payload.text);
+    form.append('open_at', payload.open_at);
+    if (payload.voice?.uri) {
+      form.append('voice', {
+        uri: payload.voice.uri,
+        name: payload.voice.name || 'capsule.m4a',
+        type: payload.voice.type || 'audio/mp4',
+      } as unknown as Blob);
+    }
+    const response = await this.client.post('/capsules/', form);
     return response.data;
   }
 
@@ -1444,6 +2002,11 @@ class ApiClient {
     return response.data;
   }
 
+  async getWorldPassports() {
+    const response = await this.client.get('/users/me/passports/');
+    return response.data;
+  }
+
   async getCreatorAnalytics() {
     const response = await this.client.get('/analytics/creator/');
     return response.data;
@@ -1453,6 +2016,16 @@ class ApiClient {
   async getShopItems(params?: { category?: string; type?: string; ordering?: string }) {
     const response = await this.client.get('/shop/items/', { params });
     return toFeedPage(response.data);
+  }
+
+  async getShopFeatured() {
+    const response = await this.client.get('/shop/items/featured/');
+    return unwrapList(response.data);
+  }
+
+  async getShopItem(id: string | number) {
+    const response = await this.client.get(`/shop/items/${id}/`);
+    return response.data;
   }
 
   async getShopWallet() {
@@ -1625,8 +2198,13 @@ class ApiClient {
   }
 
   // ── Web worlds parity ─────────────────────────────────────────────
-  async getResources() {
-    const response = await this.client.get('/resources/');
+  async getResources(params?: { type?: string; search?: string }) {
+    const response = await this.client.get('/resources/', {
+      params: {
+        type: params?.type && params.type !== 'all' ? params.type : undefined,
+        search: params?.search || undefined,
+      },
+    });
     return response.data;
   }
 
@@ -1635,11 +2213,12 @@ class ApiClient {
     return response.data;
   }
 
-  async getFailedIdeas(params?: { exhibition?: string }) {
+  async getFailedIdeas(params?: { exhibition?: string; ordering?: string }) {
+    const query: Record<string, string> = {};
+    if (params?.exhibition && params.exhibition !== 'all') query.exhibition = params.exhibition;
+    if (params?.ordering === 'top') query.ordering = 'top';
     const response = await this.client.get('/speculative/failed-ideas/', {
-      params: params?.exhibition && params.exhibition !== 'all'
-        ? { exhibition: params.exhibition }
-        : undefined,
+      params: Object.keys(query).length ? query : undefined,
     });
     return response.data;
   }
@@ -1649,12 +2228,29 @@ class ApiClient {
     return response.data;
   }
 
-  async getFutureMemories() {
-    const response = await this.client.get('/speculative/future-memories/');
+  async likeFailedIdea(id: string | number) {
+    const response = await this.client.post(`/speculative/failed-ideas/${id}/like/`, {});
+    return response.data as { liked: boolean; likes_count: number };
+  }
+
+  async getFailedIdeaComments(id: string | number) {
+    const response = await this.client.get(`/speculative/failed-ideas/${id}/comments/`);
     return response.data;
   }
 
-  async createFutureMemory(payload: Record<string, unknown>) {
+  async postFailedIdeaComment(id: string | number, content: string) {
+    const response = await this.client.post(`/speculative/failed-ideas/${id}/comments/`, { content });
+    return response.data;
+  }
+
+  async getFutureMemories(userId?: string | number) {
+    const response = await this.client.get('/speculative/future-memories/', {
+      params: userId != null ? { user: userId } : undefined,
+    });
+    return response.data;
+  }
+
+  async createFutureMemory(payload: { text: string; tag?: string; is_public?: boolean }) {
     const response = await this.client.post('/speculative/future-memories/', payload);
     return response.data;
   }
@@ -1664,8 +2260,36 @@ class ApiClient {
     return response.data;
   }
 
+  async getMyCharacters() {
+    const response = await this.client.get('/speculative/characters/mine/');
+    return response.data;
+  }
+
   async summonCharacter(id: string | number) {
     const response = await this.client.post(`/speculative/characters/${id}/summon/`, {});
+    return response.data;
+  }
+
+  async mysterySummonCharacter() {
+    const response = await this.client.post('/speculative/characters/mystery-summon/', {}, { timeout: 60000 });
+    return response.data;
+  }
+
+  async mergeCharacters(characterIds: number[]) {
+    const response = await this.client.post(
+      '/speculative/characters/merge/',
+      { character_ids: characterIds },
+      { timeout: 60000 },
+    );
+    return response.data;
+  }
+
+  async createCustomCharacter(prompt: string, language?: string) {
+    const response = await this.client.post(
+      '/speculative/characters/create-custom/',
+      { prompt, language },
+      { timeout: 60000 },
+    );
     return response.data;
   }
 
@@ -1676,16 +2300,44 @@ class ApiClient {
 
   async getSubscriptionPlans() {
     const response = await this.client.get('/subscriptions/plans/');
-    return response.data;
+    return unwrapList(response.data);
   }
 
-  async startPlanCheckout(planId: string | number) {
-    const response = await this.client.post('/subscriptions/checkout/', { plan_id: planId });
+  async getMySubscription() {
+    const response = await this.client.get('/subscriptions/me/');
+    return response.data as { active?: boolean; subscription?: { plan?: { tier?: string } } };
+  }
+
+  async startPlanCheckout(tier: string) {
+    const response = await this.client.post('/subscriptions/checkout/', { tier });
     return response.data as { checkout_url?: string; url?: string };
   }
 
   async getCollabProjects() {
     const response = await this.client.get('/collab/projects/');
+    return unwrapList(response.data);
+  }
+
+  async createCollabProject(payload: { title: string; description?: string }) {
+    const response = await this.client.post('/collab/projects/', payload);
+    return response.data;
+  }
+
+  async addCollabTask(projectId: string | number, title: string) {
+    const response = await this.client.post(`/collab/projects/${projectId}/tasks/`, { title });
+    return response.data;
+  }
+
+  async updateCollabTask(projectId: string | number, taskId: string | number, status: string) {
+    const response = await this.client.post(`/collab/projects/${projectId}/update-task/`, {
+      task_id: taskId,
+      status,
+    });
+    return response.data;
+  }
+
+  async inviteCollabMember(projectId: string | number, username: string) {
+    const response = await this.client.post(`/collab/projects/${projectId}/members/`, { username });
     return response.data;
   }
 
@@ -1698,21 +2350,60 @@ class ApiClient {
   }
 
   async getDrawSessions() {
-    const response = await this.client.get('/speculative/draw-sessions/');
+    const response = await this.client.get('/studio/sessions/');
+    return unwrapList(response.data);
+  }
+
+  async createDrawSession(payload?: Record<string, unknown>) {
+    const response = await this.client.post('/studio/sessions/', payload || {});
     return response.data;
   }
 
-  async createDrawSession(payload: Record<string, unknown>) {
-    const response = await this.client.post('/speculative/draw-sessions/', payload);
+  async getStudioSession(id: string | number) {
+    const response = await this.client.get(`/studio/sessions/${id}/`);
     return response.data;
   }
 
-  async getForgeStories(params?: { ordering?: string; genre?: string; status?: string }) {
+  async addStudioStroke(
+    id: string | number,
+    payload: { points: { x: number; y: number }[]; color: string; width: number },
+  ) {
+    const response = await this.client.post(`/studio/sessions/${id}/strokes/`, payload);
+    return response.data;
+  }
+
+  async addStudioMedia(id: string | number, formData: FormData) {
+    const response = await this.client.post(`/studio/sessions/${id}/media/`, formData);
+    return response.data;
+  }
+
+  async deleteStudioMedia(sessionId: string | number, mediaId: string | number) {
+    await this.client.delete(`/studio/sessions/${sessionId}/media/${mediaId}/`);
+  }
+
+  async inviteToStudio(sessionId: string | number, toUserId: number) {
+    const response = await this.client.post(`/studio/sessions/${sessionId}/invite/`, {
+      to_user_id: toUserId,
+    });
+    return response.data;
+  }
+
+  async deleteStudioSession(id: string | number) {
+    await this.client.delete(`/studio/sessions/${id}/`);
+  }
+
+  async getForgeStories(params?: {
+    ordering?: string;
+    genre?: string;
+    status?: string;
+    owner?: string | number;
+  }) {
     const response = await this.client.get('/forge/stories/', {
       params: {
         ...(params?.ordering ? { ordering: params.ordering } : {}),
         ...(params?.genre && params.genre !== 'all' ? { genre: params.genre } : {}),
         ...(params?.status && params.status !== 'all' ? { status: params.status } : {}),
+        ...(params?.owner != null ? { owner: params.owner } : {}),
       },
     });
     return response.data;
@@ -1743,8 +2434,118 @@ class ApiClient {
     return response.data as { saved?: boolean };
   }
 
+  async getMyForgeStories(kind: 'all' | 'owned' | 'saved' | 'collaborating' = 'all') {
+    const response = await this.client.get('/forge/stories/my/', { params: { kind } });
+    return response.data;
+  }
+
+  async getFeaturedForgeStories() {
+    const response = await this.client.get('/forge/stories/featured/');
+    return response.data;
+  }
+
+  async updateForgeStory(id: string | number, payload: Record<string, unknown>) {
+    const response = await this.client.patch(`/forge/stories/${id}/`, payload);
+    return response.data;
+  }
+
+  async deleteForgeStory(id: string | number) {
+    await this.client.delete(`/forge/stories/${id}/`);
+  }
+
+  async reviseForgeSegment(storyId: string | number, segmentId: string | number, content: string) {
+    const response = await this.client.patch(`/forge/stories/${storyId}/segments/${segmentId}/`, { content });
+    return response.data;
+  }
+
+  async approveForgeSegment(storyId: string | number, segmentId: string | number) {
+    const response = await this.client.post(`/forge/stories/${storyId}/segments/${segmentId}/approve/`, {});
+    return response.data;
+  }
+
+  async rejectForgeSegment(storyId: string | number, segmentId: string | number) {
+    const response = await this.client.post(`/forge/stories/${storyId}/segments/${segmentId}/reject/`, {});
+    return response.data;
+  }
+
+  async inviteForgeCollaborator(
+    storyId: string | number,
+    payload: { username?: string; user_id?: number; role?: string },
+  ) {
+    const response = await this.client.post(`/forge/stories/${storyId}/invite/`, payload);
+    return response.data;
+  }
+
+  async respondForgeInvite(storyId: string | number, accept: boolean) {
+    const response = await this.client.post(`/forge/stories/${storyId}/collaborators/respond/`, { accept });
+    return response.data;
+  }
+
+  async requestForgeJoin(storyId: string | number, role = 'writer') {
+    const response = await this.client.post(`/forge/stories/${storyId}/join/`, { role });
+    return response.data;
+  }
+
+  async reviewForgeJoin(storyId: string | number, userId: string | number, accept: boolean, role = 'writer') {
+    const response = await this.client.post(`/forge/stories/${storyId}/collaborators/${userId}/review/`, {
+      accept,
+      role,
+    });
+    return response.data;
+  }
+
+  async postForgeDialogue(storyId: string | number, segmentId: string | number, text: string) {
+    const response = await this.client.post(`/forge/stories/${storyId}/segments/${segmentId}/dialogues/`, { text });
+    return response.data;
+  }
+
+  async patchForgeBible(storyId: string | number, payload: Record<string, unknown>) {
+    const response = await this.client.patch(`/forge/stories/${storyId}/bible/`, payload);
+    return response.data;
+  }
+
+  async buddyForgeContinue(storyId: string | number) {
+    const response = await this.client.post(`/forge/stories/${storyId}/ai/continue/`, {});
+    return response.data as { text?: string };
+  }
+
+  async buddyForgeRewrite(storyId: string | number, draft: string, style = 'lyrical') {
+    const response = await this.client.post(`/forge/stories/${storyId}/ai/rewrite/`, { draft, style });
+    return response.data as { text?: string };
+  }
+
+  async buddyForgeOutline(storyId: string | number, apply = false) {
+    const response = await this.client.post(`/forge/stories/${storyId}/ai/outline/`, { apply });
+    return response.data;
+  }
+
+  async buddyForgeCharacter(storyId: string | number, apply = false) {
+    const response = await this.client.post(`/forge/stories/${storyId}/ai/character/`, { apply });
+    return response.data;
+  }
+
+  async buddyForgeCritique(storyId: string | number, draft = '') {
+    const response = await this.client.post(`/forge/stories/${storyId}/ai/critique/`, { draft });
+    return response.data as { text?: string };
+  }
+
+  async buddyForgeInspire(storyId: string | number, mode: 'spark' | 'twist' | 'sensory' | 'dialogue', draft = '') {
+    const response = await this.client.post(`/forge/stories/${storyId}/ai/inspire/`, { mode, draft });
+    return response.data as { text?: string };
+  }
+
   async getAdCampaigns() {
     const response = await this.client.get('/ads/campaigns/');
+    return response.data;
+  }
+
+  async getAdReports() {
+    const response = await this.client.get('/ads/reports/');
+    return response.data;
+  }
+
+  async createAdCampaign(payload: Record<string, unknown>) {
+    const response = await this.client.post('/ads/campaigns/', payload);
     return response.data;
   }
 
@@ -1758,19 +2559,96 @@ class ApiClient {
     return response.data;
   }
 
+  async activateAdCampaign(id: string | number) {
+    const response = await this.client.post(`/ads/campaigns/${id}/activate/`, {});
+    return response.data;
+  }
+
   async getPromptRooms() {
     const response = await this.client.get('/chat/prompt-rooms/');
     return response.data;
   }
 
+  async getNextQuestion(params?: { lang?: string; category?: string; personalize?: boolean }) {
+    const response = await this.client.get('/questions/next/', {
+      params: {
+        lang: params?.lang || 'en',
+        category: params?.category && params.category !== 'all' ? params.category : undefined,
+        personalize: params?.personalize ? '1' : undefined,
+      },
+    });
+    return response.data as {
+      id: number;
+      text: string;
+      category?: string;
+      category_label?: string;
+      language?: string;
+      tags?: string[];
+    };
+  }
+
+  async generateQuestion(params?: { lang?: string; category?: string }) {
+    const response = await this.client.post(
+      '/questions/generate/',
+      {},
+      {
+        params: {
+          lang: params?.lang || 'en',
+          category: params?.category && params.category !== 'all' ? params.category : undefined,
+        },
+      },
+    );
+    return response.data as {
+      id: number;
+      text: string;
+      category?: string;
+      category_label?: string;
+    };
+  }
+
+  async skipQuestion(questionId: string | number) {
+    try {
+      await this.client.post(`/questions/${questionId}/skip/`, {});
+    } catch {
+      /* best-effort personalization */
+    }
+  }
+
   async getMySales() {
-    const response = await this.client.get('/shop/my-sales/');
+    try {
+      const response = await this.client.get('/shop/items/my-sales/');
+      return response.data;
+    } catch {
+      const response = await this.client.get('/shop/my-sales/');
+      return response.data;
+    }
+  }
+
+  async createShopItem(payload: Record<string, unknown>) {
+    const response = await this.client.post('/shop/items/', payload);
+    return response.data;
+  }
+
+  async updateShopItem(id: string | number, payload: Record<string, unknown>) {
+    const response = await this.client.patch(`/shop/items/${id}/`, payload);
+    return response.data;
+  }
+
+  async deleteShopItem(id: string | number) {
+    await this.client.delete(`/shop/items/${id}/`);
+  }
+
+  async fulfillShopOrder(transactionId: string | number, status = 'shipped') {
+    const response = await this.client.post('/shop/items/fulfillment/', {
+      transaction_id: transactionId,
+      fulfillment_status: status,
+    });
     return response.data;
   }
 
   async getShopTransactions() {
-    const response = await this.client.get('/shop/transactions/');
-    return response.data;
+    const response = await this.client.get('/shop/items/transactions/');
+    return unwrapList(response.data);
   }
 
   async getTwoFactorStatus() {

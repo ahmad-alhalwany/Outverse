@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  I18nManager,
   Linking,
   RefreshControl,
   SafeAreaView,
@@ -15,6 +16,8 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { createT } from '@/i18n';
 import {
   WorldBackdrop,
   WorldCard,
@@ -22,9 +25,10 @@ import {
   WorldHero,
   WorldPrimaryButton,
   WorldStat,
+  type WorldTone,
 } from '@/components/world/WorldChrome';
 
-export type WorldTone = 'lab' | 'vault' | 'bazaar' | 'live' | 'shop' | 'default';
+export type { WorldTone };
 export type WorldRow = Record<string, any>;
 
 export type WorldAction = {
@@ -135,8 +139,9 @@ export function compactMeta(row: WorldRow): string {
 }
 
 export async function openMaybeUrl(value?: string | null) {
+  const t = createT(I18nManager.isRTL ? 'ar' : 'en');
   if (!value) {
-    Alert.alert('Unavailable', 'No URL was returned.');
+    Alert.alert(t('mobile.unavailable'), t('mobile.unavailableUrl'));
     return;
   }
   await Linking.openURL(value);
@@ -148,7 +153,7 @@ export function WorldListScreen({
   tone = 'default',
   heroTitle,
   heroBody,
-  emptyText = 'Nothing here yet',
+  emptyText,
   load,
   createLabel,
   createPlaceholder,
@@ -163,6 +168,7 @@ export function WorldListScreen({
   transformRows,
 }: WorldListProps) {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [rows, setRows] = useState<WorldRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,13 +184,13 @@ export function WorldListScreen({
         const data = await load();
         setRows(transformRows ? transformRows(data) : rowsFrom(data));
       } catch (error: any) {
-        Alert.alert(title, error?.response?.data?.detail || 'Could not load this world.');
+        Alert.alert(title, error?.response?.data?.detail || t('mobile.couldNotLoadWorld'));
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [load, title, transformRows],
+    [load, title, transformRows, t],
   );
 
   useEffect(() => {
@@ -200,7 +206,7 @@ export function WorldListScreen({
       setDraft('');
       await fetchRows(true);
     } catch (error: any) {
-      Alert.alert(createLabel || title, error?.response?.data?.detail || 'Could not create item.');
+      Alert.alert(createLabel || title, error?.response?.data?.detail || t('mobile.couldNotCreateItem'));
     } finally {
       setCreating(false);
     }
@@ -214,14 +220,14 @@ export function WorldListScreen({
         await action.run(row);
         await fetchRows(true);
       } catch (error: any) {
-        Alert.alert(action.label, error?.response?.data?.detail || 'Action is not available yet.');
+        Alert.alert(action.label, error?.response?.data?.detail || t('mobile.actionUnavailable'));
       } finally {
         setBusyKey(null);
       }
     };
     if (action.confirm) {
       Alert.alert(action.label, action.confirm, [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         { text: action.label, onPress: () => void execute() },
       ]);
       return;
@@ -266,7 +272,7 @@ export function WorldListScreen({
                     <TextInput
                       value={draft}
                       onChangeText={setDraft}
-                      placeholder={createPlaceholder || 'Title'}
+                      placeholder={createPlaceholder || t('mobile.namePlaceholder')}
                       placeholderTextColor={colors.textMuted}
                       style={[
                         styles.input,
@@ -278,7 +284,8 @@ export function WorldListScreen({
                       ]}
                     />
                     <WorldPrimaryButton
-                      label={createLabel || 'Create'}
+                      label={createLabel || t('live.create')}
+                      tone={tone}
                       onPress={submitCreate}
                       loading={creating}
                       disabled={creating || !draft.trim()}
@@ -289,7 +296,7 @@ export function WorldListScreen({
             }
             ListEmptyComponent={
               <View style={styles.empty}>
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{emptyText}</Text>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{emptyText || t('mobile.nothingHere')}</Text>
               </View>
             }
             renderItem={({ item }) => {
@@ -345,6 +352,7 @@ export function WorldStatsScreen({
   onLink,
 }: WorldStatsProps) {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [data, setData] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -355,12 +363,12 @@ export function WorldStatsScreen({
       const value = await load();
       setData(value && typeof value === 'object' ? (value as Record<string, any>) : { value });
     } catch (error: any) {
-      Alert.alert(title, error?.response?.data?.detail || 'Could not load this world.');
+      Alert.alert(title, error?.response?.data?.detail || t('mobile.couldNotLoadWorld'));
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [load, title]);
+  }, [load, title, t]);
 
   useEffect(() => {
     void fetchData();
@@ -384,7 +392,7 @@ export function WorldStatsScreen({
             body={heroBody}
             action={
               linkLabel && onLink ? (
-                <WorldPrimaryButton label={linkLabel} onPress={() => onLink(navigation)} />
+                <WorldPrimaryButton label={linkLabel} tone={tone} onPress={() => onLink(navigation)} />
               ) : undefined
             }
           />
@@ -399,7 +407,7 @@ export function WorldStatsScreen({
                   ))}
                 </View>
               ) : (
-                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No stats returned yet.</Text>
+                <Text style={[styles.emptyText, { color: colors.textSecondary }]}>{t('mobile.nothingHere')}</Text>
               )}
               {rows.map((row, index) => (
                 <WorldCard key={String(row.id ?? index)}>

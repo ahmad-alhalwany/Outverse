@@ -18,23 +18,35 @@ import {
   Alert,
 } from 'react-native';
 import Video from 'react-native-video';
-import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import Avatar from '../../components/Avatar';
 import EmptyState from '../../components/EmptyState';
 import ReactionBurst from '../../components/ReactionBurst';
+import PostReactions from '../../components/PostReactions';
 import { useReels, type ReelsFeedMode } from '../../hooks/useReels';
-import { API_ORIGIN } from '../../api/config';
 import { api } from '../../api/client';
+import { useTheme } from '../../hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { displayName } from '@/lib/names';
+import { openProfile } from '@/lib/nav';
+import type { ReactionType } from '@/lib/reactions';
 import type { Reel, ReelComment, User } from '../../types';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ReelsScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute();
+  const { colors } = useTheme();
+  const { t } = useLocale();
+  const insets = useSafeAreaInsets();
   const [feed, setFeed] = useState<ReelsFeedMode>('all');
   const {
     reels,
     loading,
+    error,
     currentIndex,
     setCurrentIndex,
     like,
@@ -44,8 +56,11 @@ export default function ReelsScreen() {
     loadComments,
     addComment,
     shareReel,
+    load,
   } = useReels(feed);
   const flatListRef = useRef<FlatList<Reel>>(null);
+  const [listH, setListH] = useState(SCREEN_HEIGHT);
+  const focusId = (route.params as { focusId?: string | number } | undefined)?.focusId;
 
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [activeReel, setActiveReel] = useState<Reel | null>(null);
@@ -84,6 +99,16 @@ export default function ReelsScreen() {
     [loadComments]
   );
 
+  useEffect(() => {
+    if (focusId == null || !reels.length) return;
+    const idx = reels.findIndex((r) => String(r.id) === String(focusId));
+    if (idx < 0) return;
+    setCurrentIndex(idx);
+    requestAnimationFrame(() => {
+      flatListRef.current?.scrollToIndex({ index: idx, animated: false });
+    });
+  }, [focusId, reels, setCurrentIndex]);
+
   const closeComments = () => {
     setCommentsOpen(false);
     setActiveReel(null);
@@ -109,16 +134,16 @@ export default function ReelsScreen() {
   const handleShare = useCallback(
     async (reel: Reel) => {
       const username = reel.user?.username || 'user';
-      const url = `${API_ORIGIN}/reels/${reel.id}`;
-      Alert.alert('Share signal', 'Choose a channel', [
+      const url = `https://cosonova.com/reels/${reel.id}`;
+      Alert.alert(t('reels.share'), undefined, [
         {
-          text: 'Device share',
+          text: t('feed.shareDevice'),
           onPress: async () => {
             try {
               await Share.share({
-                message: `Check out this signal by @${username}\n${url}`,
+                message: `${reel.caption || t('reels.shareSignalTitle')}\n@${username}\n${url}`,
                 url,
-                title: reel.caption || 'Cosonova Signal',
+                title: reel.caption || t('reels.shareSignalTitle'),
               });
               await shareReel(String(reel.id));
             } catch {
@@ -127,42 +152,53 @@ export default function ReelsScreen() {
           },
         },
         {
-          text: 'Broadcast to Story',
+          text: t('reels.shareToFeed'),
           onPress: async () => {
-            const videoUri = reel.video_url || reel.video;
-            if (!videoUri) {
-              Alert.alert('Missing video', 'Cannot share this reel to story.');
-              return;
-            }
             try {
-              await api.shareReelToStory(reel.id, videoUri, reel.caption);
-              Alert.alert('On your story', 'Reel signal is in your orbit.');
+              await api.createPost({ text: '', shared_reel_id: reel.id });
+              Alert.alert(t('reels.sharedToFeed'));
             } catch {
-              Alert.alert('Error', 'Could not share reel to story.');
+              Alert.alert(t('reels.actionFailed'));
             }
           },
         },
         {
-          text: 'Dim this signal',
+          text: t('feed.shareToStory'),
+          onPress: async () => {
+            const videoUri = reel.video_url || reel.video;
+            if (!videoUri) {
+              Alert.alert(t('reels.actionFailed'));
+              return;
+            }
+            try {
+              await api.shareReelToStory(reel.id, videoUri, reel.caption);
+              Alert.alert(t('feed.shareStoryDone'));
+            } catch {
+              Alert.alert(t('reels.actionFailed'));
+            }
+          },
+        },
+        {
+          text: t('reels.dimSignal'),
           style: 'destructive',
           onPress: async () => {
             await dimReel(String(reel.id));
           },
         },
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
       ]);
     },
-    [shareReel, dimReel]
+    [shareReel, dimReel, t]
   );
 
   const goCreate = useCallback(
     (reel: Reel, kind: 'remix' | 'weave') => {
       if (kind === 'remix' && reel.allow_remix === false) {
-        Alert.alert('Remix closed', 'This creator disabled Remix on that signal.');
+        Alert.alert(t('reels.remix'), t('reels.remixHint'));
         return;
       }
       if (kind === 'weave' && reel.allow_weave === false) {
-        Alert.alert('Weave closed', 'This creator disabled Weave on that signal.');
+        Alert.alert(t('reels.weave'), t('reels.weaveHint'));
         return;
       }
       navigation.navigate('Create', {
@@ -171,48 +207,67 @@ export default function ReelsScreen() {
         stitch_of: kind === 'weave' ? reel.id : undefined,
       });
     },
-    [navigation]
+    [navigation, t]
   );
 
   const renderItem = useCallback(
     ({ item, index }: { item: Reel; index: number }) => (
       <ReelItem
         reel={item}
-        isVisible={index === currentIndex}
-        onLike={() => like(String(item.id))}
+        height={listH}
+        isVisible={index === currentIndex && !commentsOpen}
+        onLike={() => like(String(item.id), 'spark')}
+        onReact={(type) => like(String(item.id), type)}
         onComment={() => openComments(item)}
         onShare={() => handleShare(item)}
         onSave={() => void toggleSave(String(item.id))}
         onRemix={() => goCreate(item, 'remix')}
         onWeave={() => goCreate(item, 'weave')}
+        onUserPress={() => openProfile(navigation, item.user?.username)}
+        onSoundPress={() => {
+          const trackId = item.music_track_detail?.id || item.music_track;
+          if (trackId) navigation.navigate('Sound', { musicTrack: trackId, track: item.music_track_detail });
+        }}
       />
     ),
-    [currentIndex, like, openComments, handleShare, toggleSave, goCreate]
+    [currentIndex, like, openComments, handleShare, toggleSave, goCreate, commentsOpen, listH, navigation]
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={(e) => setListH(e.nativeEvent.layout.height)}>
       <StatusBar barStyle="light-content" />
 
-      <View style={styles.topChrome}>
-        <View style={styles.tabs}>
-          <Pressable onPress={() => setFeed('all')} style={styles.tabBtn}>
-            <Text style={[styles.tabText, feed === 'all' && styles.tabTextOn]}>Pulse</Text>
-          </Pressable>
-          <Pressable onPress={() => setFeed('following')} style={styles.tabBtn}>
-            <Text style={[styles.tabText, feed === 'following' && styles.tabTextOn]}>Orbit</Text>
-          </Pressable>
+      <View style={[styles.topChrome, { paddingTop: insets.top + 6 }]}>
+        <View style={styles.chromeRow}>
+          <View style={styles.brandWrap}>
+            <Ionicons name="play-circle" size={22} color="#22D3EE" />
+            <Text style={styles.brand}>{t('reels.title')}</Text>
+          </View>
+          <View style={styles.topActions}>
+            <Pressable
+              onPress={() => navigation.navigate('ReelsDiscover')}
+              style={styles.chromeBtn}
+              hitSlop={8}
+              accessibilityLabel={t('reels.discoverTitle')}
+            >
+              <Ionicons name="search-outline" size={20} color="#fff" />
+            </Pressable>
+            <Pressable
+              onPress={() => navigation.navigate('Create', { mode: 'reel' })}
+              style={[styles.chromeBtn, styles.chromeBtnAccent]}
+              hitSlop={8}
+              accessibilityLabel={t('reels.createTitle')}
+            >
+              <Ionicons name="add" size={22} color="#fff" />
+            </Pressable>
+          </View>
         </View>
-        <View style={styles.topActions}>
-          <Pressable onPress={() => navigation.navigate('ReelsDiscover')} hitSlop={10}>
-            <Text style={styles.topActionText}>✧</Text>
+        <View style={styles.tabs}>
+          <Pressable onPress={() => setFeed('all')} style={[styles.tabBtn, feed === 'all' && styles.tabBtnOn]}>
+            <Text style={[styles.tabText, feed === 'all' && styles.tabTextOn]}>{t('reels.tabAll')}</Text>
           </Pressable>
-          <Pressable
-            onPress={() => navigation.navigate('Create', { mode: 'reel' })}
-            hitSlop={10}
-            style={{ marginLeft: 14 }}
-          >
-            <Text style={styles.topActionText}>＋</Text>
+          <Pressable onPress={() => setFeed('following')} style={[styles.tabBtn, feed === 'following' && styles.tabBtnOn]}>
+            <Text style={[styles.tabText, feed === 'following' && styles.tabTextOn]}>{t('reels.tabFollowing')}</Text>
           </Pressable>
         </View>
       </View>
@@ -220,6 +275,14 @@ export default function ReelsScreen() {
       {loading && reels.length === 0 ? (
         <View style={styles.emptyWrapper}>
           <ActivityIndicator color="#A78BFA" size="large" />
+          <Text style={styles.loadingText}>{t('reels.loading')}</Text>
+        </View>
+      ) : error && reels.length === 0 ? (
+        <View style={styles.emptyWrapper}>
+          <EmptyState title={t('reels.loadError')} subtitle={t('reels.retry')} emoji="✦" />
+          <Pressable onPress={() => void load()} style={styles.retryBtn}>
+            <Text style={styles.retryText}>{t('reels.retry')}</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList<Reel>
@@ -231,15 +294,15 @@ export default function ReelsScreen() {
           showsVerticalScrollIndicator={false}
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
+          getItemLayout={(_, index) => ({ length: listH, offset: listH * index, index })}
+          onScrollToIndexFailed={({ index }) => {
+            setTimeout(() => flatListRef.current?.scrollToIndex({ index, animated: false }), 80);
+          }}
           ListEmptyComponent={
             <View style={styles.emptyWrapper}>
               <EmptyState
-                title={feed === 'following' ? 'Orbit is quiet' : 'No signals yet'}
-                subtitle={
-                  feed === 'following'
-                    ? 'Follow creators to fill your Orbit'
-                    : 'Launch the first pulse from +'
-                }
+                title={t('reels.emptyTitle')}
+                subtitle={t('reels.emptyHint')}
                 emoji="✦"
               />
             </View>
@@ -247,17 +310,25 @@ export default function ReelsScreen() {
         />
       )}
 
+      {reels.length > 1 ? (
+        <View style={styles.feedRail} pointerEvents="none">
+          {reels.map((r, i) => (
+            <View key={String(r.id)} style={[styles.railDot, i === currentIndex && styles.railDotOn]} />
+          ))}
+        </View>
+      ) : null}
+
       <Modal visible={commentsOpen} animationType="slide" transparent onRequestClose={closeComments}>
         <KeyboardAvoidingView
           style={styles.modalOverlay}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <Pressable style={styles.modalBackdrop} onPress={closeComments} />
-          <View style={styles.sheet}>
-            <View style={styles.sheetHandle} />
-            <Text style={styles.sheetTitle}>Signal thread</Text>
+          <View style={[styles.sheet, { backgroundColor: colors.surface }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+            <Text style={[styles.sheetTitle, { color: colors.text }]}>{t('reels.commentsTitle')}</Text>
             {commentsLoading ? (
-              <ActivityIndicator style={styles.sheetLoader} color="#7C3AED" />
+              <ActivityIndicator style={styles.sheetLoader} color={colors.primary} />
             ) : (
               <FlatList
                 data={comments}
@@ -268,21 +339,25 @@ export default function ReelsScreen() {
                   <View style={styles.commentRow}>
                     <Avatar user={item.user} size="sm" />
                     <View style={styles.commentBody}>
-                      <Text style={styles.commentUser}>{item.user?.username || 'user'}</Text>
-                      <Text style={styles.commentText}>{item.text}</Text>
+                      <Text style={[styles.commentUser, { color: colors.text }]}>
+                        {displayName(item.user)}
+                      </Text>
+                      <Text style={[styles.commentText, { color: colors.text }]}>{item.text}</Text>
                     </View>
                   </View>
                 )}
                 ListEmptyComponent={
-                  <Text style={styles.noComments}>No echoes yet — transmit first</Text>
+                  <Text style={[styles.noComments, { color: colors.textSecondary }]}>
+                    {t('reels.commentsEmpty')}
+                  </Text>
                 }
               />
             )}
-            <View style={styles.commentInputRow}>
+            <View style={[styles.commentInputRow, { borderTopColor: colors.border }]}>
               <TextInput
-                style={styles.commentInput}
-                placeholder="Echo into the void…"
-                placeholderTextColor="#9ca3af"
+                style={[styles.commentInput, { backgroundColor: colors.background, color: colors.text }]}
+                placeholder={t('reels.commentPlaceholder')}
+                placeholderTextColor={colors.textSecondary}
                 value={commentText}
                 onChangeText={setCommentText}
                 maxLength={500}
@@ -297,7 +372,7 @@ export default function ReelsScreen() {
                 {postingComment ? (
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
-                  <Text style={styles.commentSendText}>Send</Text>
+                  <Text style={styles.commentSendText}>{t('reels.send')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -310,13 +385,17 @@ export default function ReelsScreen() {
 
 interface ReelItemProps {
   reel: Reel;
+  height: number;
   isVisible: boolean;
   onLike: () => void;
+  onReact: (type: ReactionType) => void;
   onComment: () => void;
   onShare: () => void;
   onSave: () => void;
   onRemix: () => void;
   onWeave: () => void;
+  onUserPress: () => void;
+  onSoundPress: () => void;
 }
 
 function ReelRemixAttribution({
@@ -347,7 +426,7 @@ function ReelRemixAttribution({
   return (
     <View style={styles.remixBadge}>
       <Text style={styles.remixBadgeText}>
-        {kind === 'weave' ? '⧉ Weave of' : '↻ Remix of'} @{username}
+        {kind === 'weave' ? `⧉ Weave of @${username}` : `↻ Remix of @${username}`}
       </Text>
     </View>
   );
@@ -355,14 +434,19 @@ function ReelRemixAttribution({
 
 function ReelItem({
   reel,
+  height,
   isVisible,
   onLike,
+  onReact,
   onComment,
   onShare,
   onSave,
   onRemix,
   onWeave,
+  onUserPress,
+  onSoundPress,
 }: ReelItemProps) {
+  const { t } = useLocale();
   const videoUrl = reel.video_url || reel.video;
   const [paused, setPaused] = useState(!isVisible);
   const [muted, setMuted] = useState(false);
@@ -431,7 +515,7 @@ function ReelItem({
     reel.music_track_detail?.title ||
     reel.music?.title ||
     reel.sound_label ||
-    'Original signal';
+    t('reels.originalSound');
 
   const activeCue =
     reel.captions_status === 'ready'
@@ -453,7 +537,7 @@ function ReelItem({
   const backdropColor = BACKDROP_COLORS[backdropKey] || '#0A0A0F';
 
   return (
-    <View style={styles.reelContainer}>
+    <View style={[styles.reelContainer, { height }]}>
       {chromaKey ? (
         <View
           pointerEvents="none"
@@ -467,7 +551,7 @@ function ReelItem({
         onPressIn={onHoldStart}
         onPressOut={onHoldEnd}
         accessibilityRole="button"
-        accessibilityLabel={paused ? 'Play reel' : 'Pause reel'}
+        accessibilityLabel={t('reels.doubleTap')}
       >
         {videoUrl ? (
           <Video
@@ -534,62 +618,89 @@ function ReelItem({
         </View>
       ) : null}
 
+      {paused && isVisible ? (
+        <View style={styles.pauseHint} pointerEvents="none">
+          <Text style={styles.pauseIcon}>▶</Text>
+        </View>
+      ) : null}
+
+      {reel.views && reel.views > 0 ? (
+        <View style={styles.viewsBadge} pointerEvents="none">
+          <Ionicons name="eye-outline" size={12} color="#fff" />
+          <Text style={styles.viewsText}>{formatCount(reel.views)}</Text>
+        </View>
+      ) : null}
+
       {burst ? (
         <ReactionBurst key={burst.id} emoji="✨" x={burst.x} y={burst.y} onDone={() => setBurst(null)} />
       ) : null}
 
       <View style={styles.actions}>
-        <Pressable style={styles.actionBtn} onPress={onLike}>
-          <Text style={styles.actionEmoji}>{reel.is_liked ? '✨' : '◇'}</Text>
-          <Text style={styles.actionCount}>{formatCount(reel.likes_count)}</Text>
+        <Pressable onPress={onUserPress} style={styles.sideAvatar} accessibilityLabel={displayName(reel.user)}>
+          <Avatar user={reel.user} size="md" style={styles.sideAvatarRing} />
         </Pressable>
-        <Pressable style={styles.actionBtn} onPress={onComment}>
-          <Text style={styles.actionEmoji}>💬</Text>
+        <Pressable style={styles.actionBtn} onPress={onSave} accessibilityLabel={reel.is_saved ? t('reels.saved') : t('reels.save')}>
+          <Ionicons name={reel.is_saved ? 'bookmark' : 'bookmark-outline'} size={26} color={reel.is_saved ? '#C4B5FD' : '#fff'} />
+          <Text style={styles.actionCount}>{reel.is_saved ? t('reels.saved') : t('reels.save')}</Text>
+        </Pressable>
+        <View style={styles.reactWrap}>
+          <PostReactions
+            compact
+            hidePills
+            selectedReaction={(reel.my_reaction as ReactionType | null) ?? null}
+            reactionCounts={reel.reaction_counts}
+            onReact={onReact}
+          />
+          <Text style={styles.actionCount}>{formatCount(reel.likes_count)}</Text>
+        </View>
+        <Pressable style={styles.actionBtn} onPress={onComment} accessibilityLabel={t('reels.commentsTitle')}>
+          <Ionicons name="chatbubbles-outline" size={26} color="#fff" />
           <Text style={styles.actionCount}>{formatCount(reel.comments_count)}</Text>
         </Pressable>
-        <Pressable style={styles.actionBtn} onPress={onSave}>
-          <Text style={styles.actionEmoji}>{reel.is_saved ? '★' : '☆'}</Text>
-          <Text style={styles.actionCount}>{reel.is_saved ? 'Saved' : 'Save'}</Text>
-        </Pressable>
-        <Pressable style={styles.actionBtn} onPress={onShare}>
-          <Text style={styles.actionEmoji}>↗</Text>
-          <Text style={styles.actionCount}>{formatCount(reel.shares_count)}</Text>
+        <Pressable style={styles.actionBtn} onPress={onShare} accessibilityLabel={t('reels.share')}>
+          <Ionicons name="share-outline" size={26} color="#fff" />
+          <Text style={styles.actionCount}>{reel.shares_count > 0 ? formatCount(reel.shares_count) : t('reels.share')}</Text>
         </Pressable>
         {reel.allow_remix !== false ? (
-          <Pressable style={styles.actionBtn} onPress={onRemix}>
-            <Text style={styles.actionEmoji}>↻</Text>
-            <Text style={styles.actionCount}>Remix</Text>
+          <Pressable style={styles.actionBtn} onPress={onRemix} accessibilityLabel={t('reels.remix')}>
+            <Ionicons name="sync-outline" size={26} color="#fff" />
+            <Text style={styles.actionCount}>{t('reels.remix')}</Text>
           </Pressable>
         ) : null}
         {reel.allow_weave !== false ? (
-          <Pressable style={styles.actionBtn} onPress={onWeave}>
-            <Text style={styles.actionEmoji}>⧉</Text>
-            <Text style={styles.actionCount}>Weave</Text>
+          <Pressable style={styles.actionBtn} onPress={onWeave} accessibilityLabel={t('reels.weave')}>
+            <Ionicons name="git-merge-outline" size={26} color="#fff" />
+            <Text style={styles.actionCount}>{t('reels.weave')}</Text>
           </Pressable>
         ) : null}
-        <Pressable style={styles.actionBtn} onPress={() => setMuted((m) => !m)}>
-          <Text style={styles.actionEmoji}>{muted ? '🔇' : '🔊'}</Text>
+        <Pressable style={styles.actionBtn} onPress={() => setMuted((m) => !m)} accessibilityLabel={muted ? t('reels.unmute') : t('reels.mute')}>
+          <Ionicons name={muted ? 'volume-mute-outline' : 'volume-high-outline'} size={26} color="#fff" />
         </Pressable>
       </View>
 
       <View style={styles.bottomInfo}>
         {reel.remix_of != null && <ReelRemixAttribution sourceId={Number(reel.remix_of)} kind="remix" />}
         {reel.stitch_of != null && <ReelRemixAttribution sourceId={Number(reel.stitch_of)} kind="weave" />}
-        <View style={styles.userRow}>
-          <Avatar user={reel.user} size="md" />
-          <Text style={styles.username}>{reel.user?.username || 'user'}</Text>
-        </View>
+        <Pressable onPress={onUserPress} style={styles.userRow}>
+          <Text style={styles.username}>@{displayName(reel.user)}</Text>
+        </Pressable>
         {reel.caption ? (
           <Text style={styles.caption} numberOfLines={3}>
             {reel.caption}
           </Text>
         ) : null}
-        <View style={styles.musicRow}>
+        {reel.tags?.length ? (
+          <Text style={styles.tags} numberOfLines={1}>
+            {reel.tags.slice(0, 4).map((tag) => `#${tag}`).join('  ')}
+          </Text>
+        ) : null}
+        <Pressable onPress={onSoundPress} style={styles.musicRow} disabled={!reel.music_track_detail && !reel.music_track}>
           <Text style={styles.musicIcon}>♪</Text>
           <Text style={styles.musicText} numberOfLines={1}>
             {soundLabel}
           </Text>
-        </View>
+        </Pressable>
+        {isVisible ? <Text style={styles.hint}>{t('reels.doubleTap')}</Text> : null}
       </View>
     </View>
   );
@@ -608,42 +719,110 @@ const styles = StyleSheet.create({
   },
   topChrome: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 54 : 28,
+    top: 0,
     left: 0,
     right: 0,
     zIndex: 20,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    backgroundColor: 'transparent',
+  },
+  chromeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
+    justifyContent: 'space-between',
+  },
+  brandWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  brand: {
+    color: '#C4B5FD',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   tabs: {
+    alignSelf: 'center',
     flexDirection: 'row',
-    gap: 18,
+    gap: 4,
+    marginTop: 8,
+    padding: 3,
+    borderRadius: 999,
+    backgroundColor: 'rgba(10, 8, 24, 0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(106, 0, 255, 0.25)',
   },
   tabBtn: {
     paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+  },
+  tabBtnOn: {
+    backgroundColor: 'rgba(106, 0, 255, 0.55)',
   },
   tabText: {
-    color: 'rgba(255,255,255,0.45)',
-    fontSize: 16,
+    color: 'rgba(248,250,252,0.65)',
+    fontSize: 12,
     fontWeight: '700',
   },
   tabTextOn: {
     color: '#fff',
-    textShadowColor: 'rgba(167,139,250,0.8)',
-    textShadowRadius: 8,
   },
   topActions: {
-    position: 'absolute',
-    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  topActionText: {
+  chromeBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 10, 30, 0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(106, 0, 255, 0.35)',
+  },
+  chromeBtnAccent: {
+    backgroundColor: '#6A00FF',
+    borderWidth: 0,
+  },
+  feedRail: {
+    position: 'absolute',
+    right: 4,
+    top: '42%',
+    zIndex: 18,
+    alignItems: 'center',
+    gap: 5,
+  },
+  railDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  railDotOn: {
+    height: 18,
+    backgroundColor: '#22D3EE',
+  },
+  loadingText: {
+    marginTop: 12,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '600',
+  },
+  retryBtn: {
+    marginTop: 12,
+    backgroundColor: '#7C3AED',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  retryText: {
     color: '#fff',
-    fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   reelContainer: {
     width: SCREEN_WIDTH,
@@ -665,13 +844,13 @@ const styles = StyleSheet.create({
   },
   progressTrack: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 48 : 22,
-    left: 12,
-    right: 12,
-    height: 2,
-    borderRadius: 1,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 3,
     backgroundColor: 'rgba(255,255,255,0.2)',
     overflow: 'hidden',
+    zIndex: 12,
   },
   progressFill: {
     height: '100%',
@@ -732,9 +911,10 @@ const styles = StyleSheet.create({
   },
   actions: {
     position: 'absolute',
-    right: 12,
-    bottom: 100,
+    right: 10,
+    bottom: 28,
     alignItems: 'center',
+    zIndex: 14,
   },
   actionBtn: {
     alignItems: 'center',
@@ -750,22 +930,73 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 3,
   },
+  reactWrap: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sideAvatar: {
+    marginBottom: 14,
+  },
+  sideAvatarRing: {
+    borderWidth: 2,
+    borderColor: 'rgba(196,181,253,0.7)',
+  },
+  pauseHint: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 7,
+  },
+  pauseIcon: {
+    color: '#fff',
+    fontSize: 42,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowRadius: 12,
+  },
+  viewsBadge: {
+    position: 'absolute',
+    left: 14,
+    top: 118,
+    zIndex: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(15,10,30,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  viewsText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  tags: {
+    color: '#C4B5FD',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  hint: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    marginTop: 8,
+  },
   bottomInfo: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 24,
     left: 16,
-    right: 80,
+    right: 88,
   },
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   username: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
-    marginLeft: 10,
   },
   remixBadge: {
     alignSelf: 'flex-start',
@@ -815,9 +1046,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
   sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    backgroundColor: '#2A2154',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     maxHeight: SCREEN_HEIGHT * 0.65,
     paddingBottom: Platform.OS === 'ios' ? 24 : 12,
   },
@@ -825,7 +1056,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#d1d5db',
+    backgroundColor: '#4C3D7A',
     alignSelf: 'center',
     marginTop: 10,
     marginBottom: 8,
@@ -833,7 +1064,7 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#211B3D',
+    color: '#F5F3FF',
     textAlign: 'center',
     marginBottom: 8,
   },
@@ -859,12 +1090,12 @@ const styles = StyleSheet.create({
   commentUser: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#374151',
+    color: '#F5F3FF',
     marginBottom: 2,
   },
   commentText: {
     fontSize: 14,
-    color: '#111827',
+    color: '#F5F3FF',
     lineHeight: 20,
   },
   noComments: {
@@ -879,17 +1110,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: '#4C3D7A',
     gap: 8,
   },
   commentInput: {
     flex: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#14102A',
     borderRadius: 20,
     paddingHorizontal: 14,
     paddingVertical: Platform.OS === 'ios' ? 10 : 8,
     fontSize: 14,
-    color: '#111827',
+    color: '#F5F3FF',
   },
   commentSend: {
     backgroundColor: '#7C3AED',

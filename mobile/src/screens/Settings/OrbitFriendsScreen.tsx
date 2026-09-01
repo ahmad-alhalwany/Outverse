@@ -15,6 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { mediaUrl } from '@/api/config';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 
 type Friend = { id: number; username: string; avatar?: string | null };
 type SearchUser = { id: number; username: string; name?: string; avatar?: string | null };
@@ -22,6 +24,7 @@ type SearchUser = { id: number; username: string; name?: string; avatar?: string
 /** Inner orbit = Close Friends — who sees Orbit-only stories. */
 export default function OrbitFriendsScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [query, setQuery] = useState('');
@@ -70,7 +73,7 @@ export default function OrbitFriendsScreen() {
       setResults([]);
       await load();
     } catch {
-      Alert.alert('Error', 'Could not add this person to your orbit.');
+      Alert.alert(t('common.actionFailed'), t('social.closeFriendAddFailed'));
     } finally {
       setBusy(false);
     }
@@ -82,31 +85,30 @@ export default function OrbitFriendsScreen() {
       await api.removeCloseFriend(friendId);
       await load();
     } catch {
-      Alert.alert('Error', 'Could not remove from orbit.');
+      Alert.alert(t('common.actionFailed'), t('social.closeFriendRemoveFailed'));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: colors.text }]}>Inner Orbit</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <WorldBackdrop>
+      <SafeAreaView style={{ flex: 1 }}>
+        <WorldHeader
+          title={t('settings.innerOrbit')}
+          subtitle={t('mobile.innerOrbitSub')}
+          onBack={() => navigation.goBack()}
+        />
 
       <Text style={[styles.hint, { color: colors.textSecondary }]}>
-        People in your inner orbit see stories marked Orbit-only — your closest signals.
+        {t('social.closeFriendsHint')}
       </Text>
 
       <View style={styles.searchWrap}>
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search people to add…"
+          placeholder={t('social.closeFriendsSearchPlaceholder')}
           placeholderTextColor={colors.textSecondary}
           style={[
             styles.search,
@@ -124,7 +126,7 @@ export default function OrbitFriendsScreen() {
                 disabled={busy}
               >
                 <Text style={{ color: colors.text, fontWeight: '700' }}>@{u.username}</Text>
-                <Text style={{ color: '#A78BFA', fontWeight: '800' }}>Add</Text>
+                <Text style={{ color: '#A78BFA', fontWeight: '800' }}>{t('mobile.add')}</Text>
               </Pressable>
             ))}
           </View>
@@ -140,7 +142,7 @@ export default function OrbitFriendsScreen() {
           contentContainerStyle={{ padding: 16, gap: 10 }}
           ListEmptyComponent={
             <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 24 }}>
-              No one in your orbit yet — add people you trust.
+              {t('social.closeFriendsEmpty')}
             </Text>
           }
           renderItem={({ item }) => (
@@ -159,13 +161,14 @@ export default function OrbitFriendsScreen() {
               </View>
               <Text style={{ flex: 1, color: colors.text, fontWeight: '700' }}>@{item.username}</Text>
               <Pressable onPress={() => void remove(item.id)} disabled={busy}>
-                <Text style={{ color: '#F472B6', fontWeight: '800' }}>Remove</Text>
+                <Text style={{ color: '#F472B6', fontWeight: '800' }}>{t('social.removeCloseFriend')}</Text>
               </Pressable>
             </View>
           )}
         />
       )}
-    </SafeAreaView>
+      </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 

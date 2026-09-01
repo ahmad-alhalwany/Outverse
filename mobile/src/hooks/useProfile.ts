@@ -18,7 +18,7 @@ export function useProfile() {
       const data = await api.getProfile(username);
       setProfile(data);
     } catch (e: any) {
-      setError(e?.message || 'المستخدم غير موجود');
+      setError(e?.message || 'User not found');
     } finally {
       setLoading(false);
     }

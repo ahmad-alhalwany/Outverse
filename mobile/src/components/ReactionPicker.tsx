@@ -55,7 +55,7 @@ export default function ReactionPicker({ selectedReaction, reactionCounts, onRea
         delayLongPress={420}
         hitSlop={8}
         accessibilityRole="button"
-        accessibilityLabel={selected ? `تفاعلك: ${selected.label}. اضغط للإزالة، اضغط مطولاً للتغيير` : 'إضافة تفاعل، اضغط مطولاً لاختيار النوع'}
+        accessibilityLabel={selected ? `Your reaction: ${selected.label}. Tap to remove, long-press to change` : 'Add a reaction, long-press to choose a type'}
         style={({ pressed }) => [styles.trigger, pressed && styles.pressedDim]}
       >
         <Text style={[styles.triggerEmoji, selected && { color: selected.color }]}>
@@ -69,7 +69,7 @@ export default function ReactionPicker({ selectedReaction, reactionCounts, onRea
       </Pressable>
 
       <Modal transparent visible={open} animationType="none" onRequestClose={closePicker}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={closePicker} accessibilityLabel="إغلاق قائمة التفاعلات" accessibilityRole="button" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={closePicker} accessibilityLabel="Close reaction picker" accessibilityRole="button" />
         <Animated.View
           style={[
             styles.orbit,

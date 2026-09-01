@@ -79,7 +79,7 @@ export function useGroupCall(meId: number, myName: string, sendSignal: SendSigna
     pcsRef.current.clear();
     namesRef.current.clear();
     streamsRef.current.clear();
-    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    localStreamRef.current?.getTracks().forEach((track: any) => track.stop());
     localStreamRef.current = null;
     roomIdRef.current = null;
     callIdRef.current = null;
@@ -132,7 +132,7 @@ export function useGroupCall(meId: number, myName: string, sendSignal: SendSigna
 
       const stream = localStreamRef.current;
       if (stream) {
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+        stream.getTracks().forEach((track: any) => pc.addTrack(track, stream));
       }
       return pc;
     },
@@ -171,8 +171,11 @@ export function useGroupCall(meId: number, myName: string, sendSignal: SendSigna
       setCallKind(kind);
       try {
         await getMedia(kind);
-      } catch {
+      } catch (error: any) {
         cleanup();
+        if (String(error?.message || '').includes('WEBRTC_NATIVE_BUILD_REQUIRED')) {
+          throw error;
+        }
         throw new Error('Could not access camera/microphone');
       }
       setActive(true);
@@ -200,7 +203,7 @@ export function useGroupCall(meId: number, myName: string, sendSignal: SendSigna
   const toggleMute = useCallback(() => {
     const stream = localStreamRef.current;
     if (!stream) return;
-    stream.getAudioTracks().forEach((track) => {
+    stream.getAudioTracks().forEach((track: any) => {
       track.enabled = !track.enabled;
     });
     setMuted((value) => !value);

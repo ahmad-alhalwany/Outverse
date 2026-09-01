@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -12,15 +12,23 @@ import {
   Alert,
   TextInput,
   Modal,
+  Share,
 } from 'react-native';
 import Video from 'react-native-video';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import Avatar from './Avatar';
-import ReactionPicker from './ReactionPicker';
+import PostReactions from './PostReactions';
+import ReactionSummaryLine from './ReactionSummaryLine';
+import CommentsThread from './CommentsThread';
 import ReactionBurst from './ReactionBurst';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/auth/AuthContext';
+import { useLocale } from '@/i18n/LocaleProvider';
 import { mediaUrl } from '@/api/config';
 import api from '../api/client';
-import type { ReactionType } from '@/lib/reactions';
+import { displayName } from '@/lib/names';
+import { countsToEmojiMap, selectedEmoji, totalReactions, type ReactionType } from '@/lib/reactions';
 import type { Post, PostMedia } from '../types';
 
 interface PostCardProps {
@@ -36,7 +44,9 @@ interface PostCardProps {
   onCrossEcho?: () => void;
   onVote?: (vote: 'boost' | 'dim' | null) => void;
   onPress?: () => void;
+  onUserPress?: () => void;
   showPin?: boolean;
+  initialCommentsOpen?: boolean;
 }
 
 const DOUBLE_TAP_MS = 320;
@@ -65,9 +75,14 @@ export default function PostCard({
   onCrossEcho,
   onVote,
   onPress,
+  onUserPress,
   showPin,
+  initialCommentsOpen,
 }: PostCardProps) {
   const { colors } = useTheme();
+  const { t } = useLocale();
+  const { user: me } = useAuth();
+  const navigation = useNavigation<any>();
   const mediaItems = (post.media || []).filter((m) => !!mediaSrc(m));
   const lastTap = useRef(0);
   const [burst, setBurst] = useState<{ id: number; x: number; y: number } | null>(null);
@@ -82,34 +97,44 @@ export default function PostCard({
   const [threadOpen, setThreadOpen] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
   const [threadPosts, setThreadPosts] = useState<Post[]>([]);
+  const [commentsOpen, setCommentsOpen] = useState(!!initialCommentsOpen);
+  const [echoMenu, setEchoMenu] = useState(false);
+  const [following, setFollowing] = useState(!!post.user?.is_following);
+  const [followBusy, setFollowBusy] = useState(false);
+  const [tipOpen, setTipOpen] = useState(false);
+  const [tipAmount, setTipAmount] = useState(50);
+  const [tipBusy, setTipBusy] = useState(false);
+  const [tipStatus, setTipStatus] = useState('');
+  const [localVote, setLocalVote] = useState(post.my_vote ?? null);
+  const [localScore, setLocalScore] = useState(post.vote_score ?? 0);
+  const [commentCount, setCommentCount] = useState(post.comments_count || 0);
+  const [localReaction, setLocalReaction] = useState(post.my_reaction);
+  const [localCounts, setLocalCounts] = useState(post.reaction_counts || {});
+
+  const authorName = displayName(post.user);
+  const isOwner = !!me && String(me.id) === String(post.user?.id);
+  const emojiCounts = countsToEmojiMap(localCounts);
+  const reactionTotal = totalReactions(emojiCounts);
+  const myEmoji = selectedEmoji(localReaction);
+
+  useEffect(() => {
+    setLocalVote(post.my_vote ?? null);
+    setLocalScore(post.vote_score ?? 0);
+    setCommentCount(post.comments_count || 0);
+    setFollowing(!!post.user?.is_following);
+  }, [post.my_vote, post.vote_score, post.comments_count, post.user?.is_following]);
+
+  useEffect(() => {
+    setLocalReaction(post.my_reaction);
+  }, [post.my_reaction]);
+
+  useEffect(() => {
+    setLocalCounts(post.reaction_counts || {});
+  }, [post.reaction_counts]);
 
   const pollTotal = (post.poll_options || []).reduce((sum, option) => {
     return sum + (pollResults[String(option.id)] ?? option.vote_count ?? 0);
   }, 0);
-
-  const openEchoSheet = () => {
-    const buttons: Array<{ text: string; style?: 'cancel' | 'destructive'; onPress?: () => void }> = [];
-    if (onEcho) {
-      buttons.push({
-        text: post.my_repost != null ? 'Undo Echo' : 'Echo',
-        onPress: () => onEcho(),
-      });
-    }
-    if (onQuote) {
-      buttons.push({
-        text: 'Quote Signal',
-        onPress: () => setQuoteOpen(true),
-      });
-    }
-    if (onShare) {
-      buttons.push({ text: 'Share…', onPress: () => onShare() });
-    }
-    if (onCrossEcho) {
-      buttons.push({ text: 'Cross-Echo', onPress: () => onCrossEcho() });
-    }
-    buttons.push({ text: 'Cancel', style: 'cancel' });
-    Alert.alert('Signal actions', undefined, buttons);
-  };
 
   const handleMediaPress = (
     e: { nativeEvent: { locationX: number; locationY: number } },
@@ -120,7 +145,7 @@ export default function PostCard({
     if (now - lastTap.current < DOUBLE_TAP_MS) {
       const { locationX, locationY } = e.nativeEvent;
       setBurst({ id: now, x: locationX, y: locationY });
-      onReact?.('spark');
+      handleReact('spark');
       lastTap.current = now;
       return;
     }
@@ -159,7 +184,7 @@ export default function PostCard({
         }));
       }
     } catch {
-      Alert.alert('Poll vote failed', 'Please try again.');
+      Alert.alert(t('mobile.pollVoteFailed'), t('common.tryAgain'));
     }
   };
 
@@ -175,22 +200,168 @@ export default function PostCard({
       const rows = await api.getThread(post.id);
       setThreadPosts(rows);
     } catch {
-      Alert.alert('Thread unavailable', 'Could not load this constellation.');
+      Alert.alert(t('mobile.threadUnavailable'), t('mobile.constellationFail'));
     } finally {
       setThreadLoading(false);
     }
   };
 
+  const handleReact = (type: ReactionType) => {
+    const same = localReaction === type;
+    const next = same ? null : type;
+    const prevCounts = { ...localCounts };
+    const prevReaction = localReaction;
+    const nextCounts = { ...localCounts };
+    if (prevReaction && nextCounts[prevReaction]) {
+      nextCounts[prevReaction] = Math.max(0, (nextCounts[prevReaction] || 0) - 1);
+    }
+    if (next) nextCounts[next] = (nextCounts[next] || 0) + 1;
+    setLocalReaction(next);
+    setLocalCounts(nextCounts);
+    if (onReact) {
+      onReact(type);
+      return;
+    }
+    api
+      .reactToPost(post.id, next)
+      .then((data) => {
+        setLocalReaction(data.my_reaction);
+        setLocalCounts(data.reaction_counts || {});
+      })
+      .catch(() => {
+        setLocalReaction(prevReaction);
+        setLocalCounts(prevCounts);
+      });
+  };
+
+  const handleVote = async (vote: 'boost' | 'dim') => {
+    const next = localVote === vote ? null : vote;
+    const prevVote = localVote;
+    const prevScore = localScore;
+    const delta =
+      (next === 'boost' ? 1 : next === 'dim' ? -1 : 0) -
+      (prevVote === 'boost' ? 1 : prevVote === 'dim' ? -1 : 0);
+    setLocalVote(next);
+    setLocalScore(prevScore + delta);
+    try {
+      if (onVote) {
+        onVote(next);
+      } else {
+        const result = await api.votePost(post.id, next);
+        setLocalScore(result.vote_score);
+        setLocalVote(result.my_vote);
+      }
+    } catch {
+      setLocalVote(prevVote);
+      setLocalScore(prevScore);
+    }
+  };
+
+  const handleFollow = async () => {
+    if (!post.user?.id || followBusy) return;
+    setFollowBusy(true);
+    try {
+      const res = await api.toggleFollow(post.user.id);
+      setFollowing(!!(res.following ?? res.is_following ?? !following));
+    } catch {
+      /* ignore */
+    } finally {
+      setFollowBusy(false);
+    }
+  };
+
+  const handleSharePost = async () => {
+    if (onShare) {
+      onShare();
+      return;
+    }
+    try {
+      await Share.share({
+        message: `${authorName}: ${post.text || ''}\nhttps://cosonova.com/post/${post.id}`,
+      });
+    } catch {
+      /* cancelled */
+    }
+  };
+
+  const handleTip = async () => {
+    if (!post.user?.id || tipBusy || tipAmount <= 0) return;
+    setTipBusy(true);
+    setTipStatus('');
+    try {
+      await api.sendTip(post.user.id, tipAmount, { postId: post.id });
+      setTipStatus(t('tip.sent', { amount: String(tipAmount) }));
+    } catch {
+      setTipStatus(t('tip.error'));
+    } finally {
+      setTipBusy(false);
+    }
+  };
+
   return (
-    <Pressable style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={onPress}>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: colors.card,
+          borderColor: colors.border,
+          shadowColor: '#6A00FF',
+        },
+      ]}
+    >
+      <View style={styles.cardShine} />
       <View style={styles.header}>
-        <Avatar name={post.user.username} avatar={post.user.avatar} size="md" verified={post.user.is_verified} />
-        <View style={styles.userInfo}>
-          <Text style={[styles.username, { color: colors.text }]}>{post.user?.username || 'مستخدم'}</Text>
-          <Text style={[styles.time, { color: colors.textSecondary }]}>{formatTime(post.created_at)}</Text>
-        </View>
+        <Pressable
+          onPress={onUserPress}
+          disabled={!onUserPress}
+          hitSlop={8}
+          accessibilityRole={onUserPress ? 'button' : undefined}
+          accessibilityLabel={onUserPress ? authorName : undefined}
+          style={styles.userHit}
+        >
+          <Avatar name={authorName} avatar={post.user.avatar} size="md" verified={post.user.is_verified} style={styles.avatarRing} />
+          <View style={styles.userInfo}>
+            <View style={styles.nameRow}>
+              <Text style={[styles.username, { color: colors.text }]} numberOfLines={1}>
+                {authorName}
+              </Text>
+              {post.user?.is_verified ? (
+                <Ionicons name="checkmark-circle" size={15} color={colors.primaryLight} />
+              ) : null}
+              {post.flair ? (
+                <Text style={[styles.flair, { color: colors.textSecondary, backgroundColor: colors.surface }]}>
+                  {post.flair}
+                </Text>
+              ) : null}
+            </View>
+            <Text style={[styles.time, { color: colors.textSecondary }]}>{formatTime(post.created_at)}</Text>
+            {post.community?.slug ? (
+              <Pressable
+                onPress={() => navigation.navigate('CommunityDetail', { slug: post.community?.slug })}
+                hitSlop={6}
+              >
+                <Text style={[styles.communityLink, { color: colors.lab }]}>
+                  c/{post.community.name || post.community.slug}
+                  {post.is_community_pinned ? ' · 📌' : ''}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </Pressable>
+        {!isOwner && post.user?.id && me && !following ? (
+          <Pressable
+            onPress={() => void handleFollow()}
+            disabled={followBusy}
+            style={styles.followBtn}
+            accessibilityRole="button"
+            accessibilityLabel={t('feed.follow')}
+          >
+            <Ionicons name="person-add-outline" size={14} color="#fff" />
+            <Text style={styles.followText}>{t('feed.follow')}</Text>
+          </Pressable>
+        ) : null}
         {post.is_profile_pinned ? (
-          <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>📌 Pinned</Text>
+          <Text style={{ color: colors.primary, fontSize: 11, fontWeight: '700' }}>📌</Text>
         ) : null}
         {post.reply_control && post.reply_control !== 'everyone' ? (
           <Text style={{ color: colors.textSecondary, fontSize: 11, marginLeft: 6 }}>🔒</Text>
@@ -201,7 +372,7 @@ export default function PostCard({
             hitSlop={8}
             style={{ marginLeft: 8 }}
             accessibilityRole="button"
-            accessibilityLabel={post.is_profile_pinned ? 'إلغاء التثبيت' : 'تثبيت المنشور'}
+            accessibilityLabel={post.is_profile_pinned ? 'Unpin signal' : 'Pin signal'}
           >
             <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 12 }}>
               {post.is_profile_pinned ? 'Unpin' : 'Pin'}
@@ -211,7 +382,7 @@ export default function PostCard({
       </View>
 
       {post.text ? (
-        <View style={styles.captionWrap}>
+        <Pressable style={styles.captionWrap} onPress={onPress} disabled={!onPress}>
           <Text
             style={[styles.caption, { color: colors.text }]}
             numberOfLines={expanded ? undefined : 3}
@@ -220,13 +391,13 @@ export default function PostCard({
           </Text>
           {post.text.length > 120 ? (
             <Pressable onPress={() => setExpanded((v) => !v)} hitSlop={8}>
-              <Text style={styles.seeMore}>{expanded ? 'عرض أقل' : 'عرض المزيد'}</Text>
+              <Text style={styles.seeMore}>{expanded ? t('feed.seeLess') : t('feed.seeMore')}</Text>
             </Pressable>
           ) : null}
           {post.edited_at ? (
-            <Text style={[styles.edited, { color: colors.textSecondary }]}>تم التعديل</Text>
+            <Text style={[styles.edited, { color: colors.textSecondary }]}>{t('feed.edited')}</Text>
           ) : null}
-        </View>
+        </Pressable>
       ) : null}
 
       {post.location_name ? (
@@ -283,7 +454,7 @@ export default function PostCard({
                     style={[styles.mediaSlide, { width: slideW }]}
                     onPress={(e) => handleMediaPress(e, index, video)}
                     accessibilityRole="image"
-                    accessibilityLabel={video ? 'فيديو المنشور، اضغط مرتين للتفاعل' : 'صورة المنشور، اضغط مرتين للتفاعل'}
+                    accessibilityLabel={video ? 'Post video, double-tap to react' : 'Post image, double-tap to react'}
                   >
                     {video ? (
                       <>
@@ -364,119 +535,278 @@ export default function PostCard({
         </View>
       ) : null}
 
-      <View style={[styles.actions, { borderTopColor: colors.border }]}>
-        {onVote ? (
-          <View style={[styles.action, { gap: 8 }]}>
-            <Pressable
-              onPress={() => onVote(post.my_vote === 'boost' ? null : 'boost')}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={post.my_vote === 'boost' ? 'إلغاء التعزيز' : 'تعزيز المنشور'}
-              style={({ pressed }) => [pressed && styles.pressedDim]}
-            >
-              <Text style={{ color: post.my_vote === 'boost' ? '#22c55e' : colors.textSecondary, fontWeight: '700' }}>
-                ▲
-              </Text>
-            </Pressable>
-            <Text style={[styles.actionText, { color: colors.text }]}>{post.vote_score ?? 0}</Text>
-            <Pressable
-              onPress={() => onVote(post.my_vote === 'dim' ? null : 'dim')}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={post.my_vote === 'dim' ? 'إلغاء التخفيض' : 'تخفيض المنشور'}
-              style={({ pressed }) => [pressed && styles.pressedDim]}
-            >
-              <Text style={{ color: post.my_vote === 'dim' ? '#ef4444' : colors.textSecondary, fontWeight: '700' }}>
-                ▼
-              </Text>
-            </Pressable>
-          </View>
+      <View style={styles.engagement}>
+        <View style={[styles.voteBar, { borderColor: 'rgba(167,139,250,0.16)' }]}>
+          <Pressable
+            onPress={() => void handleVote('boost')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('comments.boost')}
+          >
+            <Ionicons name="caret-up" size={20} color={localVote === 'boost' ? '#A78BFA' : colors.textSecondary} />
+          </Pressable>
+          <Text
+            style={[
+              styles.voteScore,
+              { color: localScore > 0 ? '#A78BFA' : localScore < 0 ? '#22D3EE' : colors.textSecondary },
+            ]}
+          >
+            {localScore}
+          </Text>
+          <Pressable
+            onPress={() => void handleVote('dim')}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={t('comments.dim')}
+          >
+            <Ionicons name="caret-down" size={20} color={localVote === 'dim' ? '#22D3EE' : colors.textSecondary} />
+          </Pressable>
+          {!isOwner && post.user?.id ? (
+            <View>
+              <Pressable
+                onPress={() => setTipOpen((v) => !v)}
+                style={styles.tipTrigger}
+                accessibilityRole="button"
+                accessibilityLabel={t('tip.send')}
+              >
+                <Ionicons name="gift-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.tipLabel, { color: colors.textSecondary }]}>{t('tip.send')}</Text>
+              </Pressable>
+              {tipOpen ? (
+                <View style={[styles.tipPanel, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                  <Text style={[styles.tipTitle, { color: colors.text }]}>{t('tip.pickAmount')}</Text>
+                  <View style={styles.tipAmounts}>
+                    {[10, 50, 100, 500].map((amt) => (
+                      <Pressable
+                        key={amt}
+                        onPress={() => setTipAmount(amt)}
+                        style={[
+                          styles.tipAmt,
+                          { backgroundColor: tipAmount === amt ? colors.primary : colors.surface },
+                        ]}
+                      >
+                        <Text style={{ color: tipAmount === amt ? '#fff' : colors.textSecondary, fontWeight: '700', fontSize: 12 }}>
+                          {amt} ✨
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <Pressable
+                    onPress={() => void handleTip()}
+                    disabled={tipBusy}
+                    style={[styles.tipSend, { backgroundColor: colors.primary, opacity: tipBusy ? 0.6 : 1 }]}
+                  >
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>
+                      {tipBusy ? t('common.loading') : t('tip.send')}
+                    </Text>
+                  </Pressable>
+                  {tipStatus ? (
+                    <Text style={{ color: colors.textSecondary, fontSize: 12, marginTop: 8 }}>{tipStatus}</Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
+        {reactionTotal > 0 ? (
+          <ReactionSummaryLine
+            total={reactionTotal}
+            myReaction={myEmoji}
+            reactionCounts={emojiCounts}
+            topReactors={post.top_reactors || []}
+          />
         ) : null}
-        <View style={styles.action}>
-          <ReactionPicker
-            selectedReaction={(post.my_reaction as ReactionType | null) ?? null}
-            reactionCounts={post.reaction_counts}
-            onReact={(type) => onReact?.(type)}
+
+        <View style={styles.engagementRow}>
+          <PostReactions
+            selectedReaction={(localReaction as ReactionType | null) ?? null}
+            reactionCounts={localCounts}
+            onReact={handleReact}
           />
         </View>
-        <Pressable
-          style={({ pressed }) => [styles.action, pressed && styles.pressedDim]}
-          onPress={onComment}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`التعليقات، ${formatCount(post.comments_count)}`}
-        >
-          <Text style={[styles.actionText, { color: colors.textSecondary }]}>💬 {formatCount(post.comments_count)}</Text>
-        </Pressable>
-        <Pressable
-          style={({ pressed }) => [styles.action, pressed && styles.pressedDim]}
-          onPress={onEcho || onQuote || onCrossEcho ? openEchoSheet : onShare}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={`إعادة النشر، ${formatCount(post.reposts_count)}`}
-        >
-          <Text style={[styles.actionText, { color: post.my_repost != null ? colors.primary : colors.textSecondary }]}>
-            🔁 {formatCount(post.reposts_count)}
-          </Text>
-        </Pressable>
-        {onSave ? (
-          <Pressable
-            style={({ pressed }) => [styles.action, pressed && styles.pressedDim]}
-            onPress={onSave}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={post.is_saved ? 'إزالة من المحفوظات' : 'حفظ المنشور'}
-          >
-            <Text style={[styles.actionText, { color: post.is_saved ? colors.primary : colors.textSecondary }]}>
-              {post.is_saved ? '🔖' : '📑'}
+
+        <View style={styles.actionChips}>
+          <View style={styles.viewsStat}>
+            <Ionicons name="eye-outline" size={16} color={colors.textSecondary} />
+            <Text style={[styles.viewsText, { color: colors.textSecondary }]}>
+              {post.views && post.views > 0 ? formatCount(post.views) : '—'}
             </Text>
-          </Pressable>
-        ) : null}
-        {onShareToStory ? (
+          </View>
+
           <Pressable
-            style={({ pressed }) => [styles.action, pressed && styles.pressedDim]}
-            onPress={onShareToStory}
-            hitSlop={8}
+            onPress={() => setCommentsOpen((v) => !v)}
+            style={[
+              styles.chip,
+              commentsOpen && styles.chipActive,
+              { borderColor: commentsOpen ? 'rgba(0,204,255,0.4)' : 'rgba(106,0,255,0.15)' },
+            ]}
             accessibilityRole="button"
-            accessibilityLabel="مشاركة في الستوري"
+            accessibilityLabel={commentsOpen ? t('feed.hideComments') : t('feed.discuss')}
           >
-            <Text style={[styles.actionText, { color: '#A78BFA' }]}>◎ Story</Text>
+            <Ionicons name="chatbubbles-outline" size={18} color={colors.icon} />
+            <Text style={[styles.chipLabel, { color: colors.text }]}>
+              {commentsOpen ? t('feed.hideComments') : t('feed.discuss')}
+            </Text>
+            {commentCount > 0 ? (
+              <View style={styles.chipCount}>
+                <Text style={styles.chipCountText}>{formatCount(commentCount)}</Text>
+              </View>
+            ) : null}
           </Pressable>
-        ) : null}
+
+          {onEcho || onQuote || onCrossEcho ? (
+            <View>
+              <Pressable
+                onPress={() => setEchoMenu((v) => !v)}
+                style={[
+                  styles.chip,
+                  post.my_repost != null && styles.chipActive,
+                  { borderColor: post.my_repost != null ? 'rgba(0,204,255,0.4)' : 'rgba(106,0,255,0.15)' },
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={t('feed.repost')}
+              >
+                <Ionicons
+                  name="repeat-outline"
+                  size={18}
+                  color={post.my_repost != null ? colors.primary : colors.icon}
+                />
+                <Text style={[styles.chipLabel, { color: post.my_repost != null ? colors.primary : colors.text }]}>
+                  {t('feed.repost')}
+                </Text>
+                {post.reposts_count > 0 ? (
+                  <View style={styles.chipCount}>
+                    <Text style={styles.chipCountText}>{formatCount(post.reposts_count)}</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+              {echoMenu ? (
+                <View style={[styles.echoMenu, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>
+                  {onEcho ? (
+                    <Pressable
+                      onPress={() => {
+                        setEchoMenu(false);
+                        onEcho();
+                      }}
+                      style={styles.echoItem}
+                    >
+                      <Ionicons name="repeat-outline" size={18} color={colors.icon} />
+                      <Text style={{ color: colors.text, fontWeight: '700' }}>
+                        {post.my_repost != null ? t('feed.undoRepost') : t('feed.echo')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {onQuote ? (
+                    <Pressable
+                      onPress={() => {
+                        setEchoMenu(false);
+                        setQuoteOpen(true);
+                      }}
+                      style={styles.echoItem}
+                    >
+                      <Ionicons name="create-outline" size={18} color={colors.icon} />
+                      <Text style={{ color: colors.text, fontWeight: '700' }}>{t('feed.quote')}</Text>
+                    </Pressable>
+                  ) : null}
+                  {onCrossEcho ? (
+                    <Pressable
+                      onPress={() => {
+                        setEchoMenu(false);
+                        onCrossEcho();
+                      }}
+                      style={styles.echoItem}
+                    >
+                      <Ionicons name="git-branch-outline" size={18} color={colors.icon} />
+                      <Text style={{ color: colors.text, fontWeight: '700' }}>Cross-Echo</Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
+          <Pressable
+            onPress={() => void handleSharePost()}
+            style={[styles.chip, { borderColor: 'rgba(106,0,255,0.15)' }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('feed.share')}
+          >
+            <Ionicons name="share-outline" size={18} color={colors.icon} />
+            <Text style={[styles.chipLabel, { color: colors.text }]}>{t('feed.share')}</Text>
+            {post.shares_count > 0 ? (
+              <View style={styles.chipCount}>
+                <Text style={styles.chipCountText}>{formatCount(post.shares_count)}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+
+          {onSave ? (
+            <Pressable
+              onPress={onSave}
+              style={[styles.chip, { borderColor: 'rgba(106,0,255,0.15)' }]}
+              accessibilityRole="button"
+              accessibilityLabel={post.is_saved ? 'Remove from saved' : 'Save post'}
+            >
+              <Ionicons
+                name={post.is_saved ? 'bookmark' : 'bookmark-outline'}
+                size={18}
+                color={post.is_saved ? colors.primary : colors.icon}
+              />
+            </Pressable>
+          ) : null}
+          {onShareToStory ? (
+            <Pressable
+              onPress={onShareToStory}
+              style={[styles.chip, { borderColor: 'rgba(106,0,255,0.15)' }]}
+              accessibilityRole="button"
+              accessibilityLabel={t('feed.shareToStory')}
+            >
+              <Ionicons name="ellipse-outline" size={18} color={colors.primaryLight} />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
+
+      <CommentsThread
+        postId={post.id}
+        postOwnerId={post.user?.id}
+        open={commentsOpen}
+        onAdded={() => setCommentCount((n) => n + 1)}
+      />
 
       <Modal visible={quoteOpen} transparent animationType="fade" onRequestClose={() => setQuoteOpen(false)}>
         <View style={styles.quoteBackdrop}>
           <View style={[styles.quoteSheet, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.quoteTitle, { color: colors.text }]}>Quote Signal</Text>
+            <Text style={[styles.quoteTitle, { color: colors.text }]}>{t('feed.quoteTitle')}</Text>
             <TextInput
               value={quoteText}
               onChangeText={setQuoteText}
-              placeholder="Add your signal…"
+              placeholder={t('feed.quotePlaceholder')}
               placeholderTextColor={colors.textSecondary}
               multiline
               style={[styles.quoteInput, { color: colors.text, borderColor: colors.border }]}
             />
             <View style={styles.quoteActions}>
               <Pressable onPress={() => setQuoteOpen(false)}>
-                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>Cancel</Text>
+                <Text style={{ color: colors.textSecondary, fontWeight: '600' }}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable
                 onPress={() => {
-                  const t = quoteText.trim();
-                  if (!t) return;
-                  onQuote?.(t);
+                  const next = quoteText.trim();
+                  if (!next) return;
+                  onQuote?.(next);
                   setQuoteText('');
                   setQuoteOpen(false);
                 }}
               >
-                <Text style={{ color: colors.primary, fontWeight: '700' }}>Quote</Text>
+                <Text style={{ color: colors.primary, fontWeight: '700' }}>{t('feed.quoteSubmit')}</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
-    </Pressable>
+    </View>
   );
 }
 
@@ -490,61 +820,115 @@ function formatTime(dateStr: string): string {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'الآن';
-  if (mins < 60) return `${mins} د`;
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours} س`;
+  if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days} ي`;
+  if (days < 30) return `${days}d`;
   return new Date(dateStr).toLocaleDateString();
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
-    marginBottom: 12,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 28,
+    marginBottom: 16,
+    overflow: 'visible',
+    borderWidth: 1,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 6,
+  },
+  cardShine: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.28)',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  userHit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minHeight: 44,
+  },
+  avatarRing: {
+    borderWidth: 2,
+    borderColor: 'rgba(167,139,250,0.42)',
   },
   userInfo: {
     marginLeft: 10,
+    flex: 1,
   },
   username: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
+    flexShrink: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  flair: {
+    fontSize: 10,
+    fontWeight: '700',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    overflow: 'hidden',
+  },
+  communityLink: {
+    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  followBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginEnd: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#7C3AED',
+  },
+  followText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   time: {
     fontSize: 12,
   },
   caption: {
-    fontSize: 15,
-    paddingHorizontal: 14,
+    fontSize: 16,
+    paddingHorizontal: 24,
     paddingBottom: 4,
-    lineHeight: 22,
+    lineHeight: 24,
   },
   captionWrap: {
     paddingBottom: 10,
   },
   seeMore: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 24,
     marginTop: 2,
     fontSize: 13,
     fontWeight: '700',
     color: '#A78BFA',
   },
   edited: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 24,
     marginTop: 4,
     fontSize: 11,
   },
   badgeRow: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 24,
     paddingBottom: 10,
     flexDirection: 'row',
   },
@@ -557,7 +941,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   pollWrap: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 24,
     paddingBottom: 12,
     gap: 8,
   },
@@ -600,6 +984,8 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     backgroundColor: '#0f0a1f',
     position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 4,
   },
   mediaSlide: {
     height: '100%',
@@ -665,7 +1051,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   threadWrap: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 24,
     paddingTop: 12,
     paddingBottom: 4,
   },
@@ -685,23 +1071,141 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingVertical: 8,
   },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+  engagement: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(167,139,250,0.18)',
   },
-  action: {
+  voteBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 24,
+    gap: 6,
+    marginBottom: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    backgroundColor: 'rgba(124,58,237,0.08)',
   },
-  pressedDim: {
-    opacity: 0.55,
-  },
-  actionText: {
+  voteScore: {
+    minWidth: 24,
+    textAlign: 'center',
     fontSize: 14,
+    fontWeight: '800',
+  },
+  tipTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginStart: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  tipLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  tipPanel: {
+    position: 'absolute',
+    top: 36,
+    start: 0,
+    zIndex: 40,
+    width: 220,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+  },
+  tipTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  tipAmounts: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  tipAmt: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  tipSend: {
+    alignSelf: 'flex-end',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  engagementRow: {
+    marginBottom: 8,
+  },
+  actionChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewsStat: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  viewsText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: 'rgba(106,0,255,0.08)',
+    borderWidth: 1,
+  },
+  chipActive: {
+    backgroundColor: 'rgba(106,0,255,0.22)',
+  },
+  chipLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  chipCount: {
+    minWidth: 20,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+    backgroundColor: 'rgba(0,204,255,0.2)',
+  },
+  chipCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#F5F3FF',
+    textAlign: 'center',
+  },
+  echoMenu: {
+    position: 'absolute',
+    bottom: 44,
+    end: 0,
+    zIndex: 30,
+    minWidth: 180,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 6,
+  },
+  echoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   quoteBackdrop: {
     flex: 1,

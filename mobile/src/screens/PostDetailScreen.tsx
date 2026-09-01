@@ -1,39 +1,44 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ActivityIndicator, FlatList, TouchableOpacity, TextInput } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  ScrollView,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import { api } from '@/api/client';
-import type { Post, Comment } from '@/types';
+import type { Post } from '@/types';
 import type { ReactionType } from '@/lib/reactions';
 import PostCard from '@/components/PostCard';
-import ReactionPicker from '@/components/ReactionPicker';
+import { openProfile } from '@/lib/nav';
 
 export default function PostDetailScreen() {
   const route = useRoute();
+  const navigation = useNavigation<any>();
   const { colors } = useTheme();
-  const postId = (route.params as any)?.postId as string | number;
-  const postIdStr = postId?.toString() || '';
+  const { t } = useLocale();
+  const postId = (route.params as { postId?: string | number })?.postId;
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState('');
+  const [error, setError] = useState(false);
 
   const fetchPost = async () => {
+    if (!postId) return;
+    setError(false);
     try {
-      setPost(await api.getPost(postIdStr));
+      setPost(await api.getPost(postId.toString()));
     } catch {
-      /* ignore */
+      setError(true);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchComments = async () => {
-    try {
-      const response = await api.getComments(postIdStr);
-      setComments(response.results || response);
-    } catch {
-      /* ignore */
     }
   };
 
@@ -45,111 +50,112 @@ export default function PostDetailScreen() {
       my_reaction: wasSame ? null : type,
       likes_count: wasSame ? post.likes_count - 1 : post.likes_count + (post.my_reaction ? 0 : 1),
     });
-    api.reactToPost(postIdStr, type)
-      .then((data) => setPost((p) => (p ? { ...p, my_reaction: data.my_reaction, likes_count: data.total, reaction_counts: data.reaction_counts } : p)))
+    api
+      .reactToPost(postId!.toString(), wasSame ? null : type)
+      .then((data) =>
+        setPost((p) =>
+          p
+            ? {
+                ...p,
+                my_reaction: data.my_reaction,
+                likes_count: data.total,
+                reaction_counts: data.reaction_counts,
+              }
+            : p,
+        ),
+      )
       .catch(() => fetchPost());
   };
 
-  const handleAddComment = async () => {
-    const text = newComment.trim();
-    if (!text) return;
-    setNewComment('');
-    try {
-      await api.createComment(postIdStr, text);
-      fetchComments();
-    } catch {
-      setNewComment(text);
-    }
-  };
-
   useEffect(() => {
-    if (!postId) return;
+    if (!postId) {
+      setLoading(false);
+      setError(true);
+      return;
+    }
     fetchPost();
-    fetchComments();
   }, [postId]);
 
-  if (loading) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </SafeAreaView>
-    );
-  }
-
-  if (!post) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: colors.textSecondary }}>المنشور غير موجود</Text>
-      </SafeAreaView>
-    );
-  }
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <FlatList
-        data={comments}
-        keyExtractor={(c) => String(c.id)}
-        renderItem={({ item }) => <CommentRow comment={item} colors={colors} onChanged={fetchComments} />}
-        contentContainerStyle={styles.listContent}
-        ListHeaderComponent={<PostCard post={post} onReact={handleReact} />}
-        ListFooterComponent={
-          <View style={styles.commentInputWrapper}>
-            <TextInput
-              style={[styles.commentInput, { color: colors.text, backgroundColor: colors.surface }]}
-              placeholder="أضف تعليقاً..."
-              placeholderTextColor={colors.textSecondary}
-              value={newComment}
-              onChangeText={setNewComment}
-              multiline
-              maxLength={280}
-              onSubmitEditing={handleAddComment}
-            />
-            <TouchableOpacity style={[styles.sendButton, { backgroundColor: colors.primary }]} onPress={handleAddComment} disabled={!newComment.trim()}>
-              <Text style={styles.sendButtonText}>➤</Text>
-            </TouchableOpacity>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <Pressable onPress={() => navigation.goBack()} style={styles.back} hitSlop={8}>
+          <Ionicons name="arrow-back" size={18} color={colors.textSecondary} />
+          <Text style={[styles.backText, { color: colors.textSecondary }]}>{t('common.back')}</Text>
+        </Pressable>
+
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={[styles.hint, { color: colors.textSecondary }]}>{t('common.loading')}</Text>
           </View>
-        }
-      />
+        ) : error || !post ? (
+          <View style={styles.center}>
+            <Text style={{ color: colors.textSecondary, marginBottom: 12 }}>{t('feed.loadError')}</Text>
+            <Pressable onPress={() => { setLoading(true); void fetchPost(); }} style={[styles.retry, { backgroundColor: colors.primary }]}>
+              <Text style={{ color: '#fff', fontWeight: '800' }}>{t('feed.retry')}</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+            <PostCard
+              post={post}
+              initialCommentsOpen
+              onReact={handleReact}
+              onUserPress={() => openProfile(navigation, post.user?.username)}
+              onVote={(vote) => {
+                void (async () => {
+                  try {
+                    const result = await api.votePost(post.id, vote);
+                    setPost((p) =>
+                      p ? { ...p, vote_score: result.vote_score, my_vote: result.my_vote } : p,
+                    );
+                  } catch {
+                    /* ignore */
+                  }
+                })();
+              }}
+            />
+          </ScrollView>
+        )}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-function CommentRow({ comment, colors, onChanged }: { comment: Comment; colors: any; onChanged: () => void }) {
-  const handleReact = (type: ReactionType) => {
-    api.reactToComment(String(comment.id), type).then(onChanged).catch(() => {});
-  };
-  return (
-    <View style={[styles.commentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-      <Text style={[styles.commentAuthor, { color: colors.text }]}>{comment.user?.display_name || comment.user?.username}</Text>
-      <Text style={[styles.commentText, { color: colors.text }]}>{comment.text}</Text>
-      <ReactionPicker
-        selectedReaction={(comment.my_reaction as ReactionType | null) ?? null}
-        reactionCounts={comment.reaction_counts}
-        onReact={handleReact}
-      />
-      {comment.replies && comment.replies.length > 0 && (
-        <View style={styles.replies}>
-          {comment.replies.map((reply) => (
-            <View key={reply.id} style={styles.reply}>
-              <Text style={[styles.commentAuthor, { color: colors.text }]}>{reply.user?.display_name || reply.user?.username}</Text>
-              <Text style={[styles.commentText, { color: colors.text }]}>{reply.text}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  listContent: { paddingHorizontal: 12, paddingBottom: 100 },
-  commentInputWrapper: { flexDirection: 'row', alignItems: 'flex-end', paddingVertical: 8 },
-  commentInput: { flex: 1, fontSize: 16, minHeight: 40, maxHeight: 100, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 24, marginRight: 8 },
-  sendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  sendButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
-  commentCard: { marginBottom: 10, borderRadius: 14, padding: 12, borderWidth: StyleSheet.hairlineWidth },
-  commentAuthor: { fontWeight: '700', fontSize: 13, marginBottom: 4 },
-  commentText: { fontSize: 15, lineHeight: 21 },
-  replies: { marginTop: 8, marginLeft: 20, borderLeftWidth: 1, borderLeftColor: '#e5e7eb', paddingLeft: 12 },
-  reply: { marginBottom: 8 },
+  safe: { flex: 1 },
+  back: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  backText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  hint: {
+    marginTop: 10,
+    fontSize: 13,
+  },
+  retry: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  scroll: {
+    paddingHorizontal: 12,
+    paddingBottom: 40,
+  },
 });

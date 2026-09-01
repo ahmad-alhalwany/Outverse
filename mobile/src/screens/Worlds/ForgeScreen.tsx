@@ -1,284 +1,251 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { api } from '@/api/client';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import {
   WorldBackdrop,
-  WorldCard,
   WorldHeader,
   WorldHero,
+  WorldPill,
   WorldPrimaryButton,
 } from '@/components/world/WorldChrome';
-import { rowsFrom } from './WorldScreenKit';
+import { ForgeCreateModal, ForgeDeleteDialog, ForgeEditModal, ForgeFeaturedCard, ForgeSpotlightCard, ForgeStoryCard } from './forgeParts';
+import {
+  FORGE_GENRES,
+  FORGE_TABS,
+  asForgeStories,
+  useForgePalette,
+  type ForgeStory,
+} from '@/lib/forge';
 
-const ORDER_TABS = [
-  { key: 'trending', label: 'Trending' },
-  { key: 'new', label: 'New' },
-  { key: 'completed', label: 'Completed' },
-] as const;
-
-const GENRES = [
-  'all',
-  'fantasy',
-  'scifi',
-  'mystery',
-  'romance',
-  'horror',
-  'adventure',
-  'absurd',
-  'other',
+const MY_KINDS = [
+  { key: 'all', labelKey: 'forge.myAll' },
+  { key: 'owned', labelKey: 'forge.myOwned' },
+  { key: 'saved', labelKey: 'forge.mySaved' },
+  { key: 'collaborating', labelKey: 'forge.myCollaborating' },
 ] as const;
 
 export default function ForgeScreen() {
   const navigation = useNavigation<any>();
-  const { colors } = useTheme();
-  const [ordering, setOrdering] = useState<(typeof ORDER_TABS)[number]['key']>('trending');
-  const [genre, setGenre] = useState<(typeof GENRES)[number]>('all');
-  const [rows, setRows] = useState<any[]>([]);
+  const { isDark } = useTheme();
+  const C = useForgePalette(isDark);
+  const { t } = useLocale();
+  const [tab, setTab] = useState<(typeof FORGE_TABS)[number]['key']>('trending');
+  const [genre, setGenre] = useState<(typeof FORGE_GENRES)[number]['key']>('all');
+  const [myKind, setMyKind] = useState<(typeof MY_KINDS)[number]['key']>('all');
+  const [stories, setStories] = useState<ForgeStory[]>([]);
+  const [featured, setFeatured] = useState<ForgeStory[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [title, setTitle] = useState('');
-  const [premise, setPremise] = useState('');
-  const [createGenre, setCreateGenre] = useState('fantasy');
+  const [search, setSearch] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<ForgeStory | null>(null);
+  const [deleting, setDeleting] = useState<ForgeStory | null>(null);
+
+  const openStory = (id: number) => navigation.navigate('ForgeDetail', { storyId: id });
 
   const load = useCallback(async (refresh = false) => {
     if (refresh) setRefreshing(true);
     else setLoading(true);
+    setLoadError(false);
     try {
-      const data = await api.getForgeStories({
-        ordering: ordering === 'new' ? 'new' : 'trending',
-        genre,
-        status: ordering === 'completed' ? 'completed' : 'all',
-      });
-      setRows(rowsFrom(data));
+      const data =
+        tab === 'my'
+          ? await api.getMyForgeStories(myKind)
+          : await api.getForgeStories({
+              ordering: tab === 'new' ? 'new' : 'trending',
+              genre,
+              status: tab === 'completed' ? 'completed' : 'all',
+            });
+      setStories(asForgeStories(data));
     } catch {
-      Alert.alert('Forge', 'Could not load stories.');
+      setStories([]);
+      setLoadError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [ordering, genre]);
+  }, [tab, genre, myKind]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const create = async () => {
-    if (!title.trim()) return;
-    setCreating(true);
-    try {
-      const created = await api.createForgeStory({
-        title: title.trim(),
-        premise: premise.trim(),
-        genre: createGenre,
-      });
-      setTitle('');
-      setPremise('');
-      if (created?.id) {
-        navigation.navigate('ForgeDetail', { storyId: created.id });
-      } else {
-        await load(true);
+  useEffect(() => {
+    void (async () => {
+      try {
+        setFeatured(asForgeStories(await api.getFeaturedForgeStories()));
+      } catch {
+        setFeatured([]);
       }
-    } catch {
-      Alert.alert('Forge', 'Could not create story.');
-    } finally {
-      setCreating(false);
-    }
-  };
+    })();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return stories;
+    return stories.filter((s) =>
+      `${s.title} ${s.premise} ${s.genre} ${s.genre_display || ''}`.toLowerCase().includes(q),
+    );
+  }, [search, stories]);
+
+  const spotlight = featured[0] || filtered[0] || stories[0] || null;
 
   return (
-    <WorldBackdrop tone="bazaar">
-      <SafeAreaView style={{ flex: 1 }}>
-        <WorldHeader title="Forge" subtitle="Stories" tone="bazaar" onBack={() => navigation.goBack()} />
-        {loading && rows.length === 0 ? (
-          <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : (
-          <FlatList
-            data={rows}
-            keyExtractor={(item, index) => String(item.id ?? index)}
-            contentContainerStyle={styles.list}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor="#818CF8" />
-            }
-            ListHeaderComponent={
-              <>
-                <WorldHero
-                  tone="bazaar"
-                  eyebrow="Stories"
-                  title="Forge long-form stories"
-                  body="Filter by genre, start a shell with a premise, then open to contribute segments."
-                />
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                  {ORDER_TABS.map((tab) => {
-                    const selected = ordering === tab.key;
-                    return (
-                      <Pressable
-                        key={tab.key}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Order ${tab.label}`}
-                        accessibilityState={{ selected }}
-                        hitSlop={8}
-                        onPress={() => setOrdering(tab.key)}
-                        style={({ pressed }) => [
-                          styles.chip,
-                          {
-                            backgroundColor: selected ? '#6366F1' : colors.surface,
-                            borderColor: selected ? '#6366F1' : colors.border,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={{ color: selected ? '#fff' : colors.text, fontWeight: '700', fontSize: 12 }}>
-                          {tab.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                  {GENRES.map((g) => {
-                    const selected = genre === g;
-                    return (
-                      <Pressable
-                        key={g}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Genre ${g}`}
-                        accessibilityState={{ selected }}
-                        hitSlop={8}
-                        onPress={() => setGenre(g)}
-                        style={({ pressed }) => [
-                          styles.chip,
-                          {
-                            backgroundColor: selected ? 'rgba(167,139,250,0.35)' : colors.surface,
-                            borderColor: selected ? '#A78BFA' : colors.border,
-                            opacity: pressed ? 0.8 : 1,
-                          },
-                        ]}
-                      >
-                        <Text style={{ color: colors.text, fontWeight: '700', fontSize: 12 }}>
-                          {g === 'all' ? 'All genres' : g}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-                <WorldCard>
+    <WorldBackdrop tone="story">
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <WorldHeader title={t('forge.title')} subtitle={t('forge.eyebrow')} tone="story" onBack={() => navigation.goBack()} />
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => String(item.id)}
+          contentContainerStyle={styles.list}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={C.brown} />}
+          ListHeaderComponent={
+            <>
+              <WorldHero
+                tone="story"
+                eyebrow={t('forge.eyebrow')}
+                title={t('forge.title')}
+                body={t('forge.subtitle')}
+                action={
+                  <WorldPrimaryButton label={t('forge.startStory')} tone="story" onPress={() => setCreateOpen(true)} />
+                }
+              />
+
+              <View style={[styles.panel, { backgroundColor: C.white, borderColor: C.line }]}>
+                <Text style={[styles.panelTitle, { color: C.text }]}>{t('forge.activeStories')}</Text>
+                <Text style={[styles.panelHint, { color: C.text2 }]}>{t('forge.activeStoriesHint')}</Text>
+                <View style={[styles.searchBar, { backgroundColor: C.card2, borderColor: C.line }]}>
+                  <Ionicons name="search" size={16} color={C.text2} />
                   <TextInput
-                    value={title}
-                    onChangeText={setTitle}
-                    placeholder="Story title"
-                    placeholderTextColor={colors.textMuted}
-                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
-                    accessibilityLabel="Story title"
+                    value={search}
+                    onChangeText={setSearch}
+                    placeholder={t('forge.searchPlaceholder')}
+                    placeholderTextColor={C.text2}
+                    style={[styles.searchInput, { color: C.text }]}
                   />
-                  <TextInput
-                    value={premise}
-                    onChangeText={setPremise}
-                    placeholder="Premise (optional)"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    style={[styles.input, styles.premise, { color: colors.text, borderColor: colors.border, backgroundColor: colors.background }]}
-                    accessibilityLabel="Story premise"
-                  />
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                  {FORGE_TABS.map((tabDef) => (
+                    <WorldPill key={tabDef.key} label={t(tabDef.labelKey)} active={tab === tabDef.key} tone="story" onPress={() => setTab(tabDef.key)} />
+                  ))}
+                </ScrollView>
+                {tab === 'my' ? (
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-                    {GENRES.filter((g) => g !== 'all').map((g) => {
-                      const selected = createGenre === g;
-                      return (
-                        <Pressable
-                          key={g}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Create genre ${g}`}
-                          hitSlop={8}
-                          onPress={() => setCreateGenre(g)}
-                          style={[
-                            styles.chip,
-                            {
-                              backgroundColor: selected ? '#6366F1' : colors.surface,
-                              borderColor: selected ? '#6366F1' : colors.border,
-                            },
-                          ]}
-                        >
-                          <Text style={{ color: selected ? '#fff' : colors.text, fontWeight: '700', fontSize: 12 }}>{g}</Text>
-                        </Pressable>
-                      );
-                    })}
+                    {MY_KINDS.map((k) => (
+                      <WorldPill key={k.key} label={t(k.labelKey)} active={myKind === k.key} tone="story" onPress={() => setMyKind(k.key)} />
+                    ))}
                   </ScrollView>
-                  <WorldPrimaryButton
-                    label="Create story"
-                    onPress={create}
-                    loading={creating}
-                    disabled={creating || !title.trim()}
-                  />
-                </WorldCard>
-              </>
-            }
-            ListEmptyComponent={
-              <View style={styles.center}>
-                <Text style={{ color: colors.textSecondary }}>No forged stories yet</Text>
+                ) : null}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+                  {FORGE_GENRES.map((g) => (
+                    <WorldPill key={g.key} label={t(g.labelKey)} active={genre === g.key} tone="story" onPress={() => setGenre(g.key)} />
+                  ))}
+                </ScrollView>
               </View>
-            }
-            renderItem={({ item }) => {
-              const segments = item.segment_count ?? item.segments_count ?? 0;
-              const max = item.max_segments ?? item.max_parts;
-              return (
-                <WorldCard onPress={() => navigation.navigate('ForgeDetail', { storyId: item.id })}>
-                  <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title || 'Untitled'}</Text>
-                  {item.premise ? (
-                    <Text style={{ color: colors.textSecondary, marginTop: 4 }} numberOfLines={3}>
-                      {item.premise}
-                    </Text>
-                  ) : null}
-                  <Text style={[styles.meta, { color: colors.textSecondary }]}>
-                    {[item.genre_display || item.genre, item.status, max != null ? `${segments}/${max} parts` : `${segments} parts`]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                </WorldCard>
-              );
-            }}
-          />
-        )}
+
+              {spotlight ? <ForgeSpotlightCard story={spotlight} onOpen={() => openStory(spotlight.id)} /> : null}
+
+              {featured.length > 0 ? (
+                <>
+                  <View style={styles.sectionHead}>
+                    <Text style={[styles.sectionTitle, { color: C.text }]}>{t('forge.featuredThisWeek')}</Text>
+                    <Text style={[styles.sectionHint, { color: C.text2 }]}>{t('forge.curatedPicks')}</Text>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featRow}>
+                    {featured.map((s) => (
+                      <ForgeFeaturedCard key={s.id} story={s} onOpen={() => openStory(s.id)} />
+                    ))}
+                  </ScrollView>
+                </>
+              ) : null}
+
+              <View style={styles.sectionHead}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.sectionTitle, { color: C.text }]}>{t('forge.storyBoard')}</Text>
+                  <Text style={[styles.sectionHint, { color: C.text2 }]}>{t('forge.storyBoardHint')}</Text>
+                </View>
+                <Text style={[styles.countChip, { backgroundColor: C.card2, color: C.brown }]}>
+                  {filtered.length} {t('forge.storiesCount')}
+                </Text>
+              </View>
+            </>
+          }
+          ListEmptyComponent={
+            loading ? (
+              <ActivityIndicator color={C.brown} style={{ marginTop: 24 }} />
+            ) : loadError ? (
+              <View style={styles.center}>
+                <Text style={[styles.emptyTitle, { color: C.text }]}>{t('forge.couldNotLoad')}</Text>
+                <Pressable onPress={() => void load()}><Text style={[styles.retry, { color: C.brown }]}>{t('common.tryAgain')}</Text></Pressable>
+              </View>
+            ) : (
+              <Text style={[styles.emptyBody, { color: C.text2 }]}>{t('forge.noMatch')}</Text>
+            )
+          }
+          renderItem={({ item }) => (
+            <ForgeStoryCard
+              story={item}
+              onOpen={() => openStory(item.id)}
+              onEdit={() => setEditing(item)}
+              onDelete={() => setDeleting(item)}
+            />
+          )}
+        />
+        <ForgeCreateModal
+          visible={createOpen}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(id) => {
+            void load(true);
+            if (id) openStory(id);
+          }}
+        />
+        {editing ? <ForgeEditModal story={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void load(true); }} /> : null}
+        {deleting ? <ForgeDeleteDialog story={deleting} onClose={() => setDeleting(null)} onDeleted={() => { setDeleting(null); void load(true); }} /> : null}
       </SafeAreaView>
     </WorldBackdrop>
   );
 }
 
 const styles = StyleSheet.create({
-  list: { padding: 16, paddingBottom: 40 },
-  chips: { gap: 8, paddingBottom: 10 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+  list: { padding: 16, paddingBottom: 48, gap: 14 },
+  panel: { borderWidth: 1, borderRadius: 24, padding: 16, marginTop: 2 },
+  panelTitle: { fontSize: 16, lineHeight: 22, fontWeight: '600' },
+  panelHint: { fontSize: 13, lineHeight: 19, fontWeight: '500', marginTop: 4, marginBottom: 14 },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
     borderRadius: 999,
-    borderWidth: 1,
-    marginRight: 8,
+    paddingHorizontal: 14,
+    minHeight: 44,
+    marginBottom: 12,
   },
-  input: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 15,
-    marginBottom: 10,
-  },
-  premise: { minHeight: 72, textAlignVertical: 'top' },
-  cardTitle: { fontSize: 16, fontWeight: '800' },
-  meta: { fontSize: 12, marginTop: 8 },
-  center: { padding: 32, alignItems: 'center' },
+  searchInput: { flex: 1, fontSize: 15, paddingVertical: 8, fontWeight: '500' },
+  chips: { gap: 8, paddingBottom: 8 },
+  featRow: { gap: 12, paddingBottom: 4, paddingRight: 4 },
+  sectionHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 6, marginBottom: 2, gap: 10 },
+  sectionTitle: { fontSize: 18, lineHeight: 24, fontWeight: '700' },
+  sectionHint: { fontSize: 13, lineHeight: 18, fontWeight: '500', marginTop: 3 },
+  countChip: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, fontSize: 12, fontWeight: '600' },
+  center: { padding: 28, alignItems: 'center' },
+  emptyTitle: { fontWeight: '600', fontSize: 16, marginBottom: 8 },
+  emptyBody: { textAlign: 'center', padding: 24, fontSize: 14, lineHeight: 21, fontWeight: '500' },
+  retry: { fontWeight: '600', fontSize: 14 },
 });

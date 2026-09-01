@@ -1,58 +1,92 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  FlatList,
-  Pressable,
-  TextInput,
-  Switch,
-  Alert,
   ActivityIndicator,
+  Alert,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { api, type OrbitList } from '@/api/client';
-import { useTheme } from '@/hooks/useTheme';
 import PostCard from '@/components/PostCard';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
+import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { openProfile } from '@/lib/nav';
+import {
+  asOrbitList,
+  asOrbitLists,
+  asOrbitPost,
+  orbitFieldError,
+  ORBIT_TABS,
+  useOrbitListsPalette,
+  type OrbitTab,
+} from '@/lib/orbitLists';
 import type { Post } from '@/types';
 
 export default function OrbitListsScreen() {
-  const { colors } = useTheme();
   const navigation = useNavigation<any>();
-  const [tab, setTab] = useState<'mine' | 'following'>('mine');
+  const { isDark } = useTheme();
+  const C = useOrbitListsPalette(isDark);
+  const { t } = useLocale();
+
+  const [tab, setTab] = useState<OrbitTab>('mine');
   const [lists, setLists] = useState<OrbitList[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
-  const [active, setActive] = useState<OrbitList | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [activeId, setActiveId] = useState<number | null>(null);
   const [feed, setFeed] = useState<Post[]>([]);
   const [feedLoading, setFeedLoading] = useState(false);
-  const [memberId, setMemberId] = useState('');
+  const [memberQuery, setMemberQuery] = useState('');
+  const [memberResults, setMemberResults] = useState<Array<{ id: number; username: string }>>([]);
+  const [addingMember, setAddingMember] = useState(false);
+  const [followingId, setFollowingId] = useState<number | null>(null);
+  const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const active = lists.find((list) => list.id === activeId) || null;
+
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true);
+    else setLoading(true);
+    setError('');
     try {
-      setLists(await api.getOrbitLists(tab === 'following'));
+      setLists(asOrbitLists(await api.getOrbitLists(tab)));
     } catch {
       setLists([]);
+      setError(t('signal.loadListsFailed'));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [tab]);
+  }, [tab, t]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
-  const openFeed = async (list: OrbitList) => {
-    setActive(list);
+  const openFeed = async (listId: number) => {
+    setActiveId(listId);
     setFeedLoading(true);
     try {
-      const page = await api.getOrbitListFeed(list.id, { limit: 20, offset: 0 });
-      setFeed((page.results || []) as Post[]);
-      const detail = await api.getOrbitList(list.id);
-      setActive(detail);
+      const page = await api.getOrbitListFeed(listId, { limit: 20, offset: 0 });
+      setFeed((page.results || []).map(asOrbitPost).filter((row): row is Post => Boolean(row)));
+      const detail = asOrbitList(await api.getOrbitList(listId));
+      if (detail) {
+        setLists((prev) => prev.map((row) => (row.id === detail.id ? { ...row, ...detail } : row)));
+      }
     } catch {
       setFeed([]);
     } finally {
@@ -60,51 +94,131 @@ export default function OrbitListsScreen() {
     }
   };
 
-  const createList = async () => {
-    if (!title.trim()) return;
+  const handleCreate = async () => {
+    if (!title.trim() || creating) return;
+    setCreating(true);
+    setError('');
     try {
-      const created = await api.createOrbitList({
-        title: title.trim(),
-        is_private: isPrivate,
-      });
+      const created = asOrbitList(
+        await api.createOrbitList({
+          title: title.trim(),
+          description: description.trim(),
+          is_private: isPrivate,
+        }),
+      );
       setTitle('');
+      setDescription('');
       setIsPrivate(false);
-      setTab('mine');
-      await load();
-      void openFeed(created);
-    } catch {
-      Alert.alert('Error', 'Could not create Orbit List.');
+      if (tab !== 'mine') setTab('mine');
+      else await load(true);
+      if (created) {
+        setActiveId(created.id);
+        void openFeed(created.id);
+      }
+    } catch (err) {
+      setError(orbitFieldError(err, t('signal.loadListsFailed')));
+    } finally {
+      setCreating(false);
     }
   };
 
-  const addMember = async () => {
-    if (!active || !memberId.trim()) return;
+  useEffect(() => {
+    const q = memberQuery.trim();
+    if (q.length < 2 || /^\d+$/.test(q)) {
+      setMemberResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      try {
+        const users = await api.searchUsers(q);
+        setMemberResults(users.slice(0, 8));
+      } catch {
+        setMemberResults([]);
+      }
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [memberQuery]);
+
+  const addMember = async (userId: number) => {
+    if (!activeId) return;
+    setAddingMember(true);
+    setError('');
     try {
-      const updated = await api.addOrbitListMember(active.id, Number(memberId));
-      setActive(updated);
-      setMemberId('');
-    } catch {
-      Alert.alert('Error', 'Could not add member.');
+      const updated = asOrbitList(await api.addOrbitListMember(activeId, userId));
+      if (updated) {
+        setLists((prev) => prev.map((row) => (row.id === updated.id ? updated : row)));
+        setMemberQuery('');
+        setMemberResults([]);
+      }
+    } catch (err) {
+      setError(orbitFieldError(err, t('signal.addMemberFailed')));
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
+  const removeMember = async (userId: number) => {
+    if (!activeId) return;
+    setError('');
+    try {
+      await api.removeOrbitListMember(activeId, userId);
+      setLists((prev) =>
+        prev.map((row) =>
+          row.id === activeId
+            ? {
+                ...row,
+                members: (row.members || []).filter((member) => member.id !== userId),
+                member_count: Math.max(0, (row.member_count || 1) - 1),
+              }
+            : row,
+        ),
+      );
+    } catch (err) {
+      setError(orbitFieldError(err, t('signal.removeMemberFailed')));
+    }
+  };
+
+  const toggleFollow = async (listId: number) => {
+    if (followingId) return;
+    setFollowingId(listId);
+    setError('');
+    try {
+      const data = await api.toggleFollowOrbitList(listId);
+      const following = Boolean(data?.following);
+      if (tab === 'discover') {
+        setLists((prev) => prev.map((row) => (row.id === listId ? { ...row, is_following: following } : row)));
+      } else {
+        setLists((prev) => prev.filter((row) => row.id !== listId));
+        if (activeId === listId) {
+          setActiveId(null);
+          setFeed([]);
+        }
+      }
+    } catch (err) {
+      setError(orbitFieldError(err, t('signal.followListFailed')));
+    } finally {
+      setFollowingId(null);
     }
   };
 
   const removeList = (list: OrbitList) => {
-    Alert.alert('Delete list?', list.title, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('signal.deleteList'), list.title, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           void (async () => {
+            setError('');
             try {
               await api.deleteOrbitList(list.id);
-              if (active?.id === list.id) {
-                setActive(null);
+              setLists((prev) => prev.filter((row) => row.id !== list.id));
+              if (activeId === list.id) {
+                setActiveId(null);
                 setFeed([]);
               }
-              await load();
-            } catch {
-              Alert.alert('Error', 'Could not delete list.');
+            } catch (err) {
+              setError(orbitFieldError(err, t('signal.deleteListFailed')));
             }
           })();
         },
@@ -112,166 +226,274 @@ export default function OrbitListsScreen() {
     ]);
   };
 
+  const numericMemberId = Number(memberQuery.trim());
+  const canAddById = Number.isFinite(numericMemberId) && numericMemberId > 0;
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <Pressable onPress={() => navigation.goBack()}>
-          <Text style={{ color: colors.text, fontWeight: '700' }}>Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: colors.text }]}>Orbit Lists</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <View style={styles.createRow}>
-        <TextInput
-          value={title}
-          onChangeText={setTitle}
-          placeholder="New list title"
-          placeholderTextColor={colors.textSecondary}
-          style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+    <WorldBackdrop tone="vault">
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <WorldHeader
+          title={t('signal.orbitListsTitle')}
+          subtitle={t('signal.orbitListsHint')}
+          tone="vault"
+          onBack={() => navigation.goBack()}
         />
-        <View style={styles.privateRow}>
-          <Text style={{ color: colors.textSecondary, fontSize: 12 }}>Private</Text>
-          <Switch value={isPrivate} onValueChange={setIsPrivate} />
-        </View>
-        <Pressable onPress={() => void createList()} style={[styles.createBtn, { backgroundColor: colors.primary }]}>
-          <Text style={{ color: '#fff', fontWeight: '700' }}>Create</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.tabs}>
-        {(['mine', 'following'] as const).map((key) => (
-          <Pressable
-            key={key}
-            onPress={() => setTab(key)}
-            style={[styles.tab, tab === key && { backgroundColor: colors.primary }]}
-          >
-            <Text style={{ color: tab === key ? '#fff' : colors.text, fontWeight: '700', fontSize: 13 }}>
-              {key === 'mine' ? 'My lists' : 'Following'}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {loading ? (
-        <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
-      ) : (
-        <FlatList
-          data={lists}
-          keyExtractor={(item) => String(item.id)}
-          style={{ maxHeight: 160 }}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
-          ListEmptyComponent={
-            <Text style={{ color: colors.textSecondary, padding: 16 }}>No Orbit Lists yet.</Text>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={C.brown} />
           }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => void openFeed(item)}
-              onLongPress={() => (tab === 'mine' ? removeList(item) : undefined)}
-              style={[
-                styles.listChip,
-                {
-                  backgroundColor: active?.id === item.id ? 'rgba(124,58,237,0.2)' : colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={{ color: colors.text, fontWeight: '700' }}>{item.title}</Text>
-              <Text style={{ color: colors.textSecondary, fontSize: 11 }}>
-                {item.member_count} members{item.is_private ? ' · private' : ''}
-              </Text>
-            </Pressable>
-          )}
-        />
-      )}
-
-      {active && tab === 'mine' ? (
-        <View style={[styles.memberBox, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <Text style={{ color: colors.text, fontWeight: '700', marginBottom: 8 }}>{active.title} members</Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+        >
+          <View style={[styles.form, { backgroundColor: C.white, borderColor: C.line }]}>
+            <Text style={[styles.formTitle, { color: C.text2 }]}>{t('signal.createList')}</Text>
             <TextInput
-              value={memberId}
-              onChangeText={setMemberId}
-              placeholder="User id"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="number-pad"
-              style={[styles.input, { flex: 1, color: colors.text, borderColor: colors.border }]}
+              value={title}
+              onChangeText={setTitle}
+              placeholder={t('signal.listTitle')}
+              placeholderTextColor={C.text2}
+              style={[styles.input, { backgroundColor: C.card2, color: C.text, borderColor: C.line }]}
             />
-            <Pressable onPress={() => void addMember()} style={[styles.createBtn, { backgroundColor: colors.primary }]}>
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Add</Text>
-            </Pressable>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder={t('signal.listDesc')}
+              placeholderTextColor={C.text2}
+              style={[styles.input, { backgroundColor: C.card2, color: C.text, borderColor: C.line }]}
+            />
+            <View style={styles.formFooter}>
+              <Pressable onPress={() => setIsPrivate((prev) => !prev)} style={styles.switchRow}>
+                <Switch
+                  value={isPrivate}
+                  onValueChange={setIsPrivate}
+                  trackColor={{ false: C.card, true: C.brown }}
+                  thumbColor="#fff"
+                />
+                <Text style={[styles.switchLabel, { color: C.text2 }]}>{t('signal.privateList')}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleCreate()}
+                disabled={creating || !title.trim()}
+                style={[styles.primary, { backgroundColor: C.brownDk, opacity: creating || !title.trim() ? 0.5 : 1 }]}
+              >
+                <Ionicons name="add" size={16} color="#fff" />
+                <Text style={styles.primaryText}>{t('signal.createList')}</Text>
+              </Pressable>
+            </View>
           </View>
-          {(active.members || []).slice(0, 6).map((m) => (
-            <Text key={m.id} style={{ color: colors.textSecondary, marginTop: 6 }}>
-              @{m.username}
-            </Text>
-          ))}
-        </View>
-      ) : null}
 
-      {feedLoading ? (
-        <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
-      ) : (
-        <FlatList
-          data={feed}
-          keyExtractor={(item) => String(item.id)}
-          contentContainerStyle={{ padding: 12, paddingBottom: 40 }}
-          ListEmptyComponent={
-            active ? (
-              <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 24 }}>
-                No public signals from members yet.
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+            {ORBIT_TABS.map((item) => {
+              const selected = tab === item.key;
+              return (
+                <Pressable
+                  key={item.key}
+                  onPress={() => {
+                    setTab(item.key);
+                    setActiveId(null);
+                    setFeed([]);
+                  }}
+                  style={[styles.tab, { backgroundColor: selected ? C.brown : C.white }]}
+                >
+                  <Text style={[styles.tabText, { color: selected ? '#fff' : C.text2 }]}>{t(item.labelKey)}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {error ? <Text style={[styles.error, { color: C.danger }]}>{error}</Text> : null}
+
+          {loading && lists.length === 0 ? (
+            <Text style={[styles.hint, { color: C.text2 }]}>{t('common.loading')}</Text>
+          ) : lists.length === 0 ? (
+            <View style={[styles.empty, { backgroundColor: C.card2 }]}>
+              <Text style={[styles.hint, { color: C.text2 }]}>
+                {tab === 'discover' ? t('signal.noDiscoverLists') : t('signal.emptyLists')}
               </Text>
-            ) : null
-          }
-          renderItem={({ item }) => (
-            <PostCard
-              post={item}
-              onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
-              onComment={() => navigation.navigate('PostDetail', { postId: item.id })}
-            />
+            </View>
+          ) : (
+            <View style={styles.listCol}>
+              {lists.map((list) => {
+                const selected = list.id === activeId;
+                return (
+                  <View
+                    key={list.id}
+                    style={[
+                      styles.listCard,
+                      {
+                        backgroundColor: selected ? `${C.brown}22` : C.white,
+                        borderColor: selected ? C.brown : C.line,
+                      },
+                    ]}
+                  >
+                    <Pressable onPress={() => void openFeed(list.id)}>
+                      <Text style={[styles.listTitle, { color: C.text }]}>{list.title}</Text>
+                      <Text style={[styles.listMeta, { color: C.text2 }]}>
+                        {list.member_count} {t('signal.members')}
+                        {list.is_private ? ` · ${t('signal.privateList')}` : ''}
+                        {tab === 'discover' && list.owner?.username ? ` · @${list.owner.username}` : ''}
+                      </Text>
+                    </Pressable>
+                    {tab === 'mine' ? (
+                      <Pressable onPress={() => removeList(list)} style={styles.listAction}>
+                        <Ionicons name="trash-outline" size={14} color={C.danger} />
+                        <Text style={[styles.actionText, { color: C.danger }]}>{t('signal.deleteList')}</Text>
+                      </Pressable>
+                    ) : null}
+                    {tab === 'following' ? (
+                      <Pressable
+                        onPress={() => void toggleFollow(list.id)}
+                        disabled={followingId === list.id}
+                        style={styles.listAction}
+                      >
+                        <Text style={[styles.actionText, { color: C.danger }]}>{t('signal.unfollowList')}</Text>
+                      </Pressable>
+                    ) : null}
+                    {tab === 'discover' ? (
+                      <Pressable
+                        onPress={() => void toggleFollow(list.id)}
+                        disabled={followingId === list.id}
+                        style={styles.listAction}
+                      >
+                        <Text
+                          style={[
+                            styles.actionText,
+                            { color: list.is_following ? C.text2 : C.brownDk, fontWeight: '800' },
+                          ]}
+                        >
+                          {list.is_following ? t('signal.unfollowList') : t('signal.followList')}
+                        </Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
           )}
-        />
-      )}
-    </SafeAreaView>
+
+          {active && tab === 'mine' ? (
+            <View style={[styles.memberBox, { backgroundColor: C.white, borderColor: C.line }]}>
+              <Text style={[styles.listTitle, { color: C.text }]}>{active.title}</Text>
+              <Text style={[styles.listMeta, { color: C.text2, marginBottom: 12 }]}>
+                {active.description || '—'}
+              </Text>
+              <View style={styles.addRow}>
+                <TextInput
+                  value={memberQuery}
+                  onChangeText={setMemberQuery}
+                  placeholder={t('signal.searchMembers')}
+                  placeholderTextColor={C.text2}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="default"
+                  style={[styles.input, { flex: 1, backgroundColor: C.card2, color: C.text, borderColor: C.line }]}
+                />
+                {canAddById ? (
+                  <Pressable
+                    onPress={() => void addMember(numericMemberId)}
+                    disabled={addingMember}
+                    style={[styles.ghost, { backgroundColor: C.card2 }]}
+                  >
+                    <Ionicons name="person-add-outline" size={16} color={C.brownDk} />
+                    <Text style={[styles.ghostText, { color: C.text }]}>{t('signal.add')}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+              {memberResults.map((user) => (
+                <Pressable
+                  key={user.id}
+                  onPress={() => void addMember(user.id)}
+                  disabled={addingMember}
+                  style={styles.memberRow}
+                >
+                  <Text style={[styles.memberName, { color: C.text }]}>@{user.username}</Text>
+                  <Text style={[styles.actionText, { color: C.brownDk, fontWeight: '800' }]}>{t('signal.add')}</Text>
+                </Pressable>
+              ))}
+              {(active.members || []).map((member) => (
+                <View key={member.id} style={styles.memberRow}>
+                  <Pressable onPress={() => openProfile(navigation, member.username)}>
+                    <Text style={[styles.memberName, { color: C.text }]}>@{member.username}</Text>
+                  </Pressable>
+                  <Pressable onPress={() => void removeMember(member.id)}>
+                    <Text style={[styles.actionText, { color: C.danger }]}>{t('signal.remove')}</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {feedLoading ? (
+            <ActivityIndicator color={C.brown} style={{ marginTop: 16 }} />
+          ) : !activeId ? (
+            <Text style={[styles.hint, { color: C.text2, marginTop: 8 }]}>{t('signal.openFeed')}</Text>
+          ) : feed.length === 0 ? (
+            <Text style={[styles.hint, { color: C.text2, marginTop: 8 }]}>{t('signal.noFeed')}</Text>
+          ) : (
+            <View style={styles.feed}>
+              {feed.map((post) => (
+                <PostCard
+                  key={String(post.id)}
+                  post={post}
+                  onPress={() => navigation.navigate('PostDetail', { postId: post.id })}
+                  onComment={() => navigation.navigate('PostDetail', { postId: post.id })}
+                  onUserPress={() => openProfile(navigation, post.user?.username)}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
+  content: { paddingHorizontal: 16, paddingBottom: 40 },
+  form: { borderRadius: 18, borderWidth: 1, padding: 16, gap: 10, marginBottom: 14 },
+  formTitle: { fontSize: 12, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
+  input: { borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  formFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  switchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  switchLabel: { fontSize: 13, fontWeight: '600' },
+  primary: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 6,
   },
-  title: { fontSize: 17, fontWeight: '800' },
-  createRow: { padding: 12, gap: 8 },
-  input: {
-    borderWidth: 1,
+  primaryText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  tabs: { gap: 8, paddingBottom: 14 },
+  tab: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  tabText: { fontSize: 13, fontWeight: '700' },
+  error: { fontSize: 13, marginBottom: 12 },
+  hint: { fontSize: 14, textAlign: 'center' },
+  empty: { borderRadius: 18, padding: 22, marginBottom: 12 },
+  listCol: { gap: 8, marginBottom: 14 },
+  listCard: { borderRadius: 16, borderWidth: 1, padding: 14 },
+  listTitle: { fontSize: 15, fontWeight: '800' },
+  listMeta: { fontSize: 12, marginTop: 4 },
+  listAction: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
+  actionText: { fontSize: 12, fontWeight: '700' },
+  memberBox: { borderRadius: 18, borderWidth: 1, padding: 16, marginBottom: 14 },
+  addRow: { flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 },
+  ghost: {
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  privateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  createBtn: { alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
-  tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 12, marginBottom: 8 },
-  tab: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: '#e5e7eb' },
-  listChip: {
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    minWidth: 120,
+  ghostText: { fontSize: 13, fontWeight: '700' },
+  memberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
   },
-  memberBox: {
-    marginHorizontal: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: 12,
-  },
+  memberName: { fontSize: 14, fontWeight: '700' },
+  feed: { gap: 12 },
 });

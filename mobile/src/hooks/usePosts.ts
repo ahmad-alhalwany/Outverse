@@ -36,7 +36,7 @@ export function usePosts(options: UsePostsOptions = {}) {
       setHasMore(!!data.has_more);
       setOffset(data.results?.length || 0);
     } catch (e: any) {
-      setError(e?.message || 'فشل تحميل المنشورات');
+      setError(e?.message || 'Could not load posts');
     } finally {
       setLoading(false);
     }
@@ -57,7 +57,7 @@ export function usePosts(options: UsePostsOptions = {}) {
       setHasMore(!!data.has_more);
       setOffset((prev) => prev + (data.results?.length || 0));
     } catch (e: any) {
-      setError(e?.message || 'فشل تحميل المزيد');
+      setError(e?.message || 'Could not load more posts');
     }
   }, [offset, loading, refreshing, hasMore, limit, options.ordering, options.author, options.feed, options.tag]);
 

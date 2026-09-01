@@ -18,6 +18,7 @@ import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
 import { usePosts } from '@/hooks/usePosts';
 import { useTheme } from '@/hooks/useTheme';
 import type { Reel } from '@/types';
+import { openProfile } from '@/lib/nav';
 
 type Tab = 'posts' | 'reels';
 
@@ -60,17 +61,11 @@ export default function TagFeedScreen() {
   if (!tag) {
     return (
       <WorldBackdrop>
-        <SafeAreaView style={styles.center}>
-          <Text style={{ color: colors.textSecondary }}>Missing tag.</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={10}
-            onPress={() => navigation.goBack()}
-            style={({ pressed }) => [styles.retry, { opacity: pressed ? 0.7 : 1, marginTop: 12 }]}
-          >
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Back</Text>
-          </Pressable>
+        <SafeAreaView style={{ flex: 1 }}>
+          <WorldHeader title="Tag" subtitle="Missing" onBack={() => navigation.goBack()} />
+          <View style={styles.center}>
+            <Text style={{ color: colors.textSecondary }}>Missing tag.</Text>
+          </View>
         </SafeAreaView>
       </WorldBackdrop>
     );
@@ -160,6 +155,7 @@ export default function TagFeedScreen() {
                     post={item}
                     onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
                     onComment={() => navigation.navigate('PostDetail', { postId: item.id })}
+                    onUserPress={() => openProfile(navigation, item.user?.username)}
                     onReact={(type) => react(item.id, type)}
                   />
                 </View>

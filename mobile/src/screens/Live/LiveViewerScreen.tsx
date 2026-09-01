@@ -13,8 +13,10 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import Video from 'react-native-video';
 import { useTheme } from '@/hooks/useTheme';
+import { useLocale } from '@/i18n/LocaleProvider';
 import { api } from '@/api/client';
 import { mediaUrl } from '@/api/config';
 import { createReconnectingWebSocket, resolveWsUrl } from '@/api/ws';
@@ -32,6 +34,7 @@ const REACTION_MAP: Record<string, string> = {
 
 export default function LiveViewerScreen() {
   const { colors } = useTheme();
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const sessionId = route.params?.sessionId as string | number;
@@ -207,10 +210,10 @@ export default function LiveViewerScreen() {
       const result = await api.liveHostAssist(sessionId);
       if (result.questions?.length) {
         setAssistQuestions(result.questions);
-        Alert.alert('Host assist', result.questions.join('\n\n'));
+        Alert.alert(t('mobile.hostAssist'), result.questions.join('\n\n'));
       }
     } catch {
-      Alert.alert('Host assist', 'Could not get suggestions right now.');
+      Alert.alert(t('mobile.hostAssist'), t('mobile.hostAssistFail'));
     } finally {
       setAssistBusy(false);
     }
@@ -223,10 +226,10 @@ export default function LiveViewerScreen() {
       const result = await api.liveHostRecap(sessionId);
       if (result.summary) {
         setRecap(result.summary);
-        Alert.alert('Session recap', result.summary);
+        Alert.alert(t('mobile.sessionRecap'), result.summary);
       }
     } catch {
-      Alert.alert('Session recap', 'Could not generate recap right now.');
+      Alert.alert(t('mobile.sessionRecap'), t('mobile.recapFail'));
     } finally {
       setRecapBusy(false);
     }
@@ -235,7 +238,7 @@ export default function LiveViewerScreen() {
   const hostName =
     typeof session?.user === 'string'
       ? session.user
-      : session?.user?.username || 'Host';
+      : session?.user?.username || t('live.host');
 
   const playbackUrl = session?.playback_url ? mediaUrl(session.playback_url) : null;
   const chatEnabled = session?.chat_enabled !== false;
@@ -255,13 +258,13 @@ export default function LiveViewerScreen() {
       <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={{ fontSize: 22, color: colors.text }}>←</Text>
+            <Ionicons name="chevron-back" size={22} color={colors.icon} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Live</Text>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{t('live.title')}</Text>
           <View style={styles.backBtn} />
         </View>
         <View style={styles.center}>
-          <Text style={{ color: colors.textSecondary }}>Session not found</Text>
+          <Text style={{ color: colors.textSecondary }}>{t('live.notFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -289,37 +292,37 @@ export default function LiveViewerScreen() {
               <Text style={styles.placeholderText}>
                 {isHost
                   ? publishState === 'live'
-                    ? 'Broadcasting via WHIP…'
+                    ? t('mobile.broadcastingWhip')
                     : publishState === 'connecting'
-                      ? 'Connecting camera…'
+                      ? t('mobile.connectingCamera')
                       : publishState === 'unavailable'
-                        ? 'Use OBS (RTMP) or a native WHIP build'
+                        ? t('mobile.useObs')
                         : session.is_live
-                          ? 'Stream starting…'
-                          : 'No playback available'
+                          ? t('mobile.streamStarting')
+                          : t('mobile.noPlayback')
                   : session.is_live
-                    ? 'Stream starting…'
-                    : 'No playback available'}
+                    ? t('mobile.streamStarting')
+                    : t('mobile.noPlayback')}
               </Text>
             </View>
           )}
 
           <View style={styles.overlayHeader}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.overlayBack}>
-              <Text style={styles.overlayBackText}>←</Text>
+              <Ionicons name="chevron-back" size={22} color="#fff" />
             </TouchableOpacity>
             <View style={styles.overlayInfo}>
               {session.is_live ? (
                 <View style={styles.liveBadge}>
-                  <Text style={styles.liveBadgeText}>LIVE</Text>
+                  <Text style={styles.liveBadgeText}>{t('live.statusLive')}</Text>
                 </View>
               ) : null}
               <Text style={styles.overlayTitle} numberOfLines={1}>
-                {session.title || 'Untitled stream'}
+                {session.title || t('mobile.untitledStream')}
               </Text>
               <Text style={styles.overlayHost} numberOfLines={1}>
-                {hostName} · {session.current_viewers ?? 0} watching
-                {isHost ? ' · You are hosting' : ''}
+                {hostName} · {t('mobile.watchingCount', { count: session.current_viewers ?? 0 })}
+                {isHost ? ` · ${t('mobile.youAreHosting')}` : ''}
               </Text>
             </View>
             {isHost ? (
@@ -330,11 +333,11 @@ export default function LiveViewerScreen() {
                     disabled={assistBusy}
                     style={[styles.endBtn, { backgroundColor: '#7C3AED' }]}
                   >
-                    <Text style={styles.endBtnText}>{assistBusy ? '…' : '✨ Assist'}</Text>
+                    <Text style={styles.endBtnText}>{assistBusy ? '…' : `✨ ${t('mobile.assist')}`}</Text>
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity onPress={handleEnd} style={styles.endBtn}>
-                  <Text style={styles.endBtnText}>End</Text>
+                  <Text style={styles.endBtnText}>{t('live.endStream')}</Text>
                 </TouchableOpacity>
                 {!session?.is_live && session?.status === 'ended' && (
                   <TouchableOpacity
@@ -342,7 +345,7 @@ export default function LiveViewerScreen() {
                     disabled={recapBusy}
                     style={[styles.endBtn, { backgroundColor: '#7C3AED' }]}
                   >
-                    <Text style={styles.endBtnText}>{recapBusy ? '…' : '✨ Recap'}</Text>
+                    <Text style={styles.endBtnText}>{recapBusy ? '…' : `✨ ${t('mobile.recap')}`}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -352,7 +355,7 @@ export default function LiveViewerScreen() {
           {isHost && (session.stream_key || session.rtmp_url) ? (
             <View style={styles.hostPanel}>
               <Text style={styles.hostPanelTitle}>
-                Host · WHIP {publishState === 'live' ? 'live' : publishState}
+                {t('mobile.hostWhip', { state: publishState === 'live' ? t('live.statusLive') : publishState })}
               </Text>
               {session.rtmp_url ? (
                 <Text style={styles.hostPanelMeta} numberOfLines={2}>
@@ -382,7 +385,7 @@ export default function LiveViewerScreen() {
 
         {chatEnabled ? (
           <View style={[styles.chatPanel, { backgroundColor: colors.surface }]}>
-            <Text style={[styles.chatTitle, { color: colors.text }]}>Chat</Text>
+            <Text style={[styles.chatTitle, { color: colors.text }]}>{t('nav.chat')}</Text>
             <FlatList
               ref={chatRef}
               data={messages}
@@ -402,7 +405,7 @@ export default function LiveViewerScreen() {
             <View style={[styles.chatInputRow, { borderTopColor: colors.border }]}>
               <TextInput
                 style={[styles.chatInput, { color: colors.text, backgroundColor: colors.inputBg || colors.background }]}
-                placeholder="Say something…"
+                placeholder={t('mobile.saySomething')}
                 placeholderTextColor={colors.textMuted}
                 value={chatText}
                 onChangeText={setChatText}
@@ -410,7 +413,7 @@ export default function LiveViewerScreen() {
                 returnKeyType="send"
               />
               <TouchableOpacity onPress={handleSend} disabled={sending} style={styles.sendBtn}>
-                <Text style={{ color: colors.primary, fontWeight: '800' }}>Send</Text>
+                <Text style={{ color: colors.primary, fontWeight: '800' }}>{t('reels.send')}</Text>
               </TouchableOpacity>
             </View>
           </View>

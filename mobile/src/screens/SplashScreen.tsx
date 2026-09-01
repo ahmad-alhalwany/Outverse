@@ -1,17 +1,14 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColorScheme } from 'react-native';
+import { useTheme } from '@/hooks/useTheme';
 
 export default function SplashScreen() {
   const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const bgColor = isDark ? '#0A0A0F' : '#F8FAFC';
-  const primaryColor = '#6366F1';
+  const { colors } = useTheme();
 
   return (
-    <View style={[styles.container, { backgroundColor: bgColor, paddingTop: insets.top }]}>
+    <View style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Image
@@ -20,10 +17,10 @@ export default function SplashScreen() {
             resizeMode="contain"
           />
         </View>
-        <Text style={[styles.appName, { color: isDark ? '#F0F6FC' : '#1F2937' }]}>Cosonova</Text>
-        <Text style={[styles.tagline, { color: isDark ? '#8B949E' : '#6B7280' }]}>Your universe, your voice</Text>
+        <Text style={[styles.appName, { color: colors.text }]}>Cosonova</Text>
+        <Text style={[styles.tagline, { color: colors.textSecondary }]}>Your universe, your voice</Text>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={primaryColor} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       </View>
     </View>

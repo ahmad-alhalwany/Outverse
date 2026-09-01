@@ -5,54 +5,80 @@ import {
   FlatList,
   RefreshControl,
   Text,
-  TouchableOpacity,
-  ScrollView,
+  Pressable,
   Alert,
   Image,
+  useWindowDimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { usePosts } from '../../hooks/usePosts';
 import { useStories } from '../../hooks/useStories';
 import { useAds } from '../../hooks/useAds';
+import { useNotifications } from '../../hooks/useNotifications';
 import { api } from '../../api/client';
 import { mediaUrl } from '../../api/config';
 import PostCard from '../../components/PostCard';
 import FeedSkeleton from '../../components/FeedSkeleton';
-import EmptyState from '../../components/EmptyState';
-import StoriesBar from '../../components/StoriesBar';
 import StoryViewer from '../../components/StoryViewer';
 import AdCard from '../../components/ads/AdCard';
+import FeedHero from '../../components/home/FeedHero';
+import DailyRitualPanel from '../../components/home/DailyRitualPanel';
+import DailyChallengeBanner from '../../components/home/DailyChallengeBanner';
+import HomeStoriesRail from '../../components/home/HomeStoriesRail';
+import CreatePostComposer from '../../components/home/CreatePostComposer';
+import HomeDiscoverRail from '../../components/home/HomeDiscoverRail';
+import { useTheme } from '../../hooks/useTheme';
+import { Ionicons } from '@expo/vector-icons';
 import type { Post, Story } from '../../types';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { openProfile } from '@/lib/nav';
 
 const AD_FREQUENCY = 5;
 
 type HomeFeed = 'for_you' | 'following' | 'joined' | 'discover';
+type StoryMode = 'all' | 'following';
 
-const FEED_TABS: { key: HomeFeed; label: string }[] = [
-  { key: 'for_you', label: 'For You' },
-  { key: 'following', label: 'Following' },
-  { key: 'joined', label: 'Resonance' },
-  { key: 'discover', label: 'Discover' },
+const FEED_TAB_KEYS: { key: HomeFeed; labelKey: string }[] = [
+  { key: 'for_you', labelKey: 'feed.feedForYou' },
+  { key: 'following', labelKey: 'feed.feedFollowing' },
+  { key: 'joined', labelKey: 'feed.feedResonance' },
 ];
+
+function asStories(data: unknown): Story[] {
+  if (Array.isArray(data)) return data as Story[];
+  if (data && typeof data === 'object' && Array.isArray((data as { results?: Story[] }).results)) {
+    return (data as { results: Story[] }).results;
+  }
+  return [];
+}
 
 export default function HomeScreen() {
   const navigation = useNavigation();
+  const { colors, isDark, toggleColorScheme } = useTheme();
+  const { t } = useLocale();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 360;
+  const gutter = isCompact ? 12 : width >= 768 ? 28 : 16;
   const [feed, setFeed] = useState<HomeFeed>('for_you');
   const { posts, setPosts, loading, error, refreshing, loadMore, refresh, react } = usePosts({
     limit: 10,
     feed,
   });
-  const { stories, viewStory, load: reloadStories } = useStories();
+  const { stories: allStories, viewStory, load: reloadStories } = useStories();
+  const { unreadCount } = useNotifications();
   const { currentAd, fetchAd, logImpression, logClick } = useAds();
   const [viewerOpen, setViewerOpen] = useState(false);
   const [storyIndex, setStoryIndex] = useState(0);
   const [spotlightOpen, setSpotlightOpen] = useState(false);
   const [spotlightIndex, setSpotlightIndex] = useState(0);
   const [spotlightStories, setSpotlightStories] = useState<Story[]>([]);
-  const [trends, setTrends] = useState<string[]>([]);
+  const [storyMode, setStoryMode] = useState<StoryMode>('all');
+  const [followingStories, setFollowingStories] = useState<Story[]>([]);
   const [joinedCommunities, setJoinedCommunities] = useState<Array<{ id: number | string; slug: string; name: string }>>([]);
   const adFetchedRef = useRef(false);
+  const stories = storyMode === 'following' ? followingStories : allStories;
 
   useEffect(() => {
     if (!adFetchedRef.current) {
@@ -64,25 +90,32 @@ export default function HomeScreen() {
   useEffect(() => {
     void (async () => {
       try {
-        const [rows, spotlightRows] = await Promise.all([
-          api.getTrendingTags(),
-          api.getSpotlightStories().catch(() => []),
-        ]);
-        setTrends(rows.map((r) => r.tag).filter((t): t is string => !!t).slice(0, 8));
-        setSpotlightStories(Array.isArray(spotlightRows) ? (spotlightRows as Story[]) : []);
+        const spotlightRows = await api.getSpotlightStories();
+        setSpotlightStories(asStories(spotlightRows));
       } catch {
-        setTrends([]);
         setSpotlightStories([]);
       }
     })();
   }, []);
 
   useEffect(() => {
+    if (storyMode !== 'following') return;
+    void (async () => {
+      try {
+        setFollowingStories(asStories(await api.getFollowingStories()));
+      } catch {
+        setFollowingStories([]);
+      }
+    })();
+  }, [storyMode]);
+
+  useEffect(() => {
     void (async () => {
       try {
         const page = await api.getCommunities({ mine: true, limit: 30 });
+        const results = (page.results || []) as { id: number | string; slug: string; name: string }[];
         setJoinedCommunities(
-          (page.results || []).map((c: any) => ({
+          results.map((c) => ({
             id: c.id,
             slug: c.slug,
             name: c.name,
@@ -98,24 +131,19 @@ export default function HomeScreen() {
     setPosts((prev) => prev.map((p) => (String(p.id) === String(postId) ? { ...p, ...patch } : p)));
   }, [setPosts]);
 
-  const goToPost = useCallback(
-    (postId: string | number) => (navigation as any).navigate('PostDetail', { postId }),
-    [navigation]
-  );
-
   const sharePostToStory = useCallback(async (post: Post) => {
     const m = post.media?.[0];
     const uri = mediaUrl(m?.media_file || m?.url || m?.file || m?.thumbnail_url || '') || '';
     if (!uri) {
-      Alert.alert('No media', 'This post has no image to broadcast to your story.');
+      Alert.alert(t('mobile.noMediaTitle'), t('mobile.noMediaStory'));
       return;
     }
     try {
       await api.sharePostToStory(post.id, uri);
-      Alert.alert('On your story', 'Signal broadcast to your 24h orbit.');
+      Alert.alert(t('mobile.onYourStoryTitle'), t('mobile.onYourStory'));
       void reloadStories();
     } catch {
-      Alert.alert('Error', 'Could not share to story.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotShareStory'));
     }
   }, [reloadStories]);
 
@@ -127,7 +155,7 @@ export default function HomeScreen() {
         reposts_count: typeof result.reposts_count === 'number' ? result.reposts_count : post.reposts_count,
       });
     } catch {
-      Alert.alert('Error', 'Could not Echo this signal.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotEcho'));
     }
   }, [patchPost]);
 
@@ -135,10 +163,10 @@ export default function HomeScreen() {
     try {
       await api.repostPost(post.id, text);
       patchPost(post.id, { reposts_count: (post.reposts_count || 0) + 1 });
-      Alert.alert('Quoted', 'Your Quote Signal is live.');
+      Alert.alert(t('mobile.quotedTitle'), t('mobile.quotedLive'));
       void refresh();
     } catch {
-      Alert.alert('Error', 'Could not post Quote Signal.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotQuote'));
     }
   }, [patchPost, refresh]);
 
@@ -151,11 +179,11 @@ export default function HomeScreen() {
         return;
       }
       Alert.alert(
-        'Save to Vault',
-        'Pick a folder',
+        t('mobile.saveToVault'),
+        t('mobile.pickFolder'),
         [
           {
-            text: 'Default',
+            text: t('mobile.vaultDefault'),
             onPress: () => {
               void (async () => {
                 const result = await api.toggleSavePost(post.id);
@@ -172,22 +200,22 @@ export default function HomeScreen() {
               })();
             },
           })),
-          { text: 'Cancel', style: 'cancel' as const },
+          { text: t('common.cancel'), style: 'cancel' as const },
         ],
       );
     } catch {
-      Alert.alert('Error', 'Could not save to Vault.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotSaveVault'));
     }
   }, [patchPost]);
 
   const handleCrossEcho = useCallback(async (post: Post) => {
     if (!joinedCommunities.length) {
-      Alert.alert('Join a community', 'Cross-Echo needs a community you belong to.');
+      Alert.alert(t('mobile.joinCommunityTitle'), t('mobile.joinACommunity'));
       return;
     }
     Alert.alert(
-      'Cross-Echo',
-      'Share this signal into another community',
+      t('mobile.crossEchoTitle'),
+      t('mobile.shareIntoCommunity'),
       [
         ...joinedCommunities.slice(0, 6).map((c) => ({
           text: c.name,
@@ -195,14 +223,14 @@ export default function HomeScreen() {
             void (async () => {
               try {
                 await api.crossEchoPost(post.id, { community_id: c.id });
-                Alert.alert('Cross-Echoed', `Shared into ${c.name}.`);
+                Alert.alert(t('mobile.crossEchoedTitle'), t('mobile.crossEchoed', { name: c.name }));
               } catch {
-                Alert.alert('Error', 'Could not Cross-Echo.');
+                Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotCrossEcho'));
               }
             })();
           },
         })),
-        { text: 'Cancel', style: 'cancel' as const },
+        { text: t('common.cancel'), style: 'cancel' as const },
       ],
     );
   }, [joinedCommunities]);
@@ -215,8 +243,7 @@ export default function HomeScreen() {
           <PostCard
             post={item}
             onReact={(type) => react(String(item.id), type)}
-            onComment={() => goToPost(item.id)}
-            onPress={() => goToPost(item.id)}
+            onUserPress={() => openProfile(navigation as any, item.user?.username)}
             onShareToStory={() => void sharePostToStory(item)}
             onEcho={() => void handleEcho(item)}
             onQuote={(text) => void handleQuote(item, text)}
@@ -231,7 +258,7 @@ export default function HomeScreen() {
                     my_vote: result.my_vote,
                   });
                 } catch {
-                  Alert.alert('Error', 'Could not Amplify/Fade.');
+                  Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotAmplify'));
                 }
               })();
             }}
@@ -247,13 +274,13 @@ export default function HomeScreen() {
         </>
       );
     },
-    [react, goToPost, currentAd, logImpression, logClick, sharePostToStory, handleEcho, handleQuote, handleSave, handleCrossEcho, patchPost]
+    [react, currentAd, logImpression, logClick, sharePostToStory, handleEcho, handleQuote, handleSave, handleCrossEcho, patchPost, navigation]
   );
 
-  const handleStoryPress = (_story: Story, index: number) => {
+  const handleStoryPress = useCallback((_story: Story, index: number) => {
     setStoryIndex(index);
     setViewerOpen(true);
-  };
+  }, []);
 
   const handleAddStory = useCallback(() => {
     navigation.navigate('StoryStudio' as never);
@@ -266,118 +293,131 @@ export default function HomeScreen() {
     [viewStory]
   );
 
-  if (loading && posts.length === 0) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <FeedSkeleton count={3} />
-      </SafeAreaView>
-    );
-  }
+  const emptyTitle =
+    feed === 'following'
+      ? t('mobile.emptyFollowingTitle')
+      : feed === 'joined'
+        ? t('feed.emptyResonanceTitle')
+        : t('mobile.emptyForYouTitle');
+  const emptyBody =
+    feed === 'following'
+      ? t('mobile.emptyFollowingBody')
+      : feed === 'joined'
+        ? t('feed.emptyResonanceBody')
+        : t('mobile.emptyForYouBody');
+
+  const listHeader = React.useMemo(
+    () => (
+    <View>
+      <FeedHero />
+      <DailyRitualPanel />
+      <DailyChallengeBanner />
+      <HomeStoriesRail
+        stories={stories}
+        spotlight={spotlightStories}
+        feedMode={storyMode}
+        onFeedMode={setStoryMode}
+        onStoryPress={handleStoryPress}
+        onSpotlightPress={(index) => {
+          setSpotlightIndex(index);
+          setSpotlightOpen(true);
+        }}
+        onAddStory={handleAddStory}
+      />
+      <CreatePostComposer onPublished={refresh} />
+      <HomeDiscoverRail />
+      <View style={[styles.tabsWrap, isCompact && styles.tabsWrapCompact]}>
+        <View style={[styles.feedTabs, { backgroundColor: isDark ? 'rgba(42,33,84,0.8)' : colors.surface, borderColor: 'rgba(156,39,176,0.1)', flexShrink: 1 }]}>
+          {FEED_TAB_KEYS.map((tab) => {
+            const active = feed === tab.key;
+            return (
+              <Pressable key={tab.key} onPress={() => setFeed(tab.key)} style={styles.feedTab}>
+                {active ? (
+                  <LinearGradient colors={['#9C27B0', '#2196F3', '#4CAF50']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.feedTabActive}>
+                    <Text style={styles.feedTabActiveText}>{t(tab.labelKey)}</Text>
+                  </LinearGradient>
+                ) : (
+                  <Text style={[styles.feedTabText, { color: colors.textSecondary }]}>{t(tab.labelKey)}</Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+        <Pressable onPress={() => refresh()} style={styles.refreshBtn} accessibilityLabel={t('feed.refresh')}>
+          <Ionicons name="refresh-outline" size={14} color={colors.textSecondary} />
+          <Text style={[styles.refreshText, { color: colors.textSecondary }]}>{t('feed.refresh')}</Text>
+        </Pressable>
+      </View>
+    </View>
+    ),
+    [stories, spotlightStories, storyMode, handleStoryPress, handleAddStory, isDark, colors.surface, colors.textSecondary, feed, t, refresh, isCompact],
+  );
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.topBar}>
-        <View style={styles.brandRow}>
-          <Image source={require('../../../assets/icon.png')} style={styles.brandLogo} />
-          <Text style={styles.brand}>Cosonova</Text>
-        </View>
-        <View style={styles.topActions}>
-          <TouchableOpacity onPress={() => (navigation as any).navigate('StoryMap')} style={styles.mapBtn}>
-            <Text style={styles.mapBtnText}>Map</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => (navigation as any).navigate('Chat')} hitSlop={12}>
-            <Text style={styles.chatBtn}>💬</Text>
-          </TouchableOpacity>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[styles.chromePad, { paddingHorizontal: gutter }]}>
+        <View
+          style={[
+            styles.chrome,
+            {
+              backgroundColor: isDark ? 'rgba(20,16,42,0.78)' : 'rgba(255,255,255,0.82)',
+              borderColor: isDark ? 'rgba(255,255,255,0.06)' : colors.border,
+            },
+          ]}
+        >
+          <View style={styles.brandRow}>
+            <Image source={require('../../../assets/icon.png')} style={styles.brandLogo} />
+            <Text style={[styles.brand, { color: colors.text }]}>Cosonova</Text>
+          </View>
+          <View style={[styles.topCluster, { backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : 'rgba(124,58,237,0.06)' }]}>
+            <Pressable
+              onPress={toggleColorScheme}
+              accessibilityRole="button"
+              accessibilityLabel={t('mobile.darkUniverse')}
+              style={styles.iconBtn}
+            >
+              <Ionicons name={isDark ? 'sunny-outline' : 'moon-outline'} size={20} color={colors.icon} />
+            </Pressable>
+            <Pressable
+              onPress={() => (navigation as any).navigate('Search')}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.search')}
+              style={styles.iconBtn}
+            >
+              <Ionicons name="search-outline" size={20} color={colors.icon} />
+            </Pressable>
+            <Pressable
+              onPress={() => (navigation as any).navigate('Notifications')}
+              accessibilityRole="button"
+              accessibilityLabel={t('notifications.title')}
+              style={styles.iconBtn}
+            >
+              <Ionicons name="notifications-outline" size={20} color={colors.icon} />
+              {unreadCount > 0 ? (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                </View>
+              ) : null}
+            </Pressable>
+          </View>
         </View>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.feedTabs}
-        style={styles.feedTabsScroll}
-      >
-        {FEED_TABS.map((tab) => {
-          const active = feed === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              onPress={() => setFeed(tab.key)}
-              style={[styles.feedTab, active && styles.feedTabActive]}
-            >
-              <Text style={[styles.feedTabText, active && styles.feedTabTextActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? (
+        <View style={styles.errorBox}>
+          <Text style={[styles.errorText, { color: colors.error }]}>{t('feed.loadError')}</Text>
+          <Pressable onPress={() => refresh()} style={[styles.retry, { backgroundColor: colors.vault }]} accessibilityRole="button">
+            <Text style={styles.retryText}>{t('feed.retry')}</Text>
+          </Pressable>
+        </View>
+      ) : null}
       <FlatList
-        data={posts}
+        data={loading && posts.length === 0 ? [] : posts}
         keyExtractor={(item) => String(item.id)}
         renderItem={renderItem}
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[styles.list, { paddingHorizontal: gutter }]}
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
-        ListHeaderComponent={
-          <View>
-            <StoriesBar
-              stories={stories}
-              onStoryPress={handleStoryPress}
-              onAddStory={handleAddStory}
-            />
-            {spotlightStories.length > 0 ? (
-              <View style={styles.spotlightWrap}>
-                <View style={styles.spotlightHeader}>
-                  <Text style={styles.spotlightLabel}>Spotlight</Text>
-                  <TouchableOpacity onPress={() => (navigation as any).navigate('StoryMap')}>
-                    <Text style={styles.spotlightMapLink}>Map</Text>
-                  </TouchableOpacity>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.spotlightRow}>
-                  {spotlightStories.map((story, index) => {
-                    const uri = mediaUrl(story.image || story.media || story.video || '');
-                    return (
-                      <TouchableOpacity
-                        key={String(story.id)}
-                        style={styles.spotlightCard}
-                        onPress={() => {
-                          setSpotlightIndex(index);
-                          setSpotlightOpen(true);
-                        }}
-                      >
-                        {uri ? (
-                          <Image source={{ uri }} style={styles.spotlightImage} />
-                        ) : (
-                          <View style={styles.spotlightFallback}>
-                            <Text style={styles.spotlightFallbackText}>★</Text>
-                          </View>
-                        )}
-                        <Text style={styles.spotlightUser} numberOfLines={1}>
-                          @{story.user?.username || story.author?.username || 'story'}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-            ) : null}
-            {trends.length > 0 ? (
-              <View style={styles.trendsWrap}>
-                <Text style={styles.trendsLabel}>Signal Trends</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trendsRow}>
-                  {trends.map((tag) => (
-                    <TouchableOpacity
-                      key={tag}
-                      style={styles.trendChip}
-                      onPress={() => (navigation as any).navigate('TagFeed', { tag })}
-                    >
-                      <Text style={styles.trendChipText}>#{tag}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
-          </View>
-        }
+        ListHeaderComponent={listHeader}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -386,15 +426,38 @@ export default function HomeScreen() {
               reloadStories();
               fetchAd('feed');
             }}
-            tintColor="#6366f1"
+            tintColor={colors.primary}
           />
         }
         ListEmptyComponent={
-          <EmptyState
-            title="لا توجد منشورات"
-            subtitle="اتبع المزيد من المستخدمين لرؤية منشوراتهم هنا"
-            emoji="📭"
-          />
+          loading ? (
+            <FeedSkeleton count={3} />
+          ) : (
+            <View style={styles.empty}>
+              <View style={[styles.emptyIcon, { backgroundColor: isDark ? 'rgba(196,181,253,0.12)' : 'rgba(124,58,237,0.10)' }]}>
+                <Ionicons name="planet-outline" size={32} color={colors.primary} />
+              </View>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>{emptyTitle}</Text>
+              <Text style={[styles.emptyBody, { color: colors.textSecondary }]}>{emptyBody}</Text>
+              {feed === 'joined' ? (
+                <Pressable onPress={() => (navigation as any).navigate('Communities')} style={styles.emptyCta}>
+                  <LinearGradient colors={['#9C27B0', '#2196F3']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.emptyCtaInner}>
+                    <Text style={styles.emptyCtaText}>{t('feed.browseCommunities')}</Text>
+                  </LinearGradient>
+                </Pressable>
+              ) : feed === 'following' ? (
+                <Pressable onPress={() => setFeed('for_you')}>
+                  <Text style={[styles.emptyLink, { color: colors.vault }]}>{t('mobile.viewForYou')}</Text>
+                </Pressable>
+              ) : (
+                <Pressable onPress={() => (navigation as any).navigate('Create', { mode: 'post' })} style={styles.emptyCta}>
+                  <LinearGradient colors={['#9C27B0', '#2196F3']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.emptyCtaInner}>
+                    <Text style={styles.emptyCtaText}>{t('mobile.createAPost')}</Text>
+                  </LinearGradient>
+                </Pressable>
+              )}
+            </View>
+          )
         }
       />
       <StoryViewer
@@ -416,165 +479,79 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#f9fafb',
-  },
-  topBar: {
+  safe: { flex: 1 },
+  chromePad: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 8 },
+  chrome: {
+    height: 64,
+    borderRadius: 28,
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    borderWidth: 1,
   },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   brandLogo: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
   },
-  brand: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#4f46e5',
-  },
-  topActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  mapBtn: {
-    borderRadius: 999,
-    backgroundColor: '#ede9fe',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  mapBtnText: {
-    color: '#5b21b6',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  chatBtn: {
-    fontSize: 22,
-  },
-  feedTabsScroll: {
-    maxHeight: 44,
-    marginBottom: 4,
-  },
-  feedTabs: {
-    paddingHorizontal: 12,
-    gap: 8,
-    alignItems: 'center',
-  },
-  feedTab: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#e5e7eb',
-  },
-  feedTabActive: {
-    backgroundColor: '#4f46e5',
-  },
-  feedTabText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#4b5563',
-  },
-  feedTabTextActive: {
-    color: '#fff',
-  },
-  errorText: {
-    color: '#ef4444',
-    paddingHorizontal: 16,
-    marginBottom: 4,
-  },
-  list: {
-    paddingHorizontal: 12,
-    paddingBottom: 24,
-  },
-  spotlightWrap: {
-    marginBottom: 10,
-  },
-  spotlightHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    marginBottom: 8,
-  },
-  spotlightLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6b7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-  },
-  spotlightMapLink: {
-    color: '#4f46e5',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  spotlightRow: {
-    gap: 10,
-    paddingHorizontal: 2,
-  },
-  spotlightCard: {
-    width: 92,
-  },
-  spotlightImage: {
-    width: 92,
-    height: 128,
-    borderRadius: 16,
-    backgroundColor: '#111827',
-  },
-  spotlightFallback: {
-    width: 92,
-    height: 128,
-    borderRadius: 16,
-    backgroundColor: '#312e81',
+  brand: { fontSize: 22, fontWeight: '800' },
+  topCluster: { flexDirection: 'row', alignItems: 'center', borderRadius: 999, padding: 2 },
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  spotlightFallbackText: {
-    color: '#fff',
-    fontSize: 24,
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    backgroundColor: '#EC4899',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  spotlightUser: {
-    marginTop: 5,
-    fontSize: 11,
-    color: '#4b5563',
-    fontWeight: '700',
-  },
-  trendsWrap: {
-    marginBottom: 10,
-    paddingTop: 4,
-  },
-  trendsLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#6b7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  trendsRow: {
-    gap: 8,
-    paddingHorizontal: 2,
-  },
-  trendChip: {
-    backgroundColor: '#ede9fe',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: '800' },
+  errorBox: { paddingHorizontal: 16, paddingBottom: 8, alignItems: 'center' },
+  errorText: { marginBottom: 8, fontWeight: '600' },
+  retry: { borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
+  retryText: { color: '#fff', fontWeight: '700' },
+  list: { paddingHorizontal: 12, paddingBottom: 28 },
+  tabsWrap: { marginBottom: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  tabsWrapCompact: { flexDirection: 'column', alignItems: 'stretch' },
+  refreshBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 4 },
+  refreshText: { fontSize: 12, fontWeight: '600' },
+  feedTabs: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
     borderRadius: 999,
+    padding: 4,
+    borderWidth: 1,
+    gap: 2,
   },
-  trendChipText: {
-    color: '#5b21b6',
-    fontWeight: '700',
-    fontSize: 13,
+  feedTab: { borderRadius: 999, overflow: 'hidden' },
+  feedTabActive: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, minHeight: 40, justifyContent: 'center' },
+  feedTabActiveText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  feedTabText: { fontSize: 13, fontWeight: '700', paddingHorizontal: 14, paddingVertical: 8 },
+  empty: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20 },
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
+  emptyCta: { borderRadius: 14, overflow: 'hidden' },
+  emptyCtaInner: { paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, minHeight: 44, justifyContent: 'center' },
+  emptyTitle: { fontSize: 18, fontWeight: '800', textAlign: 'center', marginBottom: 6 },
+  emptyBody: { fontSize: 14, textAlign: 'center', lineHeight: 20, marginBottom: 16 },
+  emptyCtaText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  emptyLink: { fontSize: 14, fontWeight: '700' },
 });

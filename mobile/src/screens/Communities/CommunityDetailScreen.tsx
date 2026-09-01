@@ -11,12 +11,18 @@ import {
   TextInput,
   ScrollView,
   Alert,
+  Image,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '@/hooks/useTheme';
 import { api } from '@/api/client';
+import { mediaUrl } from '@/api/config';
 import PostCard from '@/components/PostCard';
 import type { Post } from '@/types';
+import { WorldBackdrop, WorldHeader } from '@/components/world/WorldChrome';
+import { useLocale } from '@/i18n/LocaleProvider';
+import { openProfile } from '@/lib/nav';
+import { useCommunitiesPalette } from '@/lib/communities';
 
 type CommunityDetail = {
   id: number | string;
@@ -35,6 +41,8 @@ type CommunityDetail = {
   is_banned?: boolean;
   is_moderator?: boolean;
   creator_username?: string;
+  cover_url?: string;
+  flair_options?: string[];
 };
 
 type Channel = {
@@ -60,7 +68,9 @@ type PendingMember = {
 };
 
 export default function CommunityDetailScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  const C = useCommunitiesPalette(isDark);
+  const { t } = useLocale();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const slug = route.params?.slug as string;
@@ -92,6 +102,18 @@ export default function CommunityDetailScreen() {
     channel_type: 'text' | 'voice' | 'stage';
   }>>({});
   const [channelBusy, setChannelBusy] = useState(false);
+  const [constellation, setConstellation] = useState<{
+    questions?: Array<{ id: number | null; text: string }>;
+  } | null>(null);
+  const [ritual, setRitual] = useState<{
+    available?: boolean;
+    prompt?: { text: string } | null;
+    completed?: boolean;
+    streak?: number;
+  } | null>(null);
+  const [ritualBusy, setRitualBusy] = useState(false);
+  const [postFlair, setPostFlair] = useState('');
+  const [postSpoiler, setPostSpoiler] = useState(false);
 
   const load = useCallback(async (isRefresh = false) => {
     if (!slug) return;
@@ -145,6 +167,12 @@ export default function CommunityDetailScreen() {
       } else {
         setPendingMembers([]);
       }
+      const [constellationData, ritualData] = await Promise.all([
+        api.getCommunityConstellation(slug),
+        api.getCommunityRitual(slug),
+      ]);
+      setConstellation(constellationData);
+      setRitual(ritualData);
     } catch (error) {
       console.error('Failed to load community:', error);
     } finally {
@@ -164,8 +192,12 @@ export default function CommunityDetailScreen() {
       await api.createPost({
         text: composeText.trim(),
         community_id: community.id,
+        flair: postFlair || undefined,
+        is_spoiler: postSpoiler || undefined,
       });
       setComposeText('');
+      setPostFlair('');
+      setPostSpoiler(false);
       await load(true);
     } catch (error) {
       console.error('Post failed:', error);
@@ -220,7 +252,7 @@ export default function CommunityDetailScreen() {
         stage: ch.channel_type === 'voice' || ch.channel_type === 'stage',
       });
     } catch {
-      Alert.alert('Error', 'Could not open channel.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotOpenChannel'));
     }
   };
 
@@ -257,17 +289,17 @@ export default function CommunityDetailScreen() {
       });
       setChannels((prev) => prev.map((ch) => (ch.id === channelId ? (updated as Channel) : ch)));
     } catch {
-      Alert.alert('Error', 'Could not update channel.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotUpdateChannel'));
     } finally {
       setChannelBusy(false);
     }
   };
 
   const deleteChannel = async (channelId: number) => {
-    Alert.alert('Delete channel?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('communities.deleteChannelConfirm'), undefined, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: () => {
           void (async () => {
@@ -276,7 +308,7 @@ export default function CommunityDetailScreen() {
               await api.deleteCommunityChannel(slug, channelId);
               setChannels((prev) => prev.filter((ch) => ch.id !== channelId));
             } catch {
-              Alert.alert('Error', 'Could not delete channel.');
+              Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotDeleteChannel'));
             } finally {
               setChannelBusy(false);
             }
@@ -294,7 +326,7 @@ export default function CommunityDetailScreen() {
       setCommunity((prev) => (prev ? { ...prev, ...(updated as CommunityDetail) } : prev));
       setPendingMembers((prev) => prev.filter((m) => String(m.id) !== String(memberId)));
     } catch {
-      Alert.alert('Error', 'Could not approve this member.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotApproveMember'));
     } finally {
       setModBusy(false);
     }
@@ -307,7 +339,7 @@ export default function CommunityDetailScreen() {
       await api.rejectCommunityMember(slug, memberId);
       setPendingMembers((prev) => prev.filter((m) => String(m.id) !== String(memberId)));
     } catch {
-      Alert.alert('Error', 'Could not remove this request.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotRemoveRequest'));
     } finally {
       setModBusy(false);
     }
@@ -322,9 +354,9 @@ export default function CommunityDetailScreen() {
       setCommunity((prev) => (prev ? { ...prev, ...(updated as CommunityDetail) } : prev));
       setPendingMembers((prev) => prev.filter((m) => String(m.id) !== memberId));
       setBanUserId('');
-      Alert.alert('Banned', `Member ${memberId} was banned.`);
+      Alert.alert(t('mobile.bannedTitle'), t('mobile.memberBanned', { id: memberId }));
     } catch {
-      Alert.alert('Error', 'Could not ban this member. Use a numeric user id.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotBan'));
     } finally {
       setModBusy(false);
     }
@@ -345,7 +377,7 @@ export default function CommunityDetailScreen() {
       setCommunity((prev) => (prev ? { ...prev, ...(updated as CommunityDetail) } : prev));
     } catch {
       setCommunity(previous);
-      Alert.alert('Error', 'Could not update community gates.');
+      Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotUpdateGates'));
     } finally {
       setModBusy(false);
     }
@@ -354,48 +386,46 @@ export default function CommunityDetailScreen() {
   const renderMembershipButton = () => {
     if (!community) return null;
     if (community.is_banned) {
-      return <Text style={[styles.badge, { color: '#dc2626' }]}>Banned</Text>;
+      return <Text style={[styles.badge, { color: '#dc2626' }]}>{t('communities.banned')}</Text>;
     }
     if (community.is_member) {
       return (
         <TouchableOpacity
-          style={[styles.memberBtn, { borderColor: colors.border }]}
+          style={[styles.memberBtn, { borderColor: C.line }]}
           onPress={handleMembership}
           disabled={membershipBusy}
         >
-          <Text style={{ color: colors.textSecondary, fontWeight: '700' }}>
-            {membershipBusy ? '…' : 'Leave'}
+          <Text style={{ color: C.text2, fontWeight: '700' }}>
+            {membershipBusy ? '…' : t('communities.leave')}
           </Text>
         </TouchableOpacity>
       );
     }
     if (community.is_pending) {
-      return <Text style={[styles.badge, { color: colors.textSecondary }]}>Pending</Text>;
+      return <Text style={[styles.badge, { color: C.text2 }]}>{t('communities.pendingApproval')}</Text>;
     }
     return (
       <TouchableOpacity
-        style={[styles.joinBtn, { backgroundColor: colors.primary }]}
+        style={[styles.joinBtn, { backgroundColor: C.brownDk }]}
         onPress={handleMembership}
         disabled={membershipBusy}
       >
         <Text style={styles.joinBtnText}>
-          {membershipBusy ? '…' : community.privacy === 'private' ? 'Request' : 'Join'}
+          {membershipBusy ? '…' : community.privacy === 'private' ? t('communities.requestToJoin') : t('communities.join')}
         </Text>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.header, { borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={{ fontSize: 22, color: colors.text }}>←</Text>
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
-          {community?.name || 'Community'}
-        </Text>
-        <View style={styles.backBtn} />
-      </View>
+    <WorldBackdrop tone="vault">
+    <SafeAreaView style={{ flex: 1 }}>
+      <WorldHeader
+        title={community?.name || t('communities.title')}
+        subtitle={community?.privacy === 'private' ? t('communities.private') : t('communities.public')}
+        tone="vault"
+        onBack={() => navigation.goBack()}
+      />
 
       {loading && !community ? (
         <View style={styles.center}>
@@ -403,7 +433,7 @@ export default function CommunityDetailScreen() {
         </View>
       ) : !community ? (
         <View style={styles.center}>
-          <Text style={{ color: colors.textSecondary }}>Community not found</Text>
+          <Text style={{ color: C.text2 }}>{t('communities.notFound')}</Text>
         </View>
       ) : (
         <FlatList
@@ -421,28 +451,83 @@ export default function CommunityDetailScreen() {
             />
           }
           ListHeaderComponent={
-            <View style={[styles.hero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={[styles.hero, { backgroundColor: C.white, borderColor: C.line }]}>
+              {community.cover_url ? (
+                <Image source={{ uri: mediaUrl(community.cover_url) }} style={styles.cover} />
+              ) : null}
               <View style={styles.heroTop}>
-                <Text style={[styles.communityName, { color: colors.text }]}>{community.name}</Text>
+                <Text style={[styles.communityName, { color: C.text }]}>{community.name}</Text>
                 {renderMembershipButton()}
               </View>
               {community.description ? (
-                <Text style={[styles.description, { color: colors.textSecondary }]}>{community.description}</Text>
+                <Text style={[styles.description, { color: C.text2 }]}>{community.description}</Text>
               ) : null}
               {community.rules && community.rules.length > 0 ? (
-                <Text style={[styles.rules, { color: colors.textSecondary }]} numberOfLines={3}>
+                <Text style={[styles.rules, { color: C.text2 }]} numberOfLines={3}>
                   {community.rules.join(' · ')}
                 </Text>
-              ) : null}
-              <Text style={[styles.meta, { color: colors.textSecondary }]}>
-                {community.members_count ?? 0} members · {community.posts_count ?? 0} posts
-                {community.privacy ? ` · ${community.privacy}` : ''}
+              ) : (
+                <Text style={[styles.rules, { color: C.text2 }]}>{t('communities.noRules')}</Text>
+              )}
+              <Text style={[styles.meta, { color: C.text2 }]}>
+                {t('communities.memberCount', { count: community.members_count ?? 0 })}
+                {' · '}
+                {t('communities.postCount', { count: community.posts_count ?? 0 })}
               </Text>
+              {ritual?.available && ritual.prompt ? (
+                <View style={[styles.sideCard, { backgroundColor: C.card, borderColor: C.line }]}>
+                  <View style={styles.sideTop}>
+                    <Text style={[styles.channelsTitle, { color: C.text }]}>{t('communities.ritualTitle')}</Text>
+                    <Text style={[styles.meta, { color: C.brownDk }]}>
+                      {ritual.streak
+                        ? t('communities.ritualStreak', { count: ritual.streak })
+                        : t('communities.ritualStreakZero')}
+                    </Text>
+                  </View>
+                  <Text style={[styles.description, { color: C.text }]}>{ritual.prompt.text}</Text>
+                  <TouchableOpacity
+                    disabled={ritualBusy || ritual.completed}
+                    onPress={() => {
+                      void (async () => {
+                        setRitualBusy(true);
+                        try {
+                          const updated = await api.completeCommunityRitual(slug);
+                          if (updated) setRitual(updated);
+                        } finally {
+                          setRitualBusy(false);
+                        }
+                      })();
+                    }}
+                    style={[styles.joinBtn, { backgroundColor: C.brownDk, opacity: ritualBusy || ritual.completed ? 0.55 : 1, alignSelf: 'flex-start' }]}
+                  >
+                    <Text style={styles.joinBtnText}>
+                      {ritual.completed ? t('communities.ritualCompleted') : t('communities.ritualComplete')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              {constellation?.questions && constellation.questions.length > 0 ? (
+                <View style={[styles.sideCard, { backgroundColor: C.card, borderColor: C.line }]}>
+                  <Text style={[styles.channelsTitle, { color: C.text }]}>{t('communities.constellationTitle')}</Text>
+                  <Text style={[styles.meta, { color: C.text2, marginTop: 4 }]}>{t('communities.constellationHint')}</Text>
+                  {constellation.questions.map((q, idx) => (
+                    <Text key={q.id ?? `q-${idx}`} style={[styles.description, { color: C.text, marginTop: 8 }]}>
+                      {q.text}
+                    </Text>
+                  ))}
+                  <TouchableOpacity
+                    onPress={() => navigation.navigate('Lab')}
+                    style={[styles.joinBtn, { backgroundColor: C.brownDk, alignSelf: 'flex-start', marginTop: 8 }]}
+                  >
+                    <Text style={styles.joinBtnText}>{t('communities.constellationLabLink')}</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
               {community.is_moderator ? (
-                <View style={[styles.modPanel, { borderColor: colors.border, backgroundColor: colors.background }]}>
-                  <Text style={[styles.channelsTitle, { color: colors.text }]}>Moderator tools</Text>
-                  <Text style={[styles.meta, { color: colors.textSecondary, marginTop: 4 }]}>
-                    Pending requests, bans, and community gates.
+                <View style={[styles.modPanel, { borderColor: C.line, backgroundColor: C.card }]}>
+                  <Text style={[styles.channelsTitle, { color: C.text }]}>{t('communities.moderatorTools')}</Text>
+                  <Text style={[styles.meta, { color: C.text2, marginTop: 4 }]}>
+                    {t('communities.moderatorToolsHint')}
                   </Text>
                   {pendingMembers.length ? (
                     <View style={{ marginTop: 10, gap: 8 }}>
@@ -457,26 +542,26 @@ export default function CommunityDetailScreen() {
                             onPress={() => void approvePendingMember(member.id)}
                             style={[styles.smallBtn, { backgroundColor: colors.primary, opacity: modBusy ? 0.5 : 1 }]}
                           >
-                            <Text style={styles.smallBtnText}>Approve</Text>
+                            <Text style={styles.smallBtnText}>{t('communities.approve')}</Text>
                           </TouchableOpacity>
                           <TouchableOpacity
                             disabled={modBusy}
                             onPress={() => void removePendingMember(member.id)}
                             style={[styles.smallBtn, { backgroundColor: '#dc2626', opacity: modBusy ? 0.5 : 1 }]}
                           >
-                            <Text style={styles.smallBtnText}>Remove</Text>
+                            <Text style={styles.smallBtnText}>{t('communities.reject')}</Text>
                           </TouchableOpacity>
                         </View>
                       ))}
                     </View>
                   ) : (
-                    <Text style={[styles.meta, { color: colors.textSecondary, marginTop: 10 }]}>No pending members.</Text>
+                    <Text style={[styles.meta, { color: C.text2, marginTop: 10 }]}>{t('communities.noPendingRequests')}</Text>
                   )}
                   <View style={styles.banRow}>
                     <TextInput
                       value={banUserId}
                       onChangeText={setBanUserId}
-                      placeholder="User ID to ban"
+                      placeholder={t('communities.userIdToBan')}
                       placeholderTextColor={colors.textSecondary}
                       keyboardType="number-pad"
                       style={[styles.banInput, { color: colors.text, borderColor: colors.border }]}
@@ -486,7 +571,7 @@ export default function CommunityDetailScreen() {
                       onPress={() => void banMember()}
                       style={[styles.smallBtn, { backgroundColor: '#dc2626', opacity: modBusy || !banUserId.trim() ? 0.5 : 1 }]}
                     >
-                      <Text style={styles.smallBtnText}>Ban</Text>
+                      <Text style={styles.smallBtnText}>{t('communities.ban')}</Text>
                     </TouchableOpacity>
                   </View>
                   <View style={styles.typePills}>
@@ -499,7 +584,7 @@ export default function CommunityDetailScreen() {
                       ]}
                     >
                       <Text style={{ color: community.is_nsfw ? '#fff' : colors.text, fontWeight: '700', fontSize: 11 }}>
-                        NSFW {community.is_nsfw ? 'on' : 'off'}
+                        {t('communities.gateNsfw')}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -511,7 +596,7 @@ export default function CommunityDetailScreen() {
                       ]}
                     >
                       <Text style={{ color: community.spoilers_enabled ? '#fff' : colors.text, fontWeight: '700', fontSize: 11 }}>
-                        Spoilers {community.spoilers_enabled ? 'on' : 'off'}
+                        {t('communities.gateSpoilers')}
                       </Text>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -527,7 +612,7 @@ export default function CommunityDetailScreen() {
                       ]}
                     >
                       <Text style={{ color: community.posting_permission === 'mods' ? '#fff' : colors.text, fontWeight: '700', fontSize: 11 }}>
-                        {community.posting_permission === 'mods' ? 'Mods post' : 'Members post'}
+                        {community.posting_permission === 'mods' ? t('communities.gatePostingMods') : t('communities.gatePostingMembers')}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -540,13 +625,13 @@ export default function CommunityDetailScreen() {
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.channelsTitle, { color: colors.text }]}>
-                      # Channels ({channels.length}) {channelsOpen ? '▲' : '▼'}
+                      {t('communities.channelsTitle', { count: channels.length })} {channelsOpen ? '▲' : '▼'}
                     </Text>
                   </TouchableOpacity>
                   {channelsOpen && (
                     <View style={[styles.channelsList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
                       {channels.length === 0 ? (
-                        <Text style={{ color: colors.textSecondary, fontSize: 13 }}>No channels yet.</Text>
+                        <Text style={{ color: C.text2, fontSize: 13 }}>{t('communities.noChannels')}</Text>
                       ) : (
                         channels.map((ch) => {
                           const draft = channelDrafts[ch.id] || {
@@ -565,7 +650,9 @@ export default function CommunityDetailScreen() {
                                 <Text style={[styles.channelName, { color: colors.text }]}>{ch.name}</Text>
                                 {(ch.channel_type === 'voice' || ch.channel_type === 'stage') && stageStates[ch.id] ? (
                                   <Text style={[styles.stageBadge, { backgroundColor: colors.primary }]}>
-                                    {stageStates[ch.id].speakers_count ?? stageStates[ch.id].speakers?.length ?? 0} speakers
+                                    {t('communities.speakersCount', {
+                                      count: stageStates[ch.id].speakers_count ?? stageStates[ch.id].speakers?.length ?? 0,
+                                    })}
                                   </Text>
                                 ) : null}
                                 {ch.unread_count ? (
@@ -584,21 +671,21 @@ export default function CommunityDetailScreen() {
                                   <TextInput
                                     value={draft.name}
                                     onChangeText={(text) => updateChannelDraft(ch.id, { name: text })}
-                                    placeholder="Name"
+                                    placeholder={t('mobile.namePlaceholder')}
                                     placeholderTextColor={colors.textSecondary}
                                     style={[styles.channelInput, { color: colors.text, borderColor: colors.border }]}
                                   />
                                   <TextInput
                                     value={draft.category}
                                     onChangeText={(text) => updateChannelDraft(ch.id, { category: text })}
-                                    placeholder="Category"
+                                    placeholder={t('mobile.channelCategory')}
                                     placeholderTextColor={colors.textSecondary}
                                     style={[styles.channelInput, { color: colors.text, borderColor: colors.border }]}
                                   />
                                   <TextInput
                                     value={draft.slowmode_seconds}
                                     onChangeText={(text) => updateChannelDraft(ch.id, { slowmode_seconds: text })}
-                                    placeholder="Slowmode seconds"
+                                    placeholder={t('mobile.slowmodeSeconds')}
                                     placeholderTextColor={colors.textSecondary}
                                     keyboardType="number-pad"
                                     style={[styles.channelInput, { color: colors.text, borderColor: colors.border }]}
@@ -628,14 +715,14 @@ export default function CommunityDetailScreen() {
                                       onPress={() => void saveChannel(ch.id)}
                                       style={[styles.smallBtn, { backgroundColor: colors.primary, opacity: channelBusy || !draft.name.trim() ? 0.5 : 1 }]}
                                     >
-                                      <Text style={styles.smallBtnText}>Save</Text>
+                                      <Text style={styles.smallBtnText}>{t('common.save')}</Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                       disabled={channelBusy}
                                       onPress={() => void deleteChannel(ch.id)}
                                       style={[styles.smallBtn, { backgroundColor: '#dc2626', opacity: channelBusy ? 0.5 : 1 }]}
                                     >
-                                      <Text style={styles.smallBtnText}>Delete</Text>
+                                      <Text style={styles.smallBtnText}>{t('common.delete')}</Text>
                                     </TouchableOpacity>
                                   </View>
                                 </View>
@@ -649,7 +736,7 @@ export default function CommunityDetailScreen() {
                           <TextInput
                             value={newChannelName}
                             onChangeText={setNewChannelName}
-                            placeholder="New channel name"
+                            placeholder={t('communities.newChannelNamePlaceholder')}
                             placeholderTextColor={colors.textSecondary}
                             style={{
                               borderWidth: 1,
@@ -663,7 +750,7 @@ export default function CommunityDetailScreen() {
                           <TextInput
                             value={newChannelCategory}
                             onChangeText={setNewChannelCategory}
-                            placeholder="Category"
+                            placeholder={t('mobile.channelCategory')}
                             placeholderTextColor={colors.textSecondary}
                             style={{
                               borderWidth: 1,
@@ -709,7 +796,7 @@ export default function CommunityDetailScreen() {
                                   setNewChannelCategory('General');
                                   setNewChannelType('text');
                                 } catch {
-                                  Alert.alert('Error', 'Could not create channel.');
+                                  Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotCreateChannel'));
                                 } finally {
                                   setChannelBusy(false);
                                 }
@@ -725,7 +812,7 @@ export default function CommunityDetailScreen() {
                             }}
                           >
                             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12 }}>
-                              {channelBusy ? '…' : 'Create channel'}
+                              {channelBusy ? '…' : t('communities.createChannel')}
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -733,34 +820,55 @@ export default function CommunityDetailScreen() {
                     </View>
                   )}
                 </View>
-              {wiki.length > 0 && (
-                <View style={styles.channelsSection}>
+              <View style={styles.channelsSection}>
                   <TouchableOpacity
                     onPress={() => setWikiOpen((v) => !v)}
                     style={styles.channelsHeader}
                     activeOpacity={0.7}
                   >
                     <Text style={[styles.channelsTitle, { color: colors.text }]}>
-                      Wiki ({wiki.length}) {wikiOpen ? '▲' : '▼'}
+                      {t('mobile.wikiCount', { count: wiki.length })} {wikiOpen ? '▲' : '▼'}
                     </Text>
                   </TouchableOpacity>
                   {wikiOpen && (
                     <View style={[styles.channelsList, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-                      {wiki.map((page) => (
+                      {wiki.length === 0 ? (
+                        <Text style={{ color: colors.textSecondary, padding: 12 }}>{t('mobile.wikiEmpty')}</Text>
+                      ) : (
+                        wiki.map((page) => (
+                          <TouchableOpacity
+                            key={page.id}
+                            style={styles.channelRow}
+                            onPress={() =>
+                              navigation.navigate('CommunityWiki', {
+                                slug,
+                                pageSlug: page.slug,
+                                isModerator: !!community.is_moderator,
+                              })
+                            }
+                          >
+                            <Text style={[styles.channelName, { color: colors.text }]}>{page.title}</Text>
+                          </TouchableOpacity>
+                        ))
+                      )}
+                      {community.is_moderator ? (
                         <TouchableOpacity
-                          key={page.id}
                           style={styles.channelRow}
                           onPress={() =>
-                            Alert.alert(page.title, (page.body || 'No content yet.').slice(0, 900))
+                            navigation.navigate('CommunityWiki', {
+                              slug,
+                              isModerator: true,
+                            })
                           }
                         >
-                          <Text style={[styles.channelName, { color: colors.text }]}>{page.title}</Text>
+                          <Text style={[styles.channelName, { color: colors.primary }]}>
+                            {t('communities.newWikiPage')}
+                          </Text>
                         </TouchableOpacity>
-                      ))}
+                      ) : null}
                     </View>
                   )}
                 </View>
-              )}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
                 {(['hot', 'new', 'top', 'controversial'] as const).map((key) => (
                   <TouchableOpacity
@@ -771,55 +879,95 @@ export default function CommunityDetailScreen() {
                       paddingHorizontal: 12,
                       paddingVertical: 6,
                       borderRadius: 999,
-                      backgroundColor: sort === key ? colors.primary : colors.background,
+                      backgroundColor: sort === key ? C.brownDk : C.card,
                     }}
                   >
-                    <Text style={{ color: sort === key ? '#fff' : colors.text, fontWeight: '700', fontSize: 12, textTransform: 'capitalize' }}>
-                      {key}
+                    <Text style={{ color: sort === key ? '#fff' : C.text, fontWeight: '700', fontSize: 12 }}>
+                      {key === 'hot'
+                        ? t('communities.sortHot')
+                        : key === 'new'
+                          ? t('communities.sortNew')
+                          : key === 'top'
+                            ? t('communities.sortTop')
+                            : t('communities.sortControversial')}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              {community.is_member && !community.is_banned ? (
+              {community.is_member && !community.is_banned && community.posting_permission === 'mods' && !community.is_moderator ? (
+                <Text style={[styles.meta, { color: C.text2, marginTop: 12 }]}>{t('communities.postingLocked')}</Text>
+              ) : null}
+              {community.is_member && !community.is_banned && (community.posting_permission !== 'mods' || community.is_moderator) ? (
                 <View style={{ marginTop: 12, gap: 8 }}>
                   <TextInput
                     value={composeText}
                     onChangeText={setComposeText}
-                    placeholder="Share a signal…"
-                    placeholderTextColor={colors.textSecondary}
+                    placeholder={t('communities.postPlaceholder')}
+                    placeholderTextColor={C.text2}
                     multiline
                     style={{
                       minHeight: 72,
                       borderWidth: 1,
-                      borderColor: colors.border,
+                      borderColor: C.line,
                       borderRadius: 12,
                       padding: 10,
-                      color: colors.text,
+                      color: C.text,
                       textAlignVertical: 'top',
+                      backgroundColor: C.card2,
                     }}
                   />
+                  {(community.flair_options || []).length > 0 ? (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <TouchableOpacity
+                        onPress={() => setPostFlair('')}
+                        style={[styles.typePill, { borderColor: C.line, backgroundColor: !postFlair ? C.brownDk : C.card }]}
+                      >
+                        <Text style={{ color: !postFlair ? '#fff' : C.text, fontWeight: '700', fontSize: 11 }}>
+                          {t('communities.noFlair')}
+                        </Text>
+                      </TouchableOpacity>
+                      {(community.flair_options || []).map((flair) => (
+                        <TouchableOpacity
+                          key={flair}
+                          onPress={() => setPostFlair(flair)}
+                          style={[styles.typePill, { borderColor: C.line, backgroundColor: postFlair === flair ? C.brownDk : C.card, marginLeft: 6 }]}
+                        >
+                          <Text style={{ color: postFlair === flair ? '#fff' : C.text, fontWeight: '700', fontSize: 11 }}>
+                            {flair}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  ) : null}
+                  {community.spoilers_enabled ? (
+                    <TouchableOpacity onPress={() => setPostSpoiler((v) => !v)}>
+                      <Text style={{ color: postSpoiler ? C.brownDk : C.text2, fontWeight: '700', fontSize: 12 }}>
+                        {t('communities.spoilerToggle')}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                   <TouchableOpacity
                     onPress={() => void handleCreatePost()}
                     disabled={postBusy || !composeText.trim()}
                     style={{
                       alignSelf: 'flex-end',
-                      backgroundColor: colors.primary,
+                      backgroundColor: C.brownDk,
                       paddingHorizontal: 14,
                       paddingVertical: 8,
                       borderRadius: 999,
                       opacity: postBusy || !composeText.trim() ? 0.5 : 1,
                     }}
                   >
-                    <Text style={{ color: '#fff', fontWeight: '700' }}>{postBusy ? '…' : 'Post'}</Text>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>{postBusy ? '…' : t('communities.post')}</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Posts</Text>
+              <Text style={[styles.sectionTitle, { color: C.text }]}>{t('communities.postsHeading')}</Text>
             </View>
           }
           ListEmptyComponent={
-            <Text style={{ color: colors.textSecondary, textAlign: 'center', padding: 24 }}>
-              No posts in this community yet.
+            <Text style={{ color: C.text2, textAlign: 'center', padding: 24 }}>
+              {t('communities.emptyFeed')}
             </Text>
           }
           renderItem={({ item }) => (
@@ -827,14 +975,15 @@ export default function CommunityDetailScreen() {
               post={item}
               onPress={() => navigation.navigate('PostDetail', { postId: item.id })}
               onComment={() => navigation.navigate('PostDetail', { postId: item.id })}
+              onUserPress={() => openProfile(navigation, item.user?.username)}
               onCrossEcho={() => {
                 if (!joinedCommunities.length) {
-                  Alert.alert('Join another community', 'Cross-Echo needs another community.');
+                  Alert.alert(t('mobile.joinAnotherTitle'), t('mobile.joinAnotherCommunity'));
                   return;
                 }
                 Alert.alert(
-                  'Cross-Echo',
-                  'Share into another community',
+                  t('mobile.crossEchoTitle'),
+                  t('mobile.shareIntoAnother'),
                   [
                     ...joinedCommunities.slice(0, 6).map((c) => ({
                       text: c.name,
@@ -842,14 +991,14 @@ export default function CommunityDetailScreen() {
                         void (async () => {
                           try {
                             await api.crossEchoPost(item.id, { community_id: c.id });
-                            Alert.alert('Cross-Echoed', `Shared into ${c.name}.`);
+                            Alert.alert(t('mobile.crossEchoedTitle'), t('mobile.crossEchoed', { name: c.name }));
                           } catch {
-                            Alert.alert('Error', 'Could not Cross-Echo.');
+                            Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotCrossEcho'));
                           }
                         })();
                       },
                     })),
-                    { text: 'Cancel', style: 'cancel' as const },
+                    { text: t('common.cancel'), style: 'cancel' as const },
                   ],
                 );
               }}
@@ -865,7 +1014,7 @@ export default function CommunityDetailScreen() {
                       ),
                     );
                   } catch {
-                    Alert.alert('Error', 'Could not Amplify/Fade.');
+                    Alert.alert(t('mobile.errorTitle'), t('mobile.couldNotAmplify'));
                   }
                 })();
               }}
@@ -874,6 +1023,7 @@ export default function CommunityDetailScreen() {
         />
       )}
     </SafeAreaView>
+    </WorldBackdrop>
   );
 }
 
@@ -889,7 +1039,10 @@ const styles = StyleSheet.create({
   title: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   list: { padding: 12, paddingBottom: 40 },
-  hero: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 12 },
+  hero: { borderRadius: 14, borderWidth: 1, padding: 14, marginBottom: 12, overflow: 'hidden' },
+  cover: { height: 120, marginHorizontal: -14, marginTop: -14, marginBottom: 12 },
+  sideCard: { marginTop: 12, borderWidth: 1, borderRadius: 12, padding: 10, gap: 8 },
+  sideTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   communityName: { fontSize: 20, fontWeight: '800', flex: 1, marginRight: 8 },
   description: { fontSize: 14, lineHeight: 20, marginBottom: 8 },
