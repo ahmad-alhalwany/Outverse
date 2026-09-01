@@ -11,7 +11,8 @@ def get_ice_servers():
     ]
     turn_url = os.environ.get('TURN_URL', '').strip()
     if turn_url:
-        entry = {'urls': turn_url}
+        urls = [u.strip() for u in turn_url.split(',') if u.strip()]
+        entry = {'urls': urls if len(urls) > 1 else urls[0]}
         username = os.environ.get('TURN_USERNAME', '').strip()
         password = os.environ.get('TURN_PASSWORD', '').strip()
         if username:
