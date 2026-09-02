@@ -39,6 +39,9 @@ backend/staticfiles/
 **/posts_api_response.json
 *.log
 
+# Trunk local cache (Windows EAS cannot copy its symlinks)
+.trunk/
+
 # IDE
 .idea/
 .vscode/
