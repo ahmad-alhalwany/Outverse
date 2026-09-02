@@ -11,7 +11,9 @@
     "resizeMode": "contain",
     "backgroundColor": "#0A0A0F"
   },
-  "assetBundlePatterns": ["**/*"],
+  "assetBundlePatterns": [
+    "**/*"
+  ],
   "ios": {
     "supportsTablet": true,
     "bundleIdentifier": "com.cosonova.mobile",
@@ -59,6 +61,12 @@
   ],
   "scheme": "cosonova",
   "extra": {
-    "eas": {}
-  }
+    "eas": {
+      "projectId": "2e864d9c-f2e9-4b39-b682-99569d18291c"
+    },
+    "apiUrl": "https://98-81-52-33.nip.io/api",
+    "googleClientId": "121583227503-h1iblf9850a69djgn7m53l7afpbmcva0.apps.googleusercontent.com",
+    "appleClientId": ""
+  },
+  "owner": "ahmad_alhalwany"
 }

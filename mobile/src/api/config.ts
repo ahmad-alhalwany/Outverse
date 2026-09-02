@@ -5,10 +5,12 @@ import Constants from 'expo-constants';
  * Expo extra.apiUrl may be either `http://host:8000` or `http://host:8000/api`.
  */
 function resolveApiOrigin(): string {
+  // Same precedence as googleSignIn.ts: local .env override first, then the
+  // committed production default in app.json `extra`.
   const raw =
-    Constants.expoConfig?.extra?.apiUrl ||
     process.env.EXPO_PUBLIC_API_URL ||
-    (__DEV__ ? 'http://10.0.2.2:8000/api' : 'https://api.cosonova.example.com/api');
+    Constants.expoConfig?.extra?.apiUrl ||
+    (__DEV__ ? 'http://10.0.2.2:8000/api' : 'https://98-81-52-33.nip.io/api');
 
   const trimmed = String(raw).replace(/\/$/, '');
   return trimmed.replace(/\/api$/i, '');
