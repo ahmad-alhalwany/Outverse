@@ -1,19 +1,58 @@
 # EAS Build archives the whole git repository when the Expo project lives in a
-# subfolder. Only mobile/ is needed for a build — skip everything else so the
-# compress/upload step takes seconds instead of the better part of an hour.
+# subfolder, and when this file exists it REPLACES .gitignore for that archive.
+# So: (1) mirror every .gitignore rule, (2) skip everything outside mobile/.
+
+# --- secrets: never upload ---
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+*.pem
+
+# --- git / tooling / local caches ---
+.git/
+.trunk/
+.claude/
+.github/
+.vscode/
+.idea/
+.uploads/
+_throttle_backup/
+tools/
+*.stackdump
+*.log
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- other parts of the monorepo (not needed for a mobile build) ---
 backend/
 outverse-dashboard/
-docs/
 deploy/
-.github/
-*.md
+nginx/
+scripts/
+docs/
 docker-compose*.yml
+*.md
 
-# Inside mobile/ (mirrors mobile/.gitignore for the non-git archive path)
+# --- inside mobile/ (mirrors mobile/.gitignore) ---
 mobile/node_modules/
 mobile/.expo/
+mobile/.expo-shared/
 mobile/dist/
 mobile/build/
+mobile/coverage/
 mobile/*.apk
+mobile/*.ipa
 mobile/*.aab
-mobile/*.log
+mobile/*.tsbuildinfo
+
+# --- generic ---
+node_modules/
+__pycache__/
+venv/
+.venv/
+.next/
