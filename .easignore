@@ -1,0 +1,19 @@
+# EAS Build archives the whole git repository when the Expo project lives in a
+# subfolder. Only mobile/ is needed for a build — skip everything else so the
+# compress/upload step takes seconds instead of the better part of an hour.
+backend/
+outverse-dashboard/
+docs/
+deploy/
+.github/
+*.md
+docker-compose*.yml
+
+# Inside mobile/ (mirrors mobile/.gitignore for the non-git archive path)
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/build/
+mobile/*.apk
+mobile/*.aab
+mobile/*.log

@@ -39,8 +39,10 @@ module.exports = ({ config }) => ({
   ],
   extra: {
     ...config.extra,
-    apiUrl: process.env.EXPO_PUBLIC_API_URL || 'http://10.0.2.2:8000/api',
-    googleClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '',
-    appleClientId: process.env.EXPO_PUBLIC_APPLE_CLIENT_ID || '',
+    // Local .env overrides; otherwise fall back to the production defaults
+    // committed in app.json (EAS builds never see the gitignored .env).
+    apiUrl: process.env.EXPO_PUBLIC_API_URL || config.extra?.apiUrl,
+    googleClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || config.extra?.googleClientId || '',
+    appleClientId: process.env.EXPO_PUBLIC_APPLE_CLIENT_ID || config.extra?.appleClientId || '',
   },
 });
