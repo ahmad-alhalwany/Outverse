@@ -22,3 +22,6 @@ _*_out.txt
 _*.sqlite3
 _smoke_api_report.json
 smoke_test.sqlite3
+
+# Local IDOR test fixtures (tokens/passwords) - never commit
+.idor-fixtures.json
