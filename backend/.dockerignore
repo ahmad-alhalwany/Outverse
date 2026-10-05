@@ -12,6 +12,7 @@ env
 htmlcov
 *.log
 .env
+.env.*
 .git
 .gitignore
 media

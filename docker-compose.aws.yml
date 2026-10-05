@@ -29,6 +29,8 @@ services:
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      # Production explicitly opts in to remote infra (RDS/S3); see the local-dev interlock in settings.py.
+      OUTVERSE_ALLOW_REMOTE: "1"
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost}
       DJANGO_ENABLE_HTTPS_SECURITY: ${DJANGO_ENABLE_HTTPS_SECURITY:-True}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
@@ -113,6 +115,8 @@ services:
     environment:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY is required}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-False}
+      # Production explicitly opts in to remote infra (RDS/S3); see the local-dev interlock in settings.py.
+      OUTVERSE_ALLOW_REMOTE: "1"
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost}
       POSTGRES_HOST: ${POSTGRES_HOST:?POSTGRES_HOST (RDS endpoint) is required}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}

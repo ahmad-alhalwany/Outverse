@@ -18,11 +18,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 def _load_env_file() -> None:
-    """Load .env files: repo root first, then backend/ overrides for local dev."""
-    layers = (
-        (BASE_DIR.parent / '.env', False),
-        (BASE_DIR / '.env', True),
-    )
+    """Load env files.
+
+    If backend/.env.local exists it is the ONLY file loaded (and it wins over
+    anything already exported in the shell): a fully isolated local-dev profile
+    that cannot inherit production credentials from the other files.
+    Otherwise: repo root .env first, then backend/.env overrides.
+    """
+    local_env = BASE_DIR / '.env.local'
+    if local_env.is_file():
+        layers = ((local_env, True),)
+    else:
+        layers = (
+            (BASE_DIR.parent / '.env', False),
+            (BASE_DIR / '.env', True),
+        )
     for env_path, override in layers:
         if not env_path.is_file():
             continue
@@ -377,7 +387,33 @@ else:
     MEDIA_URL = os.environ.get('DJANGO_MEDIA_URL', '/media/')
     # STATIC_URL already set above; preserve the env-driven value.
 MEDIA_ROOT = os.environ.get('DJANGO_MEDIA_ROOT', os.path.join(BASE_DIR, 'media'))
-EMAIL_BACKEND = os.environ.get('DJANGO_EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
+
+# --- Local-dev safety interlock ---------------------------------------------
+# A DEBUG process must never reach remote infrastructure by accident (e.g. the
+# production RDS or S3 bucket picked up from a stray .env). Refuse to start
+# unless OUTVERSE_ALLOW_REMOTE=1 is set explicitly (production sets it in
+# docker-compose.aws.yml).
+if DEBUG and os.environ.get('OUTVERSE_ALLOW_REMOTE') != '1':
+    from urllib.parse import urlparse as _urlparse
+
+    _LOCAL_HOSTS = ('localhost', '127.0.0.1', '::1', 'db')
+    _remote_targets = []
+    if _pg_host not in _LOCAL_HOSTS:
+        _remote_targets.append(f'database host {_pg_host!r}')
+    if _replica_url and (_urlparse(_replica_url).hostname or '') not in _LOCAL_HOSTS:
+        _remote_targets.append('database replica')
+    if USE_S3_MEDIA_STORAGE:
+        _remote_targets.append(f'S3 bucket {AWS_STORAGE_BUCKET_NAME!r}')
+    if _remote_targets:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured(
+            'Refusing to start: DEBUG is on but this process would use remote '
+            f'infrastructure ({", ".join(_remote_targets)}). Create backend/.env.local '
+            'for an isolated local profile, or set OUTVERSE_ALLOW_REMOTE=1 if this '
+            'is really intended.'
+        )
+EMAIL_BACKEND =os.environ.get('DJANGO_EMAIL_BACKEND', 'django.core.mail.backends.console.EmailBackend')
 EMAIL_HOST = os.environ.get('EMAIL_HOST', '')
 EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587') or '587')
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
