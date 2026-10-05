@@ -11,8 +11,11 @@ if not os.environ.get('DJANGO_SECRET_KEY'):
     os.environ['DJANGO_SECRET_KEY'] = 'test-secret-key'
 
 # Load repo-root .env so Postgres-backed test runs pick up credentials when enabled.
+# Skipped when backend/.env.local exists: settings.py then loads that isolated
+# profile exclusively, and the root .env must not leak values (it could carry
+# production settings) into the test process.
 _env_path = ROOT / '.env'
-if _env_path.is_file():
+if _env_path.is_file() and not (BACKEND / '.env.local').is_file():
     for line in _env_path.read_text(encoding='utf-8').splitlines():
         line = line.strip()
         if not line or line.startswith('#') or '=' not in line:

@@ -38,6 +38,30 @@ else:
         }
     }
 
+# --- Isolation guards --------------------------------------------------------
+# Tests must never reach remote infrastructure (production RDS / S3), whatever
+# the surrounding .env files contain.
+_LOCAL_DB_HOSTS = ('localhost', '127.0.0.1', '::1', 'db')
+_test_db_host = DATABASES['default'].get('HOST', '')
+if _use_postgres and _test_db_host not in _LOCAL_DB_HOSTS and os.environ.get('OUTVERSE_ALLOW_REMOTE') != '1':
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured(
+        f'Refusing to run tests against remote database host {_test_db_host!r}. '
+        'Use the local profile (backend/.env.local) or set OUTVERSE_ALLOW_REMOTE=1.'
+    )
+
+# Uploads go to a throw-away local folder, never to S3 (even if AWS_* is set).
+import tempfile  # noqa: E402
+
+USE_S3_MEDIA_STORAGE = False
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage'},
+}
+MEDIA_ROOT = os.path.join(tempfile.gettempdir(), 'outverse-test-media')
+MEDIA_URL = '/media/'
+
 EMAIL_BACKEND = 'django.core.mail.backends.locmem.EmailBackend'
 CORS_ALLOWED_ORIGINS = ['http://localhost:3000']
 PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
