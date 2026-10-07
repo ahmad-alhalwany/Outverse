@@ -872,6 +872,11 @@ class PostViewSet(viewsets.ModelViewSet):
     )
     def add_media(self, request, pk=None):
         post = self.get_object()
+        user, err = require_user(request)
+        if err:
+            return err
+        if post.user_id != user.id:
+            return Response({'error': 'Not allowed.'}, status=403)
         files = request.FILES.getlist('media')
         alts = request.data.getlist('alt_text') if hasattr(request.data, 'getlist') else []
         start = post.media.count()
@@ -1094,6 +1099,8 @@ class PostViewSet(viewsets.ModelViewSet):
         valid = {c for c, _ in PostShareLog.CHANNEL_CHOICES}
         channel = raw_channel if raw_channel in valid else 'unknown'
         user = user_from_request(request)
+        if not can_view_post(post, user):
+            return Response({'error': 'This post is limited.'}, status=403)
 
         post.shares_count = F('shares_count') + 1
         post.save(update_fields=['shares_count'])
@@ -1155,25 +1162,26 @@ class PostViewSet(viewsets.ModelViewSet):
         if rtype is not None and rtype not in VALID_REACTIONS:
             return Response({'error': 'Invalid reaction.'}, status=400)
 
-        existing = Reaction.objects.filter(post=post, user=user).first()
-        if rtype is None or (existing and existing.type == rtype):
-            if existing:
-                existing.delete()
-            my_reaction = None
-        elif existing:
-            existing.type = rtype
-            existing.save(update_fields=['type'])
-            my_reaction = rtype
-        else:
-            Reaction.objects.create(post=post, user=user, type=rtype)
-            my_reaction = rtype
-            create_notification(
-                recipient_id=post.user_id,
-                actor_id=user.id,
-                verb='reaction',
-                post=post,
-                text='reacted to your post',
-            )
+        with transaction.atomic():
+            existing = Reaction.objects.select_for_update().filter(post=post, user=user).first()
+            if rtype is None or (existing and existing.type == rtype):
+                if existing:
+                    existing.delete()
+                my_reaction = None
+            elif existing:
+                existing.type = rtype
+                existing.save(update_fields=['type'])
+                my_reaction = rtype
+            else:
+                Reaction.objects.create(post=post, user=user, type=rtype)
+                my_reaction = rtype
+                create_notification(
+                    recipient_id=post.user_id,
+                    actor_id=user.id,
+                    verb='reaction',
+                    post=post,
+                    text='reacted to your post',
+                )
 
         total = post.reactions.count()
         post.likes_count = total
@@ -1187,6 +1195,8 @@ class PostViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def reactors(self, request, pk=None):
         post = self.get_object()
+        if not can_view_post(post, user_from_request(request)):
+            return Response({'error': 'This post is limited.'}, status=403)
         rtype = request.query_params.get('type')
         qs = Reaction.objects.filter(post=post).select_related('user').order_by('-created_at')
         if rtype in VALID_REACTIONS:
@@ -1229,6 +1239,8 @@ class PostViewSet(viewsets.ModelViewSet):
         user, err = require_user(request)
         if err:
             return err
+        if not can_view_post(post, user):
+            return Response({'error': 'This post is limited.'}, status=403)
 
         target = post
         if post.repost_of_id and not (post.text or '').strip():
@@ -1295,6 +1307,8 @@ class PostViewSet(viewsets.ModelViewSet):
     def thread(self, request, pk=None):
         """Return the full ordered thread chain this post belongs to."""
         post = self.get_object()
+        if not can_view_post(post, user_from_request(request)):
+            return Response({'error': 'This post is limited.'}, status=403)
         root_id = post.thread_root_id or post.id
         members = (
             Post.objects.filter(Q(id=root_id) | Q(thread_root_id=root_id))
@@ -1443,37 +1457,38 @@ class PostViewSet(viewsets.ModelViewSet):
         if vote not in ('boost', 'dim', None, ''):
             return Response({'error': 'Invalid vote.'}, status=400)
 
-        existing = PostVote.objects.filter(post=post, user=user).first()
-        old_contrib = 0
-        if existing:
-            old_contrib = 1 if existing.value == PostVote.BOOST else -1
+        with transaction.atomic():
+            existing = PostVote.objects.select_for_update().filter(post=post, user=user).first()
+            old_contrib = 0
+            if existing:
+                old_contrib = 1 if existing.value == PostVote.BOOST else -1
 
-        my_vote = None
-        if not vote:
-            if existing:
-                existing.delete()
-        else:
-            value = PostVote.BOOST if vote == 'boost' else PostVote.DIM
-            if existing:
-                if existing.value == value:
+            my_vote = None
+            if not vote:
+                if existing:
                     existing.delete()
-                else:
-                    existing.value = value
-                    existing.save(update_fields=['value'])
-                    my_vote = vote
             else:
-                PostVote.objects.create(post=post, user=user, value=value)
-                my_vote = vote
+                value = PostVote.BOOST if vote == 'boost' else PostVote.DIM
+                if existing:
+                    if existing.value == value:
+                        existing.delete()
+                    else:
+                        existing.value = value
+                        existing.save(update_fields=['value'])
+                        my_vote = vote
+                else:
+                    PostVote.objects.create(post=post, user=user, value=value)
+                    my_vote = vote
 
-        new_contrib = 1 if my_vote == 'boost' else (-1 if my_vote == 'dim' else 0)
-        karma_delta = new_contrib - old_contrib
-        if karma_delta and post.user_id != user.id:
-            try:
-                from users.models import Profile
-                profile, _ = Profile.objects.get_or_create(user_id=post.user_id)
-                Profile.objects.filter(pk=profile.pk).update(karma=F('karma') + karma_delta)
-            except Exception:
-                pass
+            new_contrib = 1 if my_vote == 'boost' else (-1 if my_vote == 'dim' else 0)
+            karma_delta = new_contrib - old_contrib
+            if karma_delta and post.user_id != user.id:
+                try:
+                    from users.models import Profile
+                    profile, _ = Profile.objects.get_or_create(user_id=post.user_id)
+                    Profile.objects.filter(pk=profile.pk).update(karma=F('karma') + karma_delta)
+                except Exception:
+                    pass
 
         boost = PostVote.objects.filter(post=post, value=PostVote.BOOST).count()
         dim = PostVote.objects.filter(post=post, value=PostVote.DIM).count()
