@@ -230,7 +230,13 @@ class ThrottleMixin:
         action = getattr(self, 'action', None) or self.request.method.lower()
         scope = self.throttle_scopes.get(action)
         if scope:
-            throttle = ScopedEndpointThrottle()
-            throttle.scope = scope
-            throttles.append(throttle)
+            # DRF's ScopedRateThrottle.allow_request() reads `view.throttle_scope`
+            # itself (overwriting anything set on the throttle instance) and
+            # returns True — i.e. unthrottled — when it's unset. Setting the
+            # instance attribute alone was a silent no-op; this is what DRF
+            # actually looks at. Confirmed live: 6/6 requests passed a 5/min
+            # scope before this fix, with the throttle instance's own .scope
+            # ignored.
+            self.throttle_scope = scope
+            throttles.append(ScopedEndpointThrottle())
         return throttles

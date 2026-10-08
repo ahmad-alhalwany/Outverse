@@ -1,6 +1,8 @@
 import hashlib
+import hmac
 from datetime import timedelta
 
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -64,8 +66,13 @@ class BottleCatchSerializer(serializers.ModelSerializer):
         ]
 
     def get_sender_anon_id(self, obj):
-        raw = f"outverse-bottle-{obj.sender_id}".encode('utf-8')
-        return hashlib.sha256(raw).hexdigest()[:12]
+        # HMAC, not a plain hash: without a secret key, anyone could just hash
+        # every candidate user id themselves and de-anonymize the sender in
+        # seconds (confirmed: a plain sha256("outverse-bottle-<id>")[:12]
+        # matched this field exactly). SECRET_KEY never leaves the server.
+        raw = f'outverse-bottle-{obj.sender_id}'.encode('utf-8')
+        key = settings.SECRET_KEY.encode('utf-8')
+        return hmac.new(key, raw, hashlib.sha256).hexdigest()[:12]
 
 
 class BottleMapSerializer(serializers.ModelSerializer):

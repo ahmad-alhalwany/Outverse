@@ -336,6 +336,8 @@ REST_FRAMEWORK = {
         'user.report': '10/min',
         'search.query': '30/min',
         'search.autocomplete': '60/min',
+        # LLM-backed — each request can call a paid provider (NVIDIA/OpenAI/Anthropic).
+        'ai.generate': '5/min',
     },
 }
 

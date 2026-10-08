@@ -237,3 +237,157 @@ def test_react_toggle_still_works(api_client, alice, bob):
 
     res = api_client.post(f'/api/posts/{post.id}/react/', {'reaction': 'inspired'})
     assert res.status_code == 200 and res.data['my_reaction'] is None  # toggled off
+
+
+# --- bottles: update()/partial_update() had no permission at all ------------
+# get_permissions() fell through to AllowAny() for update/partial_update
+# (unlike destroy(), which was already explicit) — update() wasn't overridden
+# at all, so DRF's default UpdateModelMixin ran with zero ownership check.
+# A fully anonymous request could rewrite anyone's bottle message/emotion/location.
+
+from bottles.models import MessageBottle  # noqa: E402
+
+
+@pytest.mark.django_db
+def test_bottle_update_requires_authentication(api_client, alice):
+    bottle = MessageBottle.objects.create(sender=alice, message='original', emotion_type='joy')
+
+    res = api_client.patch(f'/api/bottles/{bottle.id}/', {'message': 'pwned'}, format='json')
+
+    assert res.status_code in (401, 403)
+    bottle.refresh_from_db()
+    assert bottle.message == 'original'
+
+
+@pytest.mark.django_db
+def test_bottle_update_rejects_a_non_owner(api_client, alice, bob):
+    bottle = MessageBottle.objects.create(sender=alice, message='original', emotion_type='joy')
+
+    _login(api_client, bob)
+    res = api_client.patch(f'/api/bottles/{bottle.id}/', {'message': 'pwned'}, format='json')
+
+    assert res.status_code == 403
+    bottle.refresh_from_db()
+    assert bottle.message == 'original'
+
+
+@pytest.mark.django_db
+def test_bottle_update_allows_the_sender(api_client, alice):
+    bottle = MessageBottle.objects.create(sender=alice, message='original', emotion_type='joy')
+
+    _login(api_client, alice)
+    res = api_client.patch(f'/api/bottles/{bottle.id}/', {'message': 'edited by owner'}, format='json')
+
+    assert res.status_code == 200
+    bottle.refresh_from_db()
+    assert bottle.message == 'edited by owner'
+
+
+# --- bottles: sender_anon_id was an unsalted hash --------------------------
+# get_sender_anon_id() hashed "outverse-bottle-<sender_id>" with plain SHA256
+# and no secret — confirmed by hand in Burp Decoder: hashing the sender's own
+# id locally reproduced the exact value the API returned, de-anonymizing them.
+# Fix: HMAC-SHA256 keyed with settings.SECRET_KEY, which never leaves the server.
+
+import hashlib
+
+from bottles.serializers import BottleCatchSerializer
+
+
+@pytest.mark.django_db
+def test_sender_anon_id_cannot_be_reproduced_without_the_secret_key(alice):
+    bottle = MessageBottle.objects.create(sender=alice, message='hi', emotion_type='joy')
+
+    actual = BottleCatchSerializer(bottle).data['sender_anon_id']
+    guessed = hashlib.sha256(f'outverse-bottle-{alice.id}'.encode()).hexdigest()[:12]
+
+    assert actual != guessed
+
+
+@pytest.mark.django_db
+def test_sender_anon_id_is_deterministic(alice):
+    bottle = MessageBottle.objects.create(sender=alice, message='hi', emotion_type='joy')
+
+    first = BottleCatchSerializer(bottle).data['sender_anon_id']
+    second = BottleCatchSerializer(bottle).data['sender_anon_id']
+
+    assert first == second
+    assert len(first) == 12
+
+
+@pytest.mark.django_db
+def test_catch_still_returns_a_sender_anon_id(api_client, alice, bob):
+    bottle = MessageBottle.objects.create(sender=alice, message='hi', emotion_type='joy')
+
+    _login(api_client, bob)
+    res = api_client.post('/api/bottles/catch/', {'bottle_id': bottle.id})
+
+    assert res.status_code == 200
+    assert len(res.data['sender_anon_id']) == 12
+
+
+# --- questions/generate: unauthenticated, unthrottled LLM calls -------------
+# AllowAny + no ThrottleMixin on the whole ViewSet, unlike every other
+# content-creating endpoint in the codebase — confirmed live with Burp
+# Intruder: 30/30 anonymous requests succeeded, zero 401s or 429s. In
+# production (an LLM key configured) each one is a paid API call.
+
+from questions.models import Question
+
+
+@pytest.mark.django_db
+def test_generate_requires_authentication(api_client):
+    res = api_client.post('/api/questions/generate/?lang=en&category=all')
+    assert res.status_code == 401
+
+
+@pytest.mark.django_db
+def test_generate_is_rate_limited(api_client, alice):
+    Question.objects.create(text='fallback question', category='surreal', language='en')
+    _login(api_client, alice)
+
+    statuses = [
+        api_client.post('/api/questions/generate/?lang=en&category=all').status_code
+        for _ in range(6)
+    ]
+
+    assert statuses.count(200) <= 5  # ai.generate = 5/min
+    assert 429 in statuses
+
+
+# --- ThrottleMixin: the shared scope-wiring bug, tested in isolation -------
+# Direct proof the fix sets what DRF actually reads, independent of any one
+# app. See questions/generate's own tests above for the real-world case —
+# this guards the shared mixin itself, used by 10 files (bottles,
+# communities, speculative, resources, subscriptions, collab, saved,
+# comments, notes, questions).
+
+from rest_framework.permissions import AllowAny as _AllowAny
+from rest_framework.response import Response
+from rest_framework.test import APIRequestFactory
+from rest_framework.views import APIView
+
+from outverse.throttles import ThrottleMixin
+
+
+class _ThrottleProbeView(ThrottleMixin, APIView):
+    permission_classes = [_AllowAny]
+    throttle_scopes = {'get': 'ai.generate'}  # reuse an existing low scope: 5/min
+
+    def get(self, request):
+        return Response({'ok': True})
+
+
+def test_throttle_mixin_wires_the_scope_onto_the_view():
+    """Before the fix: get_throttles() set `throttle.scope` on the throttle
+    *instance*, but DRF's ScopedRateThrottle.allow_request() overwrites that
+    with `getattr(view, 'throttle_scope', None)` and returns True — i.e.
+    unthrottled — whenever that view attribute is unset. It always was.
+    """
+    factory = APIRequestFactory()
+    view_func = _ThrottleProbeView.as_view()
+
+    statuses = [view_func(factory.get('/probe/')).status_code for _ in range(6)]
+
+    assert statuses.count(200) <= 5
+    assert 429 in statuses

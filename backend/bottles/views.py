@@ -139,7 +139,7 @@ class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
             return [IsAuthenticated()]
         if self.action in ('my_bottles', 'caught', 'dashboard'):
             return [IsAuthenticated()]
-        if self.action == 'destroy':
+        if self.action in ('update', 'partial_update', 'destroy'):
             return [IsAuthenticated()]
         if self.action == 'list':
             # No real feature lists every bottle unauthenticated — the default
@@ -154,6 +154,17 @@ class MessageBottleViewSet(ThrottleMixin, viewsets.ModelViewSet):
         ).data
         data['is_active'] = _bottle_is_drifting(instance)
         return Response(data)
+
+    def update(self, request, *args, **kwargs):
+        # partial_update() (PATCH) delegates to this too — DRF's
+        # UpdateModelMixin.partial_update just calls update(partial=True).
+        bottle = self.get_object()
+        user, err = require_user(request)
+        if err:
+            return err
+        if bottle.sender_id != user.id and not user.is_staff:
+            return Response({'detail': 'Not allowed.'}, status=403)
+        return super().update(request, *args, **kwargs)
 
     def destroy(self, request, *args, **kwargs):
         bottle = self.get_object()

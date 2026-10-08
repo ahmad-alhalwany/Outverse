@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from outverse.auth_utils import user_from_request
+from outverse.throttles import ThrottleMixin
 
 from .feedback import (
     category_stats_for_user,
@@ -33,7 +34,7 @@ SERENDIPITY_RATE = 0.20
 ALL_CATEGORIES = [c for c, _ in Question.CATEGORY_CHOICES]
 
 
-class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
+class QuestionViewSet(ThrottleMixin, viewsets.ReadOnlyModelViewSet):
     """Read-only access to creative prompts.
 
     ``GET /api/questions/next/?lang=en&category=historical&personalize=1``
@@ -58,6 +59,16 @@ class QuestionViewSet(viewsets.ReadOnlyModelViewSet):
 
     serializer_class = QuestionSerializer
     permission_classes = [AllowAny]
+    throttle_scopes = {
+        # generate() calls a paid LLM provider — confirmed unauthenticated
+        # and unthrottled live via Burp Intruder (30/30 requests succeeded).
+        'generate': 'ai.generate',
+    }
+
+    def get_permissions(self):
+        if self.action == 'generate':
+            return [IsAuthenticated()]
+        return [AllowAny()]
 
     def get_queryset(self):
         qs = Question.objects.filter(is_active=True)
